@@ -333,3 +333,20 @@
       min-height: 0;
     }
 }
+
+/* Dracula Panel web shell */
+.web-app .sidebar-brand {
+  display: none;
+}
+
+.web-column {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.web-column > .content {
+  flex: 1;
+  min-height: 0;
+}

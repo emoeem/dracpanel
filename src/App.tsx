@@ -47,6 +47,7 @@ import {
   DesktopToolbar,
 } from "./components/DesktopToolbar";
 import { Icon, type IconName } from "./components/Icon";
+import { WebTopbar } from "./components/WebTopbar";
 import { ToolbarSlotsProvider } from "./components/PageHeader";
 import { Brand, Button, Dialog, IconButton, Spinner, StateDot } from "./components/ui";
 import { SSH_DEFAULT_TERMINAL_TYPE, SSH_DEFAULT_USERNAME } from "./lib/tailscaleSSH";
@@ -104,6 +105,10 @@ import { TailscaleSSHView } from "./views/TerminalView";
 import { UsbipView } from "./views/UsbipView";
 import { OpenConnectView } from "./views/OpenConnectView";
 import { OpenVPNView } from "./views/OpenVPNView";
+import { RulesView } from "./views/RulesView";
+import { SpeedTestView } from "./views/SpeedTestView";
+import { ManageView } from "./views/ManageView";
+import { PanelGate } from "./panel/PanelGate";
 import styles from "./App.module.css";
 import { cx } from "./lib/cx";
 
@@ -112,6 +117,9 @@ export type Route =
   | { page: "groups" }
   | { page: "connections" }
   | { page: "logs" }
+  | { page: "rules" }
+  | { page: "speedtest" }
+  | { page: "manage" }
   | { page: "tools" }
   | { page: "tools/network-quality" }
   | { page: "tools/stun" }
@@ -169,6 +177,12 @@ function routeFromHash(locationHash: string): Route {
       return { page: "connections" };
     case "logs":
       return { page: "logs" };
+    case "rules":
+      return { page: "rules" };
+    case "speedtest":
+      return { page: "speedtest" };
+    case "manage":
+      return { page: "manage" };
     case "tools":
       switch (segments[1]) {
         case "network-quality":
@@ -312,6 +326,12 @@ function routeTitle(route: Route, t: Translate, language: string): string {
       return t("Connections");
     case "logs":
       return t("Logs");
+    case "rules":
+      return t("Rules");
+    case "speedtest":
+      return t("Speed Test");
+    case "manage":
+      return t("Manage");
     case "tools":
       return t("Tools");
     case "tools/network-quality":
@@ -380,7 +400,7 @@ function EndpointToolbarTitle<T>(props: {
   return props.count(status.data) > 1 && props.tag !== "" ? props.taggedTitle : props.title;
 }
 
-const DESKTOP_LOCAL_SERVER: Server = { id: "local", name: "sing-box", url: "", secret: "" };
+const DESKTOP_LOCAL_SERVER: Server = { id: "local", name: "Dracula Panel", url: "", secret: "" };
 const DESKTOP_ACTIVE_KEY = "desktop-active-server";
 
 export function App(props: { desktop?: DesktopHost } = {}) {
@@ -388,7 +408,7 @@ export function App(props: { desktop?: DesktopHost } = {}) {
   return (
     <I18nProvider>
       <DesktopHostContext.Provider value={desktop}>
-        {desktop !== null ? <DesktopApp host={desktop} /> : <WebApp />}
+        {desktop !== null ? <DesktopApp host={desktop} /> : <PanelGate><WebApp /></PanelGate>}
         <GlobalErrorDialog />
       </DesktopHostContext.Provider>
     </I18nProvider>
@@ -470,6 +490,26 @@ function WebApp() {
 
   const activeServer =
     state.serversState.servers.find((server) => server.id === state.serversState.activeId) ?? null;
+
+  useEffect(() => {
+    if (location.hash !== "") {
+      return;
+    }
+    const last = localStorage.getItem("panel-last-route");
+    if (
+      last !== null &&
+      ["overview", "groups", "connections", "logs", "rules", "speedtest", "settings", "manage"].includes(last)
+    ) {
+      navigate(last);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!activeServer) {
+      return;
+    }
+    localStorage.setItem("panel-last-route", state.route.page.split("/")[0]);
+  }, [activeServer, state.route.page]);
 
   useEffect(() => {
     if (!activeServer && location.hash !== "") {
@@ -787,7 +827,42 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
     }
   }, [known, started, groupsKnown, hasGroups, route, capabilities, localHost]);
 
-  if (lostError !== null && host === null) {
+  useEffect(() => {
+    const pages: Record<string, string> = {
+      "1": "overview",
+      "2": "groups",
+      "3": "connections",
+      "4": "logs",
+      "5": "rules",
+      "6": "speedtest",
+      "7": "settings",
+      "8": "manage",
+    };
+    const handler = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (
+        target !== null &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const page = pages[event.key];
+      if (page !== undefined) {
+        event.preventDefault();
+        navigate(page);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  if (lostError !== null && host === null && route.page !== "manage") {
     return (
       <ConnectionErrorView
         server={props.server}
@@ -800,7 +875,7 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
     );
   }
 
-  if (serviceStatus.data.status === null) {
+  if (serviceStatus.data.status === null && route.page !== "manage") {
     if (host !== null) {
       return (
         <div className={styles.desktopConnectingView}>
@@ -853,6 +928,8 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
   const mainPages = (
     <>
       {navItem("logs", t("Logs"), "text_snippet", route.page === "logs")}
+      {navItem("rules", t("Rules"), "filter_list", route.page === "rules")}
+      {started && navItem("speedtest", t("Speed Test"), "speed", route.page === "speedtest")}
       {navItem(
         "tools",
         t("Tools"),
@@ -861,6 +938,7 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
         started && capabilities.supports("taildrop") ? <TaildropNavBadge /> : undefined,
       )}
       {navItem("settings", t("Settings"), "settings", route.page.startsWith("settings"))}
+      {navItem("manage", t("Manage"), "tune", route.page === "manage")}
     </>
   );
 
@@ -870,6 +948,9 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
       {route.page === "groups" && <GroupsView />}
       {route.page === "connections" && <ConnectionsView />}
       {route.page === "logs" && <LogsView />}
+      {route.page === "rules" && <RulesView />}
+      {route.page === "speedtest" && <SpeedTestView />}
+      {route.page === "manage" && <ManageView />}
       {route.page === "tools" && <ToolsView />}
       {route.page === "tools/network-quality" && <NetworkQualityView />}
       {route.page === "tools/stun" && <STUNTestView />}
@@ -932,7 +1013,7 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
 
   return (
     <CapabilitiesContext.Provider value={capabilities}>
-      <div className={styles.app}>
+      <div className={cx(styles.app, host === null && styles.webApp)}>
         {host === null && (
           <header className={styles.mobileTopbar}>
             <IconButton
@@ -942,7 +1023,7 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
             >
               <Icon name={menuOpen ? "close" : "menu"} size={18} />
             </IconButton>
-            <div className={styles.mobileTopbarBrand}>sing-box</div>
+            <div className={styles.mobileTopbarBrand}>Dracula Panel</div>
           </header>
         )}
         {menuOpen && (
@@ -957,7 +1038,7 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
           <nav className={styles.sidebar}>
             <div className={styles.sidebarTitlebar} />
             <div className={styles.sidebarBrand}>
-              sing-box
+              Dracula Panel
               {serverInfo && <span className={styles.sidebarBrandVersion}>{serverInfo.version}</span>}
             </div>
             {started ? (
@@ -974,7 +1055,7 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
         ) : (
           <nav className={cx(styles.sidebar, menuOpen && styles.open)}>
             <div className={styles.sidebarBrand}>
-              sing-box
+              Dracula Panel
               {serverInfo && <span className={styles.sidebarBrandVersion}>{serverInfo.version}</span>}
             </div>
             {navItem("overview", t("Overview"), "dashboard", route.page === "overview")}
@@ -1045,7 +1126,14 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
             </ToolbarSlotsProvider>
           </div>
         ) : (
-          mainContent
+          <div className={styles.webColumn}>
+            <WebTopbar
+              version={serverInfo?.version ?? null}
+              theme={props.theme}
+              onThemeChange={props.onThemeChange}
+            />
+            {mainContent}
+          </div>
         )}
         {serviceStatus.phase !== "active" && (
           <div className={styles.reconnectPill} role="status">

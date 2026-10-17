@@ -1,0 +1,26 @@
+Dracula Panel for sing-box
+==========================
+
+An unofficial, Dracula-themed desktop web panel for sing-box.
+
+Upstream dashboard
+------------------
+This project is a fork of SagerNet/sing-box-dashboard:
+  https://github.com/SagerNet/sing-box-dashboard
+
+The upstream project is licensed under the GNU General Public License v3.0.
+This fork is distributed under the same license (see LICENSE).
+
+This build is NOT an official sing-box or SagerNet release and is not
+affiliated with or endorsed by SagerNet or the sing-box project. The name
+"Dracula Panel for sing-box" only describes what this software controls.
+
+Theme
+-----
+Dracula (dark) and Alucard (light) palettes by the Dracula Theme project:
+  https://github.com/dracula/dracula-theme
+
+Additional notice
+-----------------
+The management module talks to the local sing-box-panel HTTP API, which is
+not part of the upstream dashboard. It is an independently added component.

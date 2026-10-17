@@ -79,10 +79,10 @@ export function Spinner(props: { className?: string }) {
 }
 
 export function Brand(props: { className?: string; product?: string | null }) {
-  const product = props.product === undefined ? "dashboard" : props.product;
+  const product = props.product === undefined ? "for sing-box" : props.product;
   return (
     <div className={cx("setup-brand", props.className)}>
-      sing-box
+      Dracula Panel
       {product !== null && <small>{product}</small>}
     </div>
   );
@@ -595,7 +595,7 @@ export function AdaptiveSegmented(props: {
       const container = containerRef.current;
       const measure = measureRef.current;
       if (container && measure) {
-        setFits(measure.scrollWidth <= container.clientWidth);
+        setFits(measure.scrollWidth + 16 <= container.clientWidth);
       }
     };
     update();

@@ -67,3 +67,31 @@
   border: 0;
   border-top: 1px solid var(--border);
 }
+
+.connection-list {
+  position: relative;
+  height: min(64vh, 680px);
+  min-height: 280px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+.connection-canvas {
+  position: relative;
+  width: 100%;
+}
+
+.virtual-row {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 84px;
+  padding-bottom: var(--space-8);
+}
+
+.virtual-row .connection-row {
+  height: 100%;
+  margin-bottom: 0;
+  overflow: hidden;
+}

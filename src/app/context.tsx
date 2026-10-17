@@ -79,10 +79,11 @@ const THEME_KEY = "theme";
 
 export function loadThemePreference(): ThemePreference {
   const value = loadStoredString(THEME_KEY);
-  if (value === "light" || value === "dark") {
+  if (value === "light" || value === "dark" || value === "auto") {
     return value;
   }
-  return "auto";
+  // Dracula Panel defaults to dark; light is the official Alucard variant.
+  return "dark";
 }
 
 export function saveThemePreference(preference: ThemePreference) {

@@ -5,11 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
     <meta name="color-scheme" content="light dark" />
     <!-- iOS 26 Safari ignores theme-color and samples #statusbar-tint instead. -->
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f0f0f0" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#181818" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fffbeb" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#282a36" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="sing-box" />
+    <meta name="apple-mobile-web-app-title" content="Dracula Panel" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <script>
       // iOS Safari samples the canvas color for its chrome before first paint.
@@ -17,9 +18,7 @@
         var dark = false;
         try {
           var stored = localStorage.getItem("sing-box-dashboard.theme");
-          dark =
-            stored === "dark" ||
-            (stored !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+          dark = stored !== "light";
         } catch (e) {}
         document.documentElement.dataset.theme = dark ? "dark" : "light";
       })();
@@ -80,7 +79,7 @@
         document.documentElement.dir = lang === "fa" ? "rtl" : "ltr";
       })();
     </script>
-    <title>sing-box dashboard</title>
+    <title>Dracula Panel for sing-box</title>
   </head>
   <body>
     <!-- iOS 26 Safari samples this fixed element for the status bar tint. -->

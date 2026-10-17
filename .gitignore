@@ -7,3 +7,5 @@ src/lib/terminalThemes.generated.ts
 .DS_Store
 /CLAUDE.md
 /.claude/
+# local test token / temp files
+.test-token

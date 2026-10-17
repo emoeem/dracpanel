@@ -1,5 +1,5 @@
 import { Code } from "@connectrpc/connect";
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ConnectionRow } from "../api/daemon";
 import { formatBytes, formatClockTime, formatDateTime, formatDurationMs } from "../api/format";
@@ -20,6 +20,9 @@ import { PageHeader } from "../components/PageHeader";
 import { StreamStates } from "../components/StreamBanner";
 import { Badge, Button, DataLine, DetailSection, DetailShell, MenuItem, MenuLabel, OthersMenu, SearchInput } from "../components/ui";
 import styles from "./ConnectionsView.module.css";
+
+const CONNECTION_ROW_HEIGHT = 84;
+const CONNECTION_OVERSCAN = 6;
 
 const STATE_OPTIONS: { value: ConnectionStateFilter; label: MessageKey }[] = [
   { value: "active", label: "Active" },
@@ -44,10 +47,14 @@ export function ConnectionsView() {
   const { t } = useI18n();
   const connections = useStream(api.connections);
   const isMobile = useIsMobile();
+  const rowHeight = isMobile ? 112 : CONNECTION_ROW_HEIGHT;
   const [stateFilter, setStateFilter] = useState<ConnectionStateFilter>(loadConnectionStateFilter);
   const [sortMode, setSortMode] = useState<ConnectionSortMode>(loadConnectionSortMode);
   const [search, setSearch] = useState("");
   const [detailId, setDetailId] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(600);
 
   const rows = useMemo(() => {
     const result: ConnectionRow[] = [];
@@ -90,6 +97,32 @@ export function ConnectionsView() {
     });
     return result;
   }, [connections.data.rows, stateFilter, sortMode, search]);
+
+  useEffect(() => {
+    const element = listRef.current;
+    if (element === null) {
+      return;
+    }
+    const measure = () => setViewportHeight(element.clientHeight || 600);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (listRef.current !== null) {
+      listRef.current.scrollTop = 0;
+    }
+    setScrollTop(0);
+  }, [stateFilter, sortMode, search]);
+
+  const rowStart = Math.max(0, Math.floor(scrollTop / rowHeight) - CONNECTION_OVERSCAN);
+  const rowEnd = Math.min(
+    rows.length,
+    Math.ceil((scrollTop + viewportHeight) / rowHeight) + CONNECTION_OVERSCAN,
+  );
+  const visibleRows = rows.slice(rowStart, rowEnd);
 
   const detailRow = detailId !== null ? (connections.data.rows.get(detailId) ?? null) : null;
   const detailActive = detailRow?.closedAt === null;
@@ -173,12 +206,31 @@ export function ConnectionsView() {
           {t("Connection tracking requires the Clash API to be configured in the running instance.")}
         </div>
       )}
-      {rows.slice(0, 500).map((row) => (
-        <ConnectionRowView key={row.connection.id} row={row} onOpen={setDetailId} />
-      ))}
-      {rows.length > 500 && (
+      {rows.length > 0 && (
+        <div
+          ref={listRef}
+          className={styles.connectionList}
+          onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+        >
+          <div className={styles.connectionCanvas} style={{ height: rows.length * rowHeight }}>
+            {visibleRows.map((row, index) => (
+              <div
+                key={row.connection.id}
+                className={styles.virtualRow}
+                style={{
+                  height: rowHeight,
+                  transform: `translateY(${(rowStart + index) * rowHeight}px)`,
+                }}
+              >
+                <ConnectionRowView row={row} onOpen={setDetailId} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {rows.length > 0 && (
         <div className="hint" style={{ textAlign: "center", padding: 8 }}>
-          {t("Showing first {limit} of {count} connections", { limit: 500, count: rows.length })}
+          共 {rows.length} 条连接 · 虚拟滚动
         </div>
       )}
       {detail}

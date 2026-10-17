@@ -108,7 +108,9 @@ function OverviewCards(props: { config: DashboardCardsConfig; host: DesktopHost 
 
   const current = status.data.current;
   const trafficAvailable = current?.trafficAvailable ?? false;
-  const modeList = clashMode.data.modeList;
+  const modeList = clashMode.data.modeList.filter(
+    (mode) => mode !== "Global" || mode === currentMode,
+  );
 
   const isCardVisible = (card: string) => {
     switch (card) {

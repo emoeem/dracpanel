@@ -1,0 +1,235 @@
+.screen {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: var(--space-24);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.glow {
+  position: absolute;
+  inset: -20% -10% auto;
+  height: 70%;
+  pointer-events: none;
+  background:
+    radial-gradient(600px 320px at 50% 20%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 70%),
+    radial-gradient(420px 240px at 78% 70%, color-mix(in srgb, var(--info) 12%, transparent), transparent 70%);
+}
+
+.card {
+  position: relative;
+  z-index: var(--z-sticky-header);
+  width: min(420px, 100%);
+  padding: var(--space-24);
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-overlay);
+  backdrop-filter: blur(18px);
+}
+
+.brand-row {
+  display: flex;
+  gap: var(--space-14);
+  align-items: center;
+  margin-bottom: var(--space-20);
+}
+
+.mark {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  filter: drop-shadow(0 0 16px color-mix(in srgb, var(--accent) 38%, transparent));
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.field input {
+  height: 38px;
+  padding: 0 var(--space-12);
+  font: inherit;
+  color: var(--text);
+  outline: none;
+  background: var(--inset);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+}
+
+.field input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.primary,
+.secondary {
+  height: 38px;
+  padding: 0 var(--space-14);
+  font: inherit;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  border-radius: var(--radius-control);
+}
+
+.primary {
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 1px solid transparent;
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.primary:disabled,
+.secondary:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.secondary {
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.hint,
+.muted {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--text-faint);
+}
+
+.hint code {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.error {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--danger);
+}
+
+.center {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-14);
+  align-items: center;
+  padding: var(--space-20) 0 var(--space-8);
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-10);
+}
+
+.recovery-status {
+  display: flex;
+  gap: var(--space-12);
+  align-items: flex-start;
+  padding: var(--space-12);
+  background: var(--inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.recovery-status strong {
+  display: block;
+  margin-bottom: var(--space-4);
+  font-size: var(--text-md);
+}
+
+.dot-offline {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-top: var(--space-4);
+  background: var(--danger);
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}
+
+.footer-link {
+  padding-top: var(--space-14);
+  margin: var(--space-16) 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  text-align: center;
+  border-top: 1px solid var(--border);
+}
+
+.footer a,
+.footer-link a {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.footer a:hover,
+.footer-link a:hover {
+  color: var(--accent);
+}
+
+.text-button {
+  padding: 0;
+  font: inherit;
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.text-button:hover {
+  color: var(--accent);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

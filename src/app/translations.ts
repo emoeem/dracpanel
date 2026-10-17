@@ -12,8 +12,17 @@ export const LANGUAGES: { value: Language; label: string }[] = [
 ];
 
 export const TRANSLATIONS = {
-  "Overview": { "zh-Hans": "概述", "zh-Hant": "概述", "fa": "نمای کلی", "ru": "Обзор" },
-  "Groups": { "zh-Hans": "组", "zh-Hant": "組", "fa": "گروه‌ها", "ru": "Группы" },
+  "Rules": { "zh-Hans": "规则", "zh-Hant": "規則", "fa": "قوانین", "ru": "Правила" },
+  "Speed Test": { "zh-Hans": "测速", "zh-Hant": "測速", "fa": "تست سرعت", "ru": "Тест скорости" },
+  "Manage": { "zh-Hans": "管理", "zh-Hant": "管理", "fa": "مدیریت", "ru": "Управление" },
+  "Running": { "zh-Hans": "运行中", "zh-Hant": "執行中", "fa": "در حال اجرا", "ru": "Работает" },
+  "Starting": { "zh-Hans": "启动中", "zh-Hant": "啟動中", "fa": "در حال شروع", "ru": "Запуск" },
+  "Stopped": { "zh-Hans": "已停止", "zh-Hant": "已停止", "fa": "متوقف", "ru": "Остановлено" },
+  "Fatal": { "zh-Hans": "异常", "zh-Hant": "異常", "fa": "خطا", "ru": "Ошибка" },
+  "Refresh": { "zh-Hans": "刷新", "zh-Hant": "重新整理", "fa": "نوسازی", "ru": "Обновить" },
+  "Reconnect": { "zh-Hans": "重新连接", "zh-Hant": "重新連線", "fa": "اتصال دوباره", "ru": "Переподключить" },
+  "Overview": { "zh-Hans": "概览", "zh-Hant": "概覽", "fa": "نمای کلی", "ru": "Обзор" },
+  "Groups": { "zh-Hans": "代理", "zh-Hant": "代理", "fa": "گروه‌ها", "ru": "Группы" },
   "Connections": { "zh-Hans": "连接", "zh-Hant": "連接", "fa": "اتصال‌ها", "ru": "Подключения" },
   "Logs": { "zh-Hans": "日志", "zh-Hant": "日誌", "fa": "گزارش", "ru": "Журнал" },
   "Tools": { "zh-Hans": "工具", "zh-Hant": "工具", "fa": "ابزارها", "ru": "Инструменты" },

@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { removeServer, serverDisplayName, upsertServer, type Server, type ServersState } from "../api/config";
 import { useDiagnosedConnectError } from "../app/connectError";
+import { navigate } from "../app/context";
 import { useI18n } from "../app/i18n";
 import { Icon } from "../components/Icon";
 import { Brand, Button, Spinner } from "../components/ui";
@@ -60,6 +61,9 @@ export function ConnectionErrorView(props: {
           <Button onClick={() => setEditing(true)}>
             {t("Edit Server")}
           </Button>
+          {localStorage.getItem("panel_token") !== null && (
+            <Button onClick={() => navigate("manage")}>{t("Manage")}</Button>
+          )}
         </div>
         {others.length > 0 && (
           <div className={styles.connectionErrorSwitch}>
