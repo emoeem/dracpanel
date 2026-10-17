@@ -161,7 +161,7 @@ pacman -Qkk sing-box-panel
 
 The live acceptance run and screenshots are kept in
 [artifacts/README.md](artifacts/README.md). Some screenshots contain local
-test domains/traffic; review before making a private checkout public.
+test domains/traffic; review/redact them before publishing this checkout.
 
 Verified on 2026-10-17 against sing-box v1.14.3-reF1nd:
 

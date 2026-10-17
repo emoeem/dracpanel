@@ -3,8 +3,8 @@
 Dracula Panel for sing-box — real-environment acceptance run (2026-10-17).
 
 > **Privacy:** these screenshots were captured from a live local instance.
-> Some pages (connections/logs) contain local test domain names. The repository
-> is private; review/redact this folder before making the checkout public.
+> Some pages (connections/logs) contain local test domain names. If this
+> checkout is made public, review/redact this folder first.
 
 All screenshots were taken against the live stack:
 

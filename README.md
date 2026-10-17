@@ -179,7 +179,7 @@ sudo cat /var/lib/sing-box-panel/token
 - panel 写配置时是 0644，`sing-box-config-perm.path` 会立即恢复 600 并复核；
 - 静态产物不含任何 token/secret；登录后 secret 存在本机 localStorage；
 - 仓库中的验收截图来自真实本机实例，**部分截图包含本地测试域名/流量**；
-  当前仓库为私有，公开前请先审阅 `artifacts/screenshots/`。
+  如果要把本仓库公开，请先审阅/脱敏 `artifacts/screenshots/`。
 
 ## 验收
 
