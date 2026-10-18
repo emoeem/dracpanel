@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { loadServersState } from "../api/config";
 import type { DaemonApi } from "../api/daemon";
@@ -39,12 +39,18 @@ import {
   type PanelSubscription,
   type PanelSubscriptionUpdate,
 } from "../api/panel";
+import {
+  usePanelCapabilities,
+  type PanelFeature,
+} from "../api/panelCapabilities";
 import { useStream } from "../api/stream";
+import type { JsonEditorSchema } from "../components/JsonEditor";
 import { useApi, useNow } from "../app/context";
 import { useI18n } from "../app/i18n";
 import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/PageHeader";
 import { Button, Card, Dialog, SearchInput, Spinner } from "../components/ui";
+import { diffConfig, diffLines, formatDiffValue } from "../lib/configDiff";
 import { cx } from "../lib/cx";
 import styles from "./ManageView.module.css";
 
@@ -54,6 +60,16 @@ const JsonEditor = lazy(() =>
 
 type Tab = "status" | "subscriptions" | "ebpf" | "config";
 const TAB_KEY = "panel_manage_tab";
+
+const PANEL_FEATURE_LABELS: Partial<Record<PanelFeature, string>> = {
+  "subscriptions.schedule": "订阅自动更新",
+  "subscriptions.managed": "订阅托管节点查询",
+  "subscriptions.userinfo": "订阅流量/到期信息",
+  "config.backup.download": "配置备份下载",
+  logs: "系统日志",
+  "clash.version": "Clash 版本检查",
+  geoip: "全球连接地图（GeoIP）",
+};
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -112,6 +128,135 @@ function ConfirmDialog(props: {
   );
 }
 
+function ConfigDiffDialog(props: {
+  original: string;
+  text: string;
+  busy: boolean;
+  onApply: () => void;
+  onClose: () => void;
+}) {
+  const result = useMemo(() => {
+    try {
+      return {
+        ok: true as const,
+        diff: diffConfig(props.original, props.text),
+        lines: diffLines(props.original, props.text),
+      };
+    } catch (error) {
+      return { ok: false as const, message: errorText(error) };
+    }
+  }, [props.original, props.text]);
+
+  const sensitiveCount = result.ok
+    ? result.diff.changes.filter((change) => change.sensitive).length
+    : 0;
+
+  return (
+    <Dialog
+      className={styles.diffDialog}
+      onClose={() => (props.busy ? undefined : props.onClose())}
+    >
+      <h3>应用配置前的变更</h3>
+      {!result.ok ? (
+        <div className={styles.errorBox}>
+          配置暂时无法解析：{result.message}。请先修复语法，再查看差异。
+        </div>
+      ) : result.diff.changes.length === 0 ? (
+        <p className="dialog-message">配置没有变化，无需应用。</p>
+      ) : (
+        <>
+          <p className="dialog-message">
+            {result.diff.truncated
+              ? `已显示前 ${result.diff.changes.length} 处变更（还有更多）`
+              : `共 ${result.diff.changes.length} 处变更`}
+            {sensitiveCount > 0
+              ? `，其中 ${sensitiveCount} 处涉及监听、DNS、路由、出站或密钥。`
+              : "。"}
+          </p>
+
+          <div className={styles.diffSummary} aria-label="字段级变更摘要">
+            {result.diff.changes.map((change) => {
+              const before = change.sensitive
+                ? "（已隐藏）"
+                : formatDiffValue(change.before);
+              const after = change.sensitive
+                ? "（已隐藏）"
+                : formatDiffValue(change.after);
+              const kindClass =
+                change.kind === "added"
+                  ? styles.diffKindAdded
+                  : change.kind === "removed"
+                    ? styles.diffKindRemoved
+                    : styles.diffKindChanged;
+              return (
+                <div
+                  key={`${change.kind}:${change.path}`}
+                  className={cx(
+                    styles.diffSummaryRow,
+                    change.sensitive && styles.diffSensitive,
+                  )}
+                >
+                  <span className={cx(styles.diffKind, kindClass)}>
+                    {change.kind === "added"
+                      ? "新增"
+                      : change.kind === "removed"
+                        ? "删除"
+                        : "修改"}
+                  </span>
+                  <code>{change.path || "$"}</code>
+                  <span>
+                    {change.kind === "added"
+                      ? after
+                      : change.kind === "removed"
+                        ? before
+                        : `${before} → ${after}`}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div
+            className={styles.diffLines}
+            role="region"
+            aria-label="配置行级差异"
+          >
+            {result.lines.map((line, index) => (
+              <div
+                key={`${index}:${line.kind}`}
+                className={cx(
+                  styles.diffLine,
+                  line.kind === "added" && styles.diffAdded,
+                  line.kind === "removed" && styles.diffRemoved,
+                )}
+              >
+                <span className={styles.diffLineNo}>{line.oldLine ?? ""}</span>
+                <span className={styles.diffLineNo}>{line.newLine ?? ""}</span>
+                <span className={styles.diffSign}>
+                  {line.kind === "added" ? "+" : line.kind === "removed" ? "-" : " "}
+                </span>
+                <code>{line.text === "" ? " " : line.text}</code>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      <div className="row-actions dialog-actions">
+        <Button onClick={props.onClose} disabled={props.busy}>
+          取消
+        </Button>
+        <Button
+          variant="primary"
+          onClick={props.onApply}
+          disabled={props.busy || !result.ok || result.diff.changes.length === 0}
+        >
+          {props.busy ? <Spinner /> : "应用并重启"}
+        </Button>
+      </div>
+    </Dialog>
+  );
+}
+
 async function afterConfigChange(api: DaemonApi) {
   const result = await resyncAfterConfigChange();
   if (result.serverChanged) {
@@ -123,6 +268,10 @@ async function afterConfigChange(api: DaemonApi) {
 
 export function ManageView() {
   const { t } = useI18n();
+  const capabilities = usePanelCapabilities();
+  const missingFeatures = capabilities.detected
+    ? capabilities.missing.filter((feature) => feature !== "subscriptions.userinfo")
+    : [];
   const [tab, setTab] = useState<Tab>(() => {
     const stored = localStorage.getItem(TAB_KEY);
     return stored === "subscriptions" || stored === "ebpf" || stored === "config" ? stored : "status";
@@ -152,6 +301,13 @@ export function ManageView() {
           </Button>
         }
       />
+      {missingFeatures.length > 0 && (
+        <div className={styles.warnBox}>
+          当前 sing-box-panel 缺少以下接口：
+          {missingFeatures.map((feature) => PANEL_FEATURE_LABELS[feature]).join("、")}。
+          升级到 0.1.0-8 后可用；其余管理功能不受影响。
+        </div>
+      )}
       <div className={styles.tabs}>
         <button type="button" className={cx(styles.tab, tab === "status" && styles.active)} onClick={() => selectTab("status")}>
           <Icon name="power_settings_new" /> 运行状态
@@ -195,6 +351,10 @@ export function ManageView() {
 
 function StatusTab() {
   const api = useApi();
+  const capabilities = usePanelCapabilities();
+  const logsSupported = !capabilities.detected || capabilities.supports("logs");
+  const clashSupported =
+    !capabilities.detected || capabilities.supports("clash.version");
   const native = useStream(api.status);
   const [state, setState] = useState<PanelState | null>(null);
   const [error, setError] = useState("");
@@ -229,6 +389,12 @@ function StatusTab() {
   }, []);
 
   const loadLogs = useCallback(async () => {
+    if (!logsSupported) {
+      setLogs("");
+      setLogsError("当前 panel 不支持 /api/logs；升级到 0.1.0-8 后可查看系统日志。");
+      setLogsLoading(false);
+      return;
+    }
     setLogsLoading(true);
     try {
       const result = await getPanelLogs(200);
@@ -239,9 +405,14 @@ function StatusTab() {
     } finally {
       setLogsLoading(false);
     }
-  }, []);
+  }, [logsSupported]);
 
   const loadClash = useCallback(async () => {
+    if (!clashSupported) {
+      setClashStatus("offline");
+      setClashVersion("");
+      return;
+    }
     setClashStatus("checking");
     try {
       const result = await getClashVersion();
@@ -251,7 +422,7 @@ function StatusTab() {
       setClashStatus("offline");
       setClashVersion("");
     }
-  }, []);
+  }, [clashSupported]);
 
   useEffect(() => {
     void load();
@@ -450,7 +621,9 @@ function StatusTab() {
           <dd className={styles.mono}>{state?.clash_api || "—"}</dd>
           <dt>状态</dt>
           <dd>
-            {clashStatus === "checking" ? (
+            {!clashSupported ? (
+              <span className={styles.muted}>当前 panel 不支持，需要 0.1.0-8</span>
+            ) : clashStatus === "checking" ? (
               <span className={styles.muted}>检查中…</span>
             ) : (
               <>
@@ -466,7 +639,11 @@ function StatusTab() {
                 </span>
               </>
             )}
-            <Button size="small" onClick={() => void loadClash()} disabled={busy}>
+            <Button
+              size="small"
+              onClick={() => void loadClash()}
+              disabled={busy || !clashSupported}
+            >
               检查
             </Button>
           </dd>
@@ -511,7 +688,11 @@ function StatusTab() {
       <Card title="系统日志">
         <div className={styles.toolbar}>
           <span className={styles.muted}>journalctl -u sing-box · 最近 200 行</span>
-          <Button size="small" onClick={() => void loadLogs()} disabled={logsLoading}>
+          <Button
+            size="small"
+            onClick={() => void loadLogs()}
+            disabled={logsLoading || !logsSupported}
+          >
             {logsLoading ? <Spinner /> : "刷新"}
           </Button>
         </div>
@@ -543,6 +724,11 @@ function StatusTab() {
 function SubscriptionsTab() {
   const api = useApi();
   const { language } = useI18n();
+  const capabilities = usePanelCapabilities();
+  const managedSupported =
+    !capabilities.detected || capabilities.supports("subscriptions.managed");
+  const scheduleSupported =
+    !capabilities.detected || capabilities.supports("subscriptions.schedule");
   const now = useNow(30_000);
   const [items, setItems] = useState<PanelSubscription[]>([]);
   const [name, setName] = useState("");
@@ -560,20 +746,24 @@ function SubscriptionsTab() {
     try {
       const [result, managedResult] = await Promise.allSettled([
         listSubscriptions(),
-        getManagedSubscriptions(),
+        managedSupported ? getManagedSubscriptions() : Promise.resolve(null),
       ]);
       if (result.status === "rejected") {
         throw result.reason;
       }
       setItems(result.value.subscriptions ?? []);
-      setManaged(managedResult.status === "fulfilled" ? managedResult.value : null);
+      setManaged(
+        managedSupported && managedResult.status === "fulfilled"
+          ? managedResult.value
+          : null,
+      );
       setError("");
     } catch (cause) {
       setError(errorText(cause));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [managedSupported]);
 
   useEffect(() => {
     void load();
@@ -686,6 +876,10 @@ function SubscriptionsTab() {
   };
 
   const setSchedule = async (item: PanelSubscription, interval: number) => {
+    if (!scheduleSupported) {
+      setError("当前 panel 不支持自动更新设置；升级到 0.1.0-8 后可用。");
+      return;
+    }
     setBusy(true);
     setError("");
     setMessage("");
@@ -805,20 +999,24 @@ function SubscriptionsTab() {
                   )}
                   <span>
                     自动更新{" "}
-                    <select
-                      value={String(interval)}
-                      onChange={(event) => void setSchedule(item, Number(event.target.value))}
-                      disabled={busy}
-                      aria-label={`${item.name || item.url} 自动更新间隔`}
-                    >
-                      <option value="0">关闭</option>
-                      {interval > 0 && ![21600, 43200, 86400].includes(interval) && (
-                        <option value={String(interval)}>{formatInterval(interval)}</option>
-                      )}
-                      <option value="21600">每 6 小时</option>
-                      <option value="43200">每 12 小时</option>
-                      <option value="86400">每天</option>
-                    </select>
+                    {!scheduleSupported ? (
+                      <span className={styles.muted}>需要 0.1.0-8</span>
+                    ) : (
+                      <select
+                        value={String(interval)}
+                        onChange={(event) => void setSchedule(item, Number(event.target.value))}
+                        disabled={busy}
+                        aria-label={`${item.name || item.url} 自动更新间隔`}
+                      >
+                        <option value="0">关闭</option>
+                        {interval > 0 && ![21600, 43200, 86400].includes(interval) && (
+                          <option value={String(interval)}>{formatInterval(interval)}</option>
+                        )}
+                        <option value="21600">每 6 小时</option>
+                        <option value="43200">每 12 小时</option>
+                        <option value="86400">每天</option>
+                      </select>
+                    )}
                   </span>
                   {interval > 0 && (
                     <span>
@@ -1102,6 +1300,9 @@ function EbpfTab() {
 function ConfigTab() {
   const api = useApi();
   const { language } = useI18n();
+  const capabilities = usePanelCapabilities();
+  const canDownload =
+    !capabilities.detected || capabilities.supports("config.backup.download");
   const [text, setText] = useState("");
   const [original, setOriginal] = useState("");
   const [backups, setBackups] = useState<PanelBackup[]>([]);
@@ -1110,7 +1311,9 @@ function ConfigTab() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [pending, setPending] = useState<{ kind: "apply" } | { kind: "restore"; name: string } | null>(null);
+  const [pending, setPending] = useState<{ kind: "restore"; name: string } | null>(null);
+  const [showDiff, setShowDiff] = useState(false);
+  const [schema, setSchema] = useState<JsonEditorSchema | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1131,6 +1334,27 @@ function ConfigTab() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const url = `${import.meta.env.BASE_URL}sing-box.schema.json`;
+    fetch(url)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((value: unknown) => {
+        if (
+          !cancelled &&
+          typeof value === "object" &&
+          value !== null &&
+          !Array.isArray(value)
+        ) {
+          setSchema(value as JsonEditorSchema);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const validate = async () => {
     setBusy(true);
@@ -1167,6 +1391,7 @@ function ConfigTab() {
     } finally {
       setBusy(false);
       setPending(null);
+      setShowDiff(false);
     }
   };
 
@@ -1206,6 +1431,10 @@ function ConfigTab() {
   };
 
   const download = async (name: string) => {
+    if (!canDownload) {
+      setError("当前 panel 不支持备份下载；升级到 0.1.0-8 后可用。");
+      return;
+    }
     setBusy(true);
     setMessage("");
     setError("");
@@ -1227,14 +1456,22 @@ function ConfigTab() {
       {message !== "" && <div className={styles.successBox}>{message}</div>}
 
       <div className={styles.toolbar}>
-        <span className={styles.muted}>
+        <span
+          className={styles.muted}
+          title="Schema 随 UI 一起提供，不会在编辑时请求外部站点"
+        >
           {loading ? "正在读取配置…" : dirty ? "有未应用的修改" : "配置已同步"}
+          {schema !== null ? " · Schema 补全" : ""}
         </span>
         <div className={styles.actions}>
           <Button onClick={() => void validate()} disabled={busy || loading}>
             校验
           </Button>
-          <Button variant="primary" onClick={() => setPending({ kind: "apply" })} disabled={busy || loading || !dirty}>
+          <Button
+            variant="primary"
+            onClick={() => setShowDiff(true)}
+            disabled={busy || loading || !dirty}
+          >
             应用并重启
           </Button>
           <Button onClick={() => void backup()} disabled={busy || loading}>
@@ -1263,8 +1500,9 @@ function ConfigTab() {
               key={editorKey}
               className={styles.jsonEditor}
               initialValue={text}
+              schema={schema}
               onChange={(value) => setText(value)}
-              onSave={() => setPending({ kind: "apply" })}
+              onSave={() => setShowDiff(true)}
             />
           </Suspense>
         )}
@@ -1292,7 +1530,12 @@ function ConfigTab() {
                   >
                     恢复
                   </Button>
-                  <Button size="small" onClick={() => void download(item.name)} disabled={busy}>
+                  <Button
+                    size="small"
+                    onClick={() => void download(item.name)}
+                    disabled={busy || !canDownload}
+                    title={!canDownload ? "需要 sing-box-panel 0.1.0-8" : undefined}
+                  >
                     下载
                   </Button>
                 </div>
@@ -1302,23 +1545,23 @@ function ConfigTab() {
         )}
       </Card>
 
+      {showDiff && (
+        <ConfigDiffDialog
+          original={original}
+          text={text}
+          busy={busy}
+          onApply={() => void apply()}
+          onClose={() => setShowDiff(false)}
+        />
+      )}
+
       {pending !== null && (
         <ConfirmDialog
-          title={pending.kind === "apply" ? "应用配置" : "恢复备份"}
-          message={
-            pending.kind === "apply"
-              ? "将写入配置并重启 sing-box；校验失败会保留原配置，运行失败会自动回滚。"
-              : `将恢复备份「${pending.name}」并重启 sing-box，当前配置会被面板自动备份。`
-          }
-          confirmLabel={pending.kind === "apply" ? "应用并重启" : "恢复并重启"}
+          title="恢复备份"
+          message={`将恢复备份「${pending.name}」并重启 sing-box，当前配置会被面板自动备份。`}
+          confirmLabel="恢复并重启"
           busy={busy}
-          onConfirm={() => {
-            if (pending.kind === "apply") {
-              void apply();
-            } else {
-              void restore(pending.name);
-            }
-          }}
+          onConfirm={() => void restore(pending.name)}
           onClose={() => setPending(null)}
         />
       )}

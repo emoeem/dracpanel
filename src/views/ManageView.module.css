@@ -359,6 +359,107 @@
   border-radius: var(--radius-md);
 }
 
+:global(.dialog).diff-dialog {
+  width: min(1120px, calc(100% - 48px));
+  max-width: calc(100% - 48px);
+}
+
+.diff-summary {
+  max-height: 28vh;
+  padding: var(--space-4);
+  margin: var(--space-12) 0;
+  overflow: auto;
+  background: var(--inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.diff-summary-row {
+  display: grid;
+  grid-template-columns: 44px minmax(160px, 0.8fr) minmax(0, 1.4fr);
+  gap: var(--space-8);
+  align-items: start;
+  padding: var(--space-6) var(--space-8);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  border-bottom: 1px solid var(--border);
+}
+
+.diff-summary-row:last-child {
+  border-bottom: 0;
+}
+
+.diff-summary-row code {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.diff-sensitive {
+  background: var(--danger-soft);
+}
+
+.diff-kind {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-semibold);
+}
+
+.diff-kind-added {
+  color: var(--good);
+}
+
+.diff-kind-removed {
+  color: var(--danger);
+}
+
+.diff-kind-changed {
+  color: var(--medium);
+}
+
+.diff-lines {
+  max-height: 36vh;
+  margin-bottom: var(--space-12);
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: 1.5;
+  background: var(--inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.diff-line {
+  display: grid;
+  grid-template-columns: 3.5em 3.5em 1.5em minmax(0, 1fr);
+  gap: var(--space-6);
+  padding: 0 var(--space-8);
+}
+
+.diff-line code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.diff-line-no {
+  color: var(--text-faint);
+  text-align: right;
+  user-select: none;
+}
+
+.diff-sign {
+  color: var(--text-faint);
+  text-align: center;
+  user-select: none;
+}
+
+.diff-added {
+  background: var(--good-soft);
+}
+
+.diff-removed {
+  background: var(--danger-soft);
+}
+
 @media (max-width: 1100px) {
   .cards {
     grid-template-columns: 1fr;
@@ -366,5 +467,14 @@
 
   .card-split {
     grid-template-columns: 1fr;
+  }
+
+  :global(.dialog).diff-dialog {
+    width: calc(100% - 24px);
+    max-width: calc(100% - 24px);
+  }
+
+  .diff-summary-row {
+    grid-template-columns: 40px minmax(120px, 0.7fr) minmax(0, 1fr);
   }
 }

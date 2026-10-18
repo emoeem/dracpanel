@@ -3,8 +3,11 @@
 Dracula Panel for sing-box — real-environment acceptance run (2026-10-17).
 
 > **Privacy:** these screenshots were captured from a live local instance.
-> Some pages (connections/logs) contain local test domain names. If this
-> checkout is made public, review/redact this folder first.
+> The connections, speedtest, subscription-test, and eBPF images have been
+> pixelated over real destinations, node names, and installed application
+> names; the settings footer's local source path is also pixelated. The config
+> screenshot uses a hand-written sample; no token or secret was intentionally
+> captured. Re-check new screenshots before committing them.
 
 All screenshots were taken against the live stack:
 
@@ -20,24 +23,24 @@ All screenshots were taken against the live stack:
 | `00-gate-dark.png` | 登录门 | Dracula gate, token only |
 | `01-overview-dark.png` | 概览 | traffic, status, four-mode card |
 | `02-groups-dark.png` | 代理 | real groups/nodes |
-| `03-connections-dark.png` | 连接 | virtual list |
+| `03-connections-dark.png` | 连接 | virtual list; destinations pixelated |
 | `04-logs-dark.png` | 日志 | native log stream |
 | `05-rules-dark.png` | 规则 | config-derived route/DNS rules |
-| `06-speedtest-dark.png` | 测速 | native URLTest delays |
-| `07-settings-dark.png` | 设置 | About shows upstream + non-affiliation notice |
+| `06-speedtest-dark.png` | 测速 | native URLTest delays; node names pixelated |
+| `07-settings-dark.png` | 设置 | About shows upstream + non-affiliation notice; local path pixelated |
 | `08-manage-status-dark.png` | 管理 → 运行状态 | panel service state + native traffic |
 | `09-manage-subscriptions-dark.png` | 管理 → 订阅 | empty state (no subscriptions configured) |
-| `10-manage-ebpf-dark.png` | 管理 → eBPF | policy + app list + probe |
+| `10-manage-ebpf-dark.png` | 管理 → eBPF | policy + app list + probe; app names pixelated |
 | `11-manage-config-dark.png` | 管理 → 配置 | CodeMirror Dracula; **sanitized sample config (no secrets)** |
 | `12-overview-light.png` | 概览（Alucard） | light variant |
 | `13-manage-after-restart.png` | 管理 | after core restart, no page reload |
-| `14-manage-ebpf-applied.png` | 管理 | after eBPF config apply |
+| `14-manage-ebpf-applied.png` | 管理 | after eBPF config apply; app names pixelated |
 | `15-manage-stopped.png` | 管理 | core stopped, management still reachable |
 | `16-manage-running.png` | 管理 | core started again |
 | `17-overview-mobile.png` | 概览（390px） | mobile fallback, no overflow |
 | `18-tools-dark.png` | 工具 | upstream tools page, Dracula styled |
-| `19-connections-virtual-dark.png` | 连接（大数量） | 56 tracked connections rendered as 14 DOM rows |
-| `20-manage-subscription-test-dark.png` | 管理 → 订阅 | local mock subscription added, updated, then deleted (no config write) |
+| `19-connections-virtual-dark.png` | 连接（大数量） | 56 tracked connections rendered as 14 DOM rows; destinations/node names pixelated |
+| `20-manage-subscription-test-dark.png` | 管理 → 订阅 | local mock subscription added, updated, then deleted (no config write); name/URL pixelated |
 
 The config screenshot uses a hand-written sample JSON (geosite/cn, direct
 outbound) inserted into the editor **without applying it**; the real config

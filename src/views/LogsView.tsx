@@ -11,13 +11,43 @@ import { useI18n } from "../app/i18n";
 import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/PageHeader";
 import { StreamErrorBanner } from "../components/StreamBanner";
-import { EmptyState, IconButton, MenuItem, OthersMenu, SearchInput, Spinner, SubMenu } from "../components/ui";
+import {
+  Button,
+  Dialog,
+  EmptyState,
+  Field,
+  IconButton,
+  MenuItem,
+  OthersMenu,
+  SearchInput,
+  Select,
+  Spinner,
+  SubMenu,
+} from "../components/ui";
 import { LogLevel } from "../gen/daemon/started_service_pb";
 import { ansiColorCss, parseAnsi, parseCssColor, stripAnsi, type Rgb } from "../lib/ansi";
+import { extractLogType } from "../lib/logTools";
 import { canShare, shareError, shareFile } from "../lib/sharing";
+import { loadStoredJson, saveStoredJson } from "../lib/storage";
 import styles from "./LogsView.module.css";
 
 const MAX_VISIBLE_LOGS = 1000;
+const LOG_TYPE_KEY = "log-type-filter";
+const LOG_HIDE_REGEX_KEY = "log-hide-regex";
+const LOG_MAX_ENTRIES_KEY = "log-max-entries";
+const MAX_ENTRY_OPTIONS = [200, 500, 1000, 3000] as const;
+
+function loadStringPreference(key: string, fallback: string): string {
+  const value = loadStoredJson(key);
+  return typeof value === "string" ? value : fallback;
+}
+
+function loadNumberPreference(key: string, fallback: number): number {
+  const value = loadStoredJson(key);
+  return typeof value === "number" && MAX_ENTRY_OPTIONS.includes(value as (typeof MAX_ENTRY_OPTIONS)[number])
+    ? value
+    : fallback;
+}
 
 const LEVEL_OPTIONS: { value: LogLevel; label: string }[] = [
   { value: LogLevel.ERROR, label: "Error" },
@@ -65,6 +95,10 @@ export function LogsView() {
   const [paused, setPaused] = useState(false);
   const [frozen, setFrozen] = useState<LogEntry[]>([]);
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState(() => loadStringPreference(LOG_TYPE_KEY, "all"));
+  const [hideRegex, setHideRegex] = useState(() => loadStringPreference(LOG_HIDE_REGEX_KEY, ""));
+  const [maxEntries, setMaxEntries] = useState(() => loadNumberPreference(LOG_MAX_ENTRIES_KEY, MAX_VISIBLE_LOGS));
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const viewRef = useRef<HTMLDivElement>(null);
   const background = useLogBackground();
 
@@ -81,21 +115,47 @@ export function LogsView() {
 
   const sourceEntries = paused ? frozen : logs.data.entries;
 
+  const typeOptions = useMemo(() => {
+    const types = new Set<string>();
+    for (const entry of sourceEntries) {
+      types.add(extractLogType(entry.message));
+    }
+    return [...types].sort();
+  }, [sourceEntries]);
+
+  const hidePattern = useMemo(() => {
+    const pattern = hideRegex.trim();
+    if (pattern === "") {
+      return { value: null, invalid: false };
+    }
+    try {
+      return { value: new RegExp(pattern, "i"), invalid: false };
+    } catch {
+      return { value: null, invalid: true };
+    }
+  }, [hideRegex]);
+
   const filtered = useMemo(() => {
     let entries = sourceEntries.filter((entry) => entry.level <= effectiveLevel);
+    if (typeFilter !== "all") {
+      entries = entries.filter((entry) => extractLogType(entry.message) === typeFilter);
+    }
+    if (hidePattern.value !== null) {
+      entries = entries.filter((entry) => !hidePattern.value!.test(stripAnsi(entry.message)));
+    }
     const query = search.trim().toLowerCase();
     if (query !== "") {
       entries = entries.filter((entry) => stripAnsi(entry.message).toLowerCase().includes(query));
     }
     return entries;
-  }, [sourceEntries, effectiveLevel, search]);
+  }, [sourceEntries, effectiveLevel, typeFilter, hidePattern, search]);
 
   const visible = useMemo(
     () =>
-      filtered.length > MAX_VISIBLE_LOGS
-        ? filtered.slice(filtered.length - MAX_VISIBLE_LOGS)
+      filtered.length > maxEntries
+        ? filtered.slice(filtered.length - maxEntries)
         : filtered,
-    [filtered],
+    [filtered, maxEntries],
   );
 
   const logsText = () => filtered.map((entry) => stripAnsi(entry.message)).join("\n");
@@ -126,7 +186,9 @@ export function LogsView() {
   }, [visible, paused]);
 
   let body: ReactNode;
-  if (sourceEntries.length > 0 && outage === null) {
+  if (sourceEntries.length > 0 && outage === null && filtered.length === 0) {
+    body = <EmptyState icon="search">{t("No results")}</EmptyState>;
+  } else if (sourceEntries.length > 0 && outage === null) {
     body = (
       <div className={styles.logView} ref={viewRef}>
         {visible.map((entry) => (
@@ -179,6 +241,9 @@ export function LogsView() {
                   </MenuItem>
                 ))}
               </SubMenu>
+              <MenuItem icon="tune" onSelect={() => setSettingsOpen(true)}>
+                {t("Filters")}
+              </MenuItem>
               <SubMenu label={t("Save")} icon="save">
                 <MenuItem
                   icon="content_copy"
@@ -214,6 +279,65 @@ export function LogsView() {
       </div>
       <StreamErrorBanner error={outage} />
       {body}
+      {settingsOpen && (
+        <Dialog onClose={() => setSettingsOpen(false)}>
+          <h3>{t("Filters")}</h3>
+          <Field label={t("Log Type")}>
+            <Select
+              options={[
+                { value: "all", label: t("All types") },
+                ...typeOptions.map((type) => ({ value: type, label: type })),
+              ]}
+              value={typeFilter}
+              onChange={(value) => {
+                setTypeFilter(value);
+                saveStoredJson(LOG_TYPE_KEY, value);
+              }}
+            />
+          </Field>
+          <Field label={t("Hide log regex")}>
+            <input
+              className="input"
+              value={hideRegex}
+              aria-invalid={hidePattern.invalid}
+              onChange={(event) => {
+                setHideRegex(event.target.value);
+                saveStoredJson(LOG_HIDE_REGEX_KEY, event.target.value);
+              }}
+            />
+          </Field>
+          <Field label={t("Max log entries")}>
+            <Select
+              options={MAX_ENTRY_OPTIONS.map((value) => ({
+                value,
+                label: String(value),
+              }))}
+              value={maxEntries}
+              onChange={(value) => {
+                setMaxEntries(value);
+                saveStoredJson(LOG_MAX_ENTRIES_KEY, value);
+              }}
+            />
+          </Field>
+          <div className="row-actions dialog-actions">
+            <Button
+              onClick={() => {
+                setTypeFilter("all");
+                setHideRegex("");
+                setMaxEntries(MAX_VISIBLE_LOGS);
+                saveStoredJson(LOG_TYPE_KEY, "all");
+                saveStoredJson(LOG_HIDE_REGEX_KEY, "");
+                saveStoredJson(LOG_MAX_ENTRIES_KEY, MAX_VISIBLE_LOGS);
+              }}
+            >
+              {t("Reset")}
+            </Button>
+            <Button variant="primary" onClick={() => setSettingsOpen(false)}>
+              {t("Done")}
+            </Button>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

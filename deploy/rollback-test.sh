@@ -53,8 +53,14 @@ restore_all() {
 
 [ -f "$CFG" ] || { echo "缺少配置"; exit 1; }
 [ -d "$DST" ] || { echo "缺少当前 UI 目录 $DST"; exit 1; }
-[ -n "$LEGACY" ] && [ -d "$LEGACY" ] || { echo "缺少旧 UI 备份"; exit 1; }
-[ -n "$PRE" ] && [ -f "$PRE" ] || { echo "缺少配置备份"; exit 1; }
+if [ -z "$LEGACY" ] || [ ! -d "$LEGACY" ]; then
+  echo "缺少旧 UI 备份" >&2
+  exit 1
+fi
+if [ -z "$PRE" ] || [ ! -f "$PRE" ]; then
+  echo "缺少配置备份" >&2
+  exit 1
+fi
 [ ! -e "$UI_HOLD" ] || { echo "临时目录已存在：$UI_HOLD"; exit 1; }
 
 trap 'if [ "$DONE" -eq 0 ]; then restore_all; fi' EXIT

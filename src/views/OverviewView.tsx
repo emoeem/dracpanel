@@ -24,6 +24,8 @@ import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/PageHeader";
 import { StreamBanner } from "../components/StreamBanner";
 import { TrafficMap } from "../components/TrafficMap";
+import { TrafficHistoryCard } from "../components/TrafficHistoryCard";
+import { ConnectionHistoryCard } from "../components/ConnectionHistoryCard";
 import { AdaptiveSegmented, Button, Card, DataLine, Dialog, EmptyState, IconButton, Sparkline } from "../components/ui";
 import { ServiceStatus_Type } from "../gen/daemon/started_service_pb";
 import { ProfileCard, SystemProxyCard } from "./ProfileViews";
@@ -88,6 +90,7 @@ export function OverviewView() {
       <div className={styles.cardGrid}>
         <TrafficMap />
       </div>
+      {started && <OverviewHistoryCards config={cardsConfig} />}
       {managing && (
         <CardManagementDialog
           config={cardsConfig}
@@ -98,6 +101,26 @@ export function OverviewView() {
           }}
           onClose={() => setManaging(false)}
         />
+      )}
+    </div>
+  );
+}
+
+const HISTORY_CARD_IDS = new Set(["trafficHistory", "connectionHistory"]);
+
+function OverviewHistoryCards(props: { config: DashboardCardsConfig }) {
+  const cards = orderedEnabledCards(props.config).filter((card) => HISTORY_CARD_IDS.has(card));
+  if (cards.length === 0) {
+    return null;
+  }
+  return (
+    <div className={styles.cardGrid}>
+      {cards.map((card) =>
+        card === "trafficHistory" ? (
+          <TrafficHistoryCard key={card} />
+        ) : (
+          <ConnectionHistoryCard key={card} />
+        ),
       )}
     </div>
   );
@@ -202,7 +225,9 @@ function OverviewCards(props: { config: DashboardCardsConfig; host: DesktopHost 
     }
   };
 
-  const visibleCards = orderedEnabledCards(props.config).filter(isCardVisible);
+  const visibleCards = orderedEnabledCards(props.config)
+    .filter((card) => !HISTORY_CARD_IDS.has(card))
+    .filter(isCardVisible);
   const wideCards = new Set(
     groupCardRows(visibleCards)
       .filter((row) => row.length === 1)

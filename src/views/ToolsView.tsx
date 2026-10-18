@@ -64,6 +64,12 @@ export function ToolsView() {
               onClick={() => navigate("tools/network-quality")}
             />
             <NavRow icon="swap_horiz" title={t("STUN Test")} onClick={() => navigate("tools/stun")} />
+            <NavRow icon="dns" title={t("DNS Tools")} onClick={() => navigate("tools/dns")} />
+            <NavRow
+              icon="network_check"
+              title={t("Connectivity Test")}
+              onClick={() => navigate("tools/connectivity")}
+            />
           </div>
         </div>
         <DebugRows />

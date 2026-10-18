@@ -7,6 +7,8 @@ export type DashboardCardId =
   | "downloadTraffic"
   | "status"
   | "connections"
+  | "trafficHistory"
+  | "connectionHistory"
   | "systemProxy"
   | "clashMode"
   | "profile";
@@ -27,6 +29,8 @@ export const DASHBOARD_CARDS: Record<
   downloadTraffic: { title: "Download", icon: "download", pairGroup: "traffic" },
   status: { title: "Status", icon: "bug_report", pairGroup: "statistics" },
   connections: { title: "Connections", icon: "cable", pairGroup: "statistics" },
+  trafficHistory: { title: "Traffic History", icon: "speed" },
+  connectionHistory: { title: "Connection History", icon: "hub" },
   systemProxy: { title: "System HTTP Proxy", icon: "router", desktop: true },
   clashMode: { title: "Clash Mode", icon: "route" },
   profile: { title: "Profile", icon: "folder", desktop: true, permanent: true },
@@ -37,6 +41,8 @@ const DEFAULT_CARD_ORDER: DashboardCardId[] = [
   "downloadTraffic",
   "status",
   "connections",
+  "trafficHistory",
+  "connectionHistory",
   "systemProxy",
   "clashMode",
   "profile",
@@ -68,10 +74,17 @@ export function loadDashboardCardsConfig(desktop: boolean): DashboardCardsConfig
     let order = (Array.isArray(parsed.order) ? parsed.order : []).filter(
       (card): card is string => typeof card === "string" && known.has(card),
     );
+    const savedOrder = new Set(order);
     const ordered = new Set(order);
     order = order.concat(defaults.filter((card) => !ordered.has(card)));
     const enabledCards = new Set(enabled);
     for (const card of defaults) {
+      // Cards introduced after this config was saved are enabled once. A card
+      // the user intentionally disabled remains in savedOrder, so it stays off.
+      if (!savedOrder.has(card) && !enabledCards.has(card)) {
+        enabled.push(card);
+        enabledCards.add(card);
+      }
       if (DASHBOARD_CARDS[card].permanent && !enabledCards.has(card)) {
         enabled = orderedEnabledCards({ enabled: [...enabled, card], order });
         enabledCards.add(card);

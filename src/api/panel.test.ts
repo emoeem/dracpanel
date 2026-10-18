@@ -9,6 +9,7 @@ import {
   MANAGED_SERVER_ID,
   normalizeConfigJson,
   PANEL_TOKEN_KEY,
+  probePanelEndpoint,
   setSubscriptionSchedule,
 } from "./panel";
 import { loadStoredJson, saveStoredJson } from "../lib/storage";
@@ -173,6 +174,41 @@ describe("setSubscriptionSchedule", () => {
     expect(calls[0]?.init?.body).toBe('{"update_interval":3600}');
     expect(calls[0]?.init?.headers).toBeInstanceOf(Headers);
     expect((calls[0]?.init?.headers as Headers).get("X-Panel-Token")).toBe("token");
+  });
+});
+
+describe("probePanelEndpoint", () => {
+  it("distinguishes an absent route from a known route's 404", async () => {
+    const responses = [
+      new Response(JSON.stringify({ ok: false, message: "未知接口：GET /api/geoip" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      }),
+      new Response(JSON.stringify({ ok: false, message: "找不到备份" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      }),
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => responses.shift()!),
+    );
+
+    await expect(probePanelEndpoint("/geoip?ip=1.1.1.1")).resolves.toMatchObject({
+      supported: false,
+      status: 404,
+    });
+    await expect(probePanelEndpoint("/config/backups/missing.json")).resolves.toMatchObject({
+      supported: true,
+      status: 404,
+    });
+    await expect(probePanelEndpoint("/logs?n=1")).resolves.toMatchObject({
+      supported: true,
+    });
   });
 });
 

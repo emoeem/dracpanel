@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { getPanelConfig, PanelAuthError } from "../api/panel";
 import { navigate } from "../app/context";
 import { useI18n } from "../app/i18n";
 import { PageHeader } from "../components/PageHeader";
-import { Badge, Button, Card, EmptyState, Spinner } from "../components/ui";
+import { Badge, Button, Card, EmptyState, SearchInput, Select, Spinner } from "../components/ui";
 import { cx } from "../lib/cx";
 import styles from "./RulesView.module.css";
 
@@ -28,6 +28,7 @@ interface ConfigShape {
 }
 
 type Tab = "route" | "dns" | "rule_set";
+type RuleSort = "config" | "action" | "outbound";
 
 const ACTION_LABELS: Record<string, string> = {
   route: "路由",
@@ -89,6 +90,30 @@ function actionOf(rule: JsonObject): string {
     return "logical";
   }
   return "default";
+}
+
+function applyRuleView(
+  rules: JsonObject[],
+  query: string,
+  actionFilter: string,
+  sort: RuleSort,
+): JsonObject[] {
+  const filtered = rules.filter((rule) => {
+    if (actionFilter !== "all" && actionOf(rule) !== actionFilter) {
+      return false;
+    }
+    return query === "" || JSON.stringify(rule).toLowerCase().includes(query);
+  });
+  if (sort === "action") {
+    filtered.sort((left, right) => actionOf(left).localeCompare(actionOf(right)));
+  } else if (sort === "outbound") {
+    filtered.sort((left, right) => {
+      const leftValue = String(left.outbound ?? left.server ?? "");
+      const rightValue = String(right.outbound ?? right.server ?? "");
+      return leftValue.localeCompare(rightValue);
+    });
+  }
+  return filtered;
 }
 
 function actionTone(action: string): "accent" | "danger" | "info" | "good" {
@@ -165,6 +190,9 @@ export function RulesView() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("route");
+  const [search, setSearch] = useState("");
+  const [actionFilter, setActionFilter] = useState("all");
+  const [sort, setSort] = useState<RuleSort>("config");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -188,10 +216,28 @@ export function RulesView() {
     void load();
   }, [load]);
 
-  const routeRules = config?.route?.rules ?? [];
-  const dnsRules = config?.dns?.rules ?? [];
-  const ruleSets = config?.route?.rule_set ?? [];
+  const routeRules = useMemo(() => config?.route?.rules ?? [], [config]);
+  const dnsRules = useMemo(() => config?.dns?.rules ?? [], [config]);
+  const ruleSets = useMemo(() => config?.route?.rule_set ?? [], [config]);
   const mode = config?.experimental?.clash_api?.default_mode;
+
+  const query = search.trim().toLowerCase();
+  const visibleRouteRules = useMemo(
+    () => applyRuleView(routeRules, query, actionFilter, sort),
+    [routeRules, query, actionFilter, sort],
+  );
+  const visibleDnsRules = useMemo(
+    () => applyRuleView(dnsRules, query, actionFilter, sort),
+    [dnsRules, query, actionFilter, sort],
+  );
+  const visibleRuleSets = useMemo(() => {
+    return ruleSets.filter((set) => query === "" || JSON.stringify(set).toLowerCase().includes(query));
+  }, [ruleSets, query]);
+  const actionOptions = useMemo(
+    () => [...new Set([...routeRules, ...dnsRules].map(actionOf))].sort(),
+    [routeRules, dnsRules],
+  );
+  const filtersActive = query !== "" || actionFilter !== "all";
 
   const actions = (
     <>
@@ -271,12 +317,55 @@ export function RulesView() {
             </button>
           </div>
 
+          <div className={styles.filters}>
+            <div className={styles.filterSearch}>
+              <SearchInput value={search} onChange={setSearch} />
+            </div>
+            {tab !== "rule_set" && (
+              <>
+                <Select
+                  options={[
+                    { value: "all", label: t("All actions") },
+                    ...actionOptions.map((action) => ({
+                      value: action,
+                      label: ACTION_LABELS[action] ?? action,
+                    })),
+                  ]}
+                  value={actionFilter}
+                  onChange={setActionFilter}
+                />
+                <Select
+                  options={[
+                    { value: "config", label: t("Configuration order") },
+                    { value: "action", label: t("Action") },
+                    { value: "outbound", label: t("Outbound") },
+                  ]}
+                  value={sort}
+                  onChange={(value) => setSort(value as RuleSort)}
+                />
+              </>
+            )}
+            {filtersActive && (
+              <Button
+                size="small"
+                onClick={() => {
+                  setSearch("");
+                  setActionFilter("all");
+                }}
+              >
+                {t("Clear filters")}
+              </Button>
+            )}
+          </div>
+
           {tab === "route" &&
             (routeRules.length === 0 ? (
               <EmptyState icon="filter_list">当前配置没有路由规则</EmptyState>
+            ) : visibleRouteRules.length === 0 ? (
+              <EmptyState icon="search">{t("No results")}</EmptyState>
             ) : (
               <div className={styles.list}>
-                {routeRules.map((rule, index) => (
+                {visibleRouteRules.map((rule, index) => (
                   <RuleItem key={index} rule={rule} index={index} />
                 ))}
               </div>
@@ -285,9 +374,11 @@ export function RulesView() {
           {tab === "dns" &&
             (dnsRules.length === 0 ? (
               <EmptyState icon="dns">当前配置没有 DNS 规则</EmptyState>
+            ) : visibleDnsRules.length === 0 ? (
+              <EmptyState icon="search">{t("No results")}</EmptyState>
             ) : (
               <div className={styles.list}>
-                {dnsRules.map((rule, index) => (
+                {visibleDnsRules.map((rule, index) => (
                   <RuleItem key={index} rule={rule} index={index} />
                 ))}
               </div>
@@ -296,9 +387,11 @@ export function RulesView() {
           {tab === "rule_set" &&
             (ruleSets.length === 0 ? (
               <EmptyState icon="folder">当前配置没有规则集</EmptyState>
+            ) : visibleRuleSets.length === 0 ? (
+              <EmptyState icon="search">{t("No results")}</EmptyState>
             ) : (
               <div className={styles.ruleSets}>
-                {ruleSets.map((set, index) => {
+                {visibleRuleSets.map((set, index) => {
                   const tag = set.tag;
                   return (
                     <div key={index} className={styles.ruleSet}>

@@ -1,6 +1,8 @@
 Dracula Panel for sing-box
 ==========================
 
+SPDX-License-Identifier: GPL-3.0-or-later
+
 An unofficial, Dracula-themed desktop web panel for sing-box.
 
 Upstream dashboard
@@ -8,8 +10,9 @@ Upstream dashboard
 This project is a fork of SagerNet/sing-box-dashboard:
   https://github.com/SagerNet/sing-box-dashboard
 
-The upstream project is licensed under the GNU General Public License v3.0.
-This fork is distributed under the same license (see LICENSE).
+The upstream project is licensed under the GNU General Public License,
+version 3 or later. This fork is distributed under the same license; the full
+text and the preserved upstream additional notice are in LICENSE.
 
 This build is NOT an official sing-box or SagerNet release and is not
 affiliated with or endorsed by SagerNet or the sing-box project. The name
@@ -24,3 +27,9 @@ Additional notice
 -----------------
 The management module talks to the local sing-box-panel HTTP API, which is
 not part of the upstream dashboard. It is an independently added component.
+
+JSON schema
+-----------
+public/sing-box.schema.json is a local snapshot of the official schema at
+https://sing-box.sagernet.org/schema.json (retrieved 2026-10-11), used for
+editor completion. See the sing-box project for its license and attribution.

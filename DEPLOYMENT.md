@@ -85,10 +85,13 @@ data.
   tags/groups, skipped protocols, and per-subscription failures are shown.
 - **eBPF** — policy mode, UID selection, app list with execs/PIDs, and a
   structured PASS/FAIL/UNKNOWN capability probe.
-- **配置** — CodeMirror (JSON5) editor with Dracula syntax colors, validate,
-  apply with panel-side backup/rollback, backup list, restore, and download.
-  Comments and trailing commas are accepted because sing-box accepts them;
-  other JSON5 extensions are rejected by both.
+- **配置** — CodeMirror (JSON5) editor with Dracula syntax colors, bundled
+  sing-box schema completion, a pre-apply field/line diff, validate, apply with
+  panel-side backup/rollback, backup list, restore, and download. Comments and
+  trailing commas are accepted because sing-box accepts them; other JSON5
+  extensions are rejected by both. The schema is served from the local
+  `public/sing-box.schema.json` asset (official schema snapshot, 2026-10-11);
+  update it when the target sing-box version changes.
 
 The management module's UI strings are currently Chinese-only. The status tab
 warns when `services.api.secret` is empty, because that disables native API
@@ -115,10 +118,23 @@ The new subscription, backup, and GeoIP features require the companion
   private/reserved/invalid IPs return 404, and a missing database/library
   returns 503. The lookup is in-memory only.
 
-Older panels lack these endpoints; the new controls show the resulting 404 and
-the rest of the page keeps working. The scheduler only refreshes subscription
-nodes; it never applies them to the live config. "写入配置" remains a manual
-action.
+Older panels lack these endpoints. The UI reads `features` from `/api/state`
+when available; otherwise it probes the routes once after login, disables the
+unsupported controls, and shows an upgrade hint instead of waiting for a 404.
+The scheduler only refreshes subscription nodes; it never applies them to the
+live config. "写入配置" remains a manual action.
+
+The optional backend contract is `"api_version": 8` plus a `"features"` array
+in `/api/state`. Recognized keys are `subscriptions.schedule`,
+`subscriptions.managed`, `subscriptions.userinfo`, `config.backup.download`,
+`logs`, `clash.version`, and `geoip`. When the array is present it is
+authoritative; when it is absent the UI probes those routes once per page.
+
+The management editor's schema completion uses
+`public/sing-box.schema.json`, a local snapshot of the official schema
+(2026-10-11). It is loaded from the same origin, never from a third party.
+Refresh the file when upgrading sing-box; backend `sing-box check` remains the
+authority for version-specific validation.
 
 ### GeoIP and the traffic map
 
@@ -154,7 +170,10 @@ All management writes go through the panel's existing validation/backup/
 atomic-replace/restart/rollback pipeline. A systemd path unit
 (`sing-box-config-perm.path`) enforces `chmod 600` on
 `/etc/sing-box/config.json` and re-checks it with `stat -c %a` after every
-change, because the panel writes the config with mode 0644.
+change, because the panel writes the config with mode 0644. The durable fix
+belongs in the companion panel backend: create the temporary file with mode
+0600 before `os.replace()`, and restore 0600 after a rollback write. The path
+unit remains a defense-in-depth fallback, not the primary guarantee.
 
 ## Theme
 
@@ -181,8 +200,8 @@ cd dracula-panel-for-sing-box
 # if cloned without --recursive:
 git submodule update --init --depth 1
 
-npx --yes pnpm@11.13.0 install --frozen-lockfile --trust-lockfile
-npx --yes pnpm@11.13.0 generate   # protobuf + icons + terminal themes
+npx --yes pnpm@11.13.1 install --frozen-lockfile --trust-lockfile
+npx --yes pnpm@11.13.1 generate   # protobuf + icons + terminal themes
 ./node_modules/.bin/tsc -b
 ./node_modules/.bin/vite build
 ```
@@ -299,8 +318,9 @@ bounded to 500 entries, and is discarded with the page.
 ## Verification record
 
 The live acceptance run and screenshots are kept in
-[artifacts/README.md](artifacts/README.md). Some screenshots contain local
-test domains/traffic; review/redact them before publishing this checkout.
+[artifacts/README.md](artifacts/README.md). Sensitive destinations, node names,
+application names, and the settings-page local path in the affected screenshots
+have been pixelated; re-check new captures before committing them.
 
 Verified on 2026-10-17 against sing-box v1.14.3-reF1nd:
 
@@ -331,14 +351,14 @@ proto/               StartedService protobuf
 vendor/              iTerm2 color-schemes submodule (terminal theme generator)
 artifacts/           acceptance scripts, screenshots, acceptance record
 deploy/              install.sh, rollback-test.sh
-NOTICE, LICENSE      GPL-3.0 and upstream/palette/name notices
+NOTICE, LICENSE      GPL-3.0-or-later (full text) and upstream/palette/name notices
 README-UPSTREAM.md   upstream README (kept for attribution)
 ```
 
 
 ## License
 
-GPL-3.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+GPL-3.0-or-later. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 This project is an unofficial fork of SagerNet/sing-box-dashboard. The upstream
 license requires that derivative works must not use the upstream name or imply

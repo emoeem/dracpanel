@@ -11,6 +11,12 @@ import {
   PanelAuthError,
   type PanelState,
 } from "../api/panel";
+import {
+  detectPanelCapabilities,
+  PanelCapabilitiesContext,
+  unknownPanelCapabilities,
+  type PanelCapabilities,
+} from "../api/panelCapabilities";
 import styles from "./PanelGate.module.css";
 
 type Phase = "checking" | "gate" | "error" | "recovery" | "ready";
@@ -35,6 +41,9 @@ export function PanelGate(props: { children: ReactNode }) {
   const [message, setMessage] = useState("");
   const [tokenInput, setTokenInput] = useState("");
   const [state, setState] = useState<PanelState | null>(null);
+  const [capabilities, setCapabilities] = useState<PanelCapabilities>(() =>
+    unknownPanelCapabilities(),
+  );
   const [busy, setBusy] = useState(false);
   const mounted = useRef(true);
 
@@ -65,7 +74,17 @@ export function PanelGate(props: { children: ReactNode }) {
       if (!mounted.current) {
         return;
       }
+      setCapabilities(unknownPanelCapabilities());
       setPhase("ready");
+      // Do not make login wait for the probes; unknown capabilities stay
+      // optimistic until the backend list or probe results arrive.
+      void detectPanelCapabilities(current)
+        .then((next) => {
+          if (mounted.current) {
+            setCapabilities(next);
+          }
+        })
+        .catch(() => {});
     } catch (error) {
       if (!mounted.current) {
         return;
@@ -164,7 +183,11 @@ export function PanelGate(props: { children: ReactNode }) {
   const showFallback = state?.zashboard_available !== false;
 
   if (phase === "ready") {
-    return <>{props.children}</>;
+    return (
+      <PanelCapabilitiesContext.Provider value={capabilities}>
+        {props.children}
+      </PanelCapabilitiesContext.Provider>
+    );
   }
 
   return (

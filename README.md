@@ -8,7 +8,7 @@ panel token, and the native API secret is bootstrapped and cached automatically.
 
 > **Unofficial fork.** This project is built on top of
 > [SagerNet/sing-box-dashboard](https://github.com/SagerNet/sing-box-dashboard)
-> (GPL-3.0). It is not affiliated with or endorsed by SagerNet or the sing-box
+> (GPL-3.0-or-later). It is not affiliated with or endorsed by SagerNet or the sing-box
 > project. See [NOTICE](NOTICE) and [LICENSE](LICENSE).
 
 ![Dracula Panel overview](artifacts/screenshots/01-overview-dark.png)
@@ -133,16 +133,35 @@ Browser
   的校验/备份/重启/回滚事务。
 - **eBPF**：策略模式、应用列表、UID 选择、能力预检；预检结果按
   PASS/FAIL/UNKNOWN 和 findings 展示，应用行显示可执行文件和运行进程数。
-- **配置**：CodeMirror JSON5 编辑器（Dracula 语法色）、校验、应用并重启、
-  备份列表、恢复和下载。应用失败由 panel 自动回滚。配置可以带注释/trailing
-  comma，panel 与原生 API 都按 sing-box 实际支持的子集解析。
+- **配置**：CodeMirror JSON5 编辑器（Dracula 语法色）、本地 sing-box Schema
+  补全、应用前的字段级/行级 Diff、校验、应用并重启、备份列表、恢复和下载。
+  应用失败由 panel 自动回滚。配置可以带注释/trailing comma，panel 与原生 API
+  都按 sing-box 实际支持的子集解析。
 
 管理模块目前只提供中文界面；上游 dashboard 页面仍跟随其语言设置。上述
 panel 侧能力和全球连接地图需要配套的 `sing-box-panel 0.1.0-8`，包括
 `POST /api/subscriptions/<id>/schedule`、`GET /api/subscriptions/managed`、
 `GET /api/config/backups/<name>`、`GET /api/geoip?ip=...`、`/api/logs` 和
-`/api/state` 的可用性/`egress_ip` 字段；仍在使用 0.1.0-6 时新控件会收到
-404，其余管理功能不受影响。
+`/api/state` 的可用性/`egress_ip` 字段。
+
+### 面板能力契约
+
+UI 登录后会优先读取 `/api/state.features`（可选，字符串数组）。如果后端
+提供该字段，UI 以它为准；没有该字段时，UI 会一次性探测下列端点，并在
+管理页禁用不支持的控件、显示“升级到 0.1.0-8”的提示，而不是等用户点击后
+才收到 404：
+
+`subscriptions.schedule`、`subscriptions.managed`、
+`subscriptions.userinfo`、`config.backup.download`、`logs`、
+`clash.version`、`geoip`。
+
+后端可以在 `/api/state` 里增加 `"api_version": 8` 和同名的 `features`
+数组来跳过探测。探测只访问同源 panel，不访问外部服务。
+
+配置编辑器的补全来自随 UI 打包的 `public/sing-box.schema.json`，取自
+<https://sing-box.sagernet.org/schema.json>（2026-10-11）；加载和补全都只
+访问同源静态资源。升级 sing-box 后应同步更新该文件；过新/过旧的字段仍以
+后端 `sing-box check` 为准。
 
 ## 主题
 
@@ -177,8 +196,8 @@ cd dracula-panel-for-sing-box
 # 如果克隆时没有 --recursive：
 git submodule update --init --depth 1
 
-npx --yes pnpm@11.13.0 install --frozen-lockfile --trust-lockfile
-npx --yes pnpm@11.13.0 generate   # protobuf + 图标 + 终端主题
+npx --yes pnpm@11.13.1 install --frozen-lockfile --trust-lockfile
+npx --yes pnpm@11.13.1 generate   # protobuf + 图标 + 终端主题
 ./node_modules/.bin/tsc -b
 ./node_modules/.bin/vite build
 ```
@@ -226,7 +245,7 @@ sudo ./deploy/install.sh --refresh-geoip  # 重新下载 DB-IP 城市库
 > 订阅自动更新/Userinfo、备份下载和全球连接地图需要配套的
 > `sing-box-panel 0.1.0-8`；
 > `deploy/install.sh` 只部署 UI，不构建或安装面板包。仍使用 0.1.0-6 时，
-> 这些新控件会收到 404，UI 会显示错误但不会影响其他管理功能。
+> UI 会探测到缺失端点并禁用相应控件、提示升级；其余管理功能不受影响。
 
 ### 首次登录
 
@@ -243,6 +262,8 @@ sudo cat /var/lib/sing-box-panel/token
 - 原生 API 只监听 `127.0.0.1:9091`，CORS 白名单仅 9096/localhost:9096；
 - 9091 的 dashboard 已关闭（`/dashboard/` = 404）；
 - panel 写配置时是 0644，`sing-box-config-perm.path` 会立即恢复 600 并复核；
+  这是兜底，不是最终的权限保证。后端应直接以 0600 创建临时文件再原子替换；
+  修复属于配套 `sing-box-panel` 包，不在本仓库的安装脚本里；
 - 静态产物不含任何 token/secret；登录后 secret 存在本机 localStorage；
 - **仅支持本机使用**：入口固定为 `http://127.0.0.1:9096`（或
   `http://localhost:9096`），原生 API 地址写死为 `127.0.0.1:9091`，CORS
@@ -257,8 +278,9 @@ sudo cat /var/lib/sing-box-panel/token
   条目，并让其他标签页刷新回登录页，但它只防误操作/他人顺手使用当前浏览器，
   **不防本机同用户进程、恶意浏览器扩展或 XSS**。需要更强隔离时，应使用独立
   的桌面用户/浏览器 profile；
-- 仓库中的验收截图来自真实本机实例，**部分截图包含本地测试域名/流量**；
-  如果要把本仓库公开，请先审阅/脱敏 `artifacts/screenshots/`。
+- 仓库中的验收截图来自真实本机实例；连接、测速、订阅测试、eBPF 截图中的
+  真实目标、节点名、应用名，以及设置页的本机源码路径已像素化。新增截图前
+  仍需先脱敏。
 
 ## 全球连接地图与 GeoIP
 
@@ -350,7 +372,7 @@ Dracula UI 本身。
 ├── artifacts/           验收脚本、截图、验收记录
 ├── deploy/              一次性部署脚本、回滚演练脚本
 ├── NOTICE               上游/主题/非官方声明
-├── LICENSE              GPL-3.0
+├── LICENSE              GPL-3.0-or-later（完整文本）
 ├── README-UPSTREAM.md   上游原始 README（保留）
 └── DEPLOYMENT.md        构建、部署、安全、回滚细节
 ```
@@ -358,7 +380,8 @@ Dracula UI 本身。
 ## 许可证与致谢
 
 - 本项目基于 [SagerNet/sing-box-dashboard](https://github.com/SagerNet/sing-box-dashboard)，
-  遵循 **GNU GPL v3.0**；见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
+  遵循 **GPL-3.0-or-later**；完整许可证文本见 [LICENSE](LICENSE)，
+  版权与关联声明见 [NOTICE](NOTICE)。
 - Dracula / Alucard 色板来自 [Dracula Theme](https://github.com/dracula/dracula-theme)。
 - 图标来自 Material Design Icons（Apache-2.0）。
 - 上游许可证明确要求衍生作品不得使用原名或暗示官方关联；本项目使用

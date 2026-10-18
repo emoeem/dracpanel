@@ -25,10 +25,18 @@ import {
   type BidirectionalStream,
   type BidirectionalStreamHandlers,
 } from "./bidirectional";
+import { withoutClosedConnectionRows } from "../lib/connectionTools";
+import {
+  appendLatencySample,
+  LATENCY_HISTORY_LIMIT,
+  type LatencySample,
+} from "../lib/latencyHistory";
+import { loadStoredJson, saveStoredJson } from "../lib/storage";
 import { serverConnectUrl, type Server } from "./config";
 import { StreamStore } from "./stream";
 
 export const STATUS_HISTORY_LENGTH = 30;
+export const STATUS_SAMPLE_HISTORY_LENGTH = 3600;
 const LOG_MAX_ENTRIES = 3000;
 const CLOSED_CONNECTIONS_MAX = 1000;
 
@@ -36,15 +44,25 @@ export interface ServiceStatusData {
   status: ServiceStatus | null;
 }
 
+export interface StatusHistorySample {
+  at: number;
+  uplink: number;
+  downlink: number;
+  connections: number;
+  memory: number;
+}
+
 export interface StatusData {
   current: Status | null;
   uplinkHistory: number[];
   downlinkHistory: number[];
+  history: StatusHistorySample[];
 }
 
 export interface GroupsData {
   groups: Group[];
   loaded: boolean;
+  latencyHistory: Record<string, LatencySample[]>;
 }
 
 export interface ClashModeData {
@@ -161,26 +179,82 @@ export class DaemonApi {
     );
 
     this.status = new StreamStore<StatusData>(
-      () => ({ current: null, uplinkHistory: [], downlinkHistory: [] }),
+      () => ({ current: null, uplinkHistory: [], downlinkHistory: [], history: [] }),
       async ({ signal, update }) => {
-        for await (const message of this.client.subscribeStatus(
-          { interval: SUBSCRIPTION_INTERVAL },
-          { signal },
-        )) {
-          update((data) => ({
-            current: message,
-            uplinkHistory: appendHistory(data.uplinkHistory, Number(message.uplink)),
-            downlinkHistory: appendHistory(data.downlinkHistory, Number(message.downlink)),
-          }));
+        let previousStatus = this.serviceStatus.getSnapshot().data.status?.status ?? null;
+        const unsubscribeServiceStatus = this.serviceStatus.subscribe(() => {
+          const nextStatus = this.serviceStatus.getSnapshot().data.status?.status ?? null;
+          if (shouldResetStatusHistory(previousStatus, nextStatus)) {
+            update((data) => ({
+              ...data,
+              uplinkHistory: [],
+              downlinkHistory: [],
+              history: [],
+            }));
+          }
+          previousStatus = nextStatus;
+        });
+        try {
+          for await (const message of this.client.subscribeStatus(
+            { interval: SUBSCRIPTION_INTERVAL },
+            { signal },
+          )) {
+            update((data) => ({
+              current: message,
+              uplinkHistory: appendHistory(data.uplinkHistory, Number(message.uplink)),
+              downlinkHistory: appendHistory(data.downlinkHistory, Number(message.downlink)),
+              history: appendStatusSample(data.history, {
+                at: Date.now(),
+                uplink: Number(message.uplink),
+                downlink: Number(message.downlink),
+                connections: message.connectionsIn + message.connectionsOut,
+                memory: Number(message.memory),
+              }),
+            }));
+          }
+        } finally {
+          unsubscribeServiceStatus();
         }
       },
     );
 
+    const latencyHistoryKey = `group-latency-history:${config.id}`;
+    const latencyStampsKey = `group-latency-stamps:${config.id}`;
+    const initialLatencyHistory = loadLatencyHistory(latencyHistoryKey);
+    const latencyStamps = loadLatencyStamps(latencyStampsKey);
     this.groups = new StreamStore<GroupsData>(
-      () => ({ groups: [], loaded: false }),
+      () => ({ groups: [], loaded: false, latencyHistory: initialLatencyHistory }),
       async ({ signal, update }) => {
         for await (const message of this.client.subscribeGroups({}, { signal })) {
-          update(() => ({ groups: message.group, loaded: true }));
+          update((data) => {
+            let history = data.latencyHistory;
+            let changed = false;
+            for (const group of message.group) {
+              for (const item of group.items) {
+                if (item.urlTestTime === 0n || item.urlTestDelay <= 0) {
+                  continue;
+                }
+                const stamp = `${item.urlTestTime}:${item.urlTestDelay}`;
+                if (latencyStamps.get(item.tag) === stamp) {
+                  continue;
+                }
+                latencyStamps.set(item.tag, stamp);
+                history = {
+                  ...history,
+                  [item.tag]: appendLatencySample(history[item.tag] ?? [], {
+                    at: Date.now(),
+                    delay: item.urlTestDelay,
+                  }),
+                };
+                changed = true;
+              }
+            }
+            if (changed) {
+              saveStoredJson(latencyHistoryKey, history);
+              saveStoredJson(latencyStampsKey, Object.fromEntries(latencyStamps));
+            }
+            return { groups: message.group, loaded: true, latencyHistory: history };
+          });
         }
       },
     );
@@ -441,6 +515,13 @@ export class DaemonApi {
     await this.client.closeAllConnections({});
   }
 
+  clearConnectionHistory(): void {
+    this.connections.mutate((data) => ({
+      ...data,
+      rows: withoutClosedConnectionRows(data.rows),
+    }));
+  }
+
   async clearLogs(): Promise<void> {
     await this.client.clearLogs({});
   }
@@ -499,6 +580,60 @@ function appendHistory(history: number[], value: number): number[] {
     return next.slice(next.length - STATUS_HISTORY_LENGTH);
   }
   return next;
+}
+
+export function shouldResetStatusHistory(
+  previous: ServiceStatus_Type | null,
+  next: ServiceStatus_Type | null,
+): boolean {
+  return next === ServiceStatus_Type.STARTING && previous !== ServiceStatus_Type.STARTING;
+}
+
+function appendStatusSample(
+  history: StatusHistorySample[],
+  sample: StatusHistorySample,
+): StatusHistorySample[] {
+  const next = history.concat(sample);
+  if (next.length > STATUS_SAMPLE_HISTORY_LENGTH) {
+    return next.slice(next.length - STATUS_SAMPLE_HISTORY_LENGTH);
+  }
+  return next;
+}
+
+function loadLatencyHistory(storageKey: string): Record<string, LatencySample[]> {
+  const value = loadStoredJson(storageKey);
+  if (typeof value !== "object" || value === null) {
+    return {};
+  }
+  const result: Record<string, LatencySample[]> = {};
+  for (const [tag, samples] of Object.entries(value as Record<string, unknown>)) {
+    if (!Array.isArray(samples)) {
+      continue;
+    }
+    const valid = samples.filter(
+      (sample): sample is LatencySample =>
+        typeof sample === "object" &&
+        sample !== null &&
+        typeof (sample as LatencySample).at === "number" &&
+        typeof (sample as LatencySample).delay === "number",
+    );
+    if (valid.length > 0) {
+      result[tag] = valid.slice(-LATENCY_HISTORY_LIMIT);
+    }
+  }
+  return result;
+}
+
+function loadLatencyStamps(storageKey: string): Map<string, string> {
+  const value = loadStoredJson(storageKey);
+  if (typeof value !== "object" || value === null) {
+    return new Map();
+  }
+  return new Map(
+    Object.entries(value as Record<string, unknown>).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
+  );
 }
 
 function pruneClosedRows(rows: Map<string, ConnectionRow>) {

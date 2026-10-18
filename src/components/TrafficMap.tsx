@@ -7,6 +7,7 @@ import {
   getPanelState,
   type GeoIpInfo,
 } from "../api/panel";
+import { usePanelCapabilities } from "../api/panelCapabilities";
 import { useStream } from "../api/stream";
 import { useApi } from "../app/context";
 import { isGeoIpUnavailable, lookupGeoIp } from "../lib/geoipCache";
@@ -584,6 +585,9 @@ class TrafficMapRenderer {
 
 export function TrafficMap() {
   const api = useApi();
+  const capabilities = usePanelCapabilities();
+  const geoipUnsupported =
+    capabilities.detected && !capabilities.supports("geoip");
   const connections = useStream(api.connections);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -715,6 +719,9 @@ export function TrafficMap() {
   }, []);
 
   useEffect(() => {
+    if (geoipUnsupported) {
+      return;
+    }
     let cancelled = false;
     void (async () => {
       let egress = "";
@@ -748,11 +755,15 @@ export function TrafficMap() {
     return () => {
       cancelled = true;
     };
-  }, [applyOrigin, handleGeoError, setFallbackOrigin, trySourceOrigin]);
+  }, [applyOrigin, geoipUnsupported, handleGeoError, setFallbackOrigin, trySourceOrigin]);
 
   useEffect(() => {
     const renderer = engineRef.current;
     if (renderer === null) {
+      return;
+    }
+    if (geoipUnsupported) {
+      setActiveCount(0);
       return;
     }
     const rows = connections.data.rows;
@@ -817,10 +828,12 @@ export function TrafficMap() {
       current === nextActive.size ? current : nextActive.size,
     );
     trySourceOrigin();
-  }, [connections.data.rows, handleGeoError, trySourceOrigin]);
+  }, [connections.data.rows, geoipUnsupported, handleGeoError, trySourceOrigin]);
 
   const emptyLabel =
-    !connections.data.loaded
+    geoipUnsupported
+      ? ""
+      : !connections.data.loaded
       ? connections.phase === "error"
         ? "连接流不可用"
         : "正在加载连接…"
@@ -838,6 +851,11 @@ export function TrafficMap() {
       {databaseMissing && (
         <div className={styles.dbWarning}>
           missing GeoIP database, see README
+        </div>
+      )}
+      {geoipUnsupported && (
+        <div className={styles.dbWarning}>
+          当前 sing-box-panel 不支持 GeoIP 查询；升级到 0.1.0-8 后显示全球连接。
         </div>
       )}
       <div className={styles.wrap} ref={wrapRef}>

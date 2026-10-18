@@ -33,6 +33,25 @@ describe("StreamStore", () => {
     unsubscribe();
   });
 
+  it("mutates the snapshot and notifies subscribers", async () => {
+    const store = new StreamStore<number>(
+      () => 0,
+      async () => {
+        await new Promise(() => {});
+      },
+    );
+    let notified = 0;
+    const unsubscribe = store.subscribe(() => {
+      notified += 1;
+    });
+
+    store.mutate((value) => value + 1);
+    expect(store.getSnapshot().data).toBe(1);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(notified).toBe(1);
+    unsubscribe();
+  });
+
   it("coalesces a burst of updates into a single notification", async () => {
     const store = new StreamStore<number>(
       () => 0,

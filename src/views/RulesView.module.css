@@ -101,6 +101,19 @@
   border-radius: var(--radius-pill);
 }
 
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-10);
+  align-items: center;
+  margin-bottom: var(--space-14);
+}
+
+.filter-search {
+  flex: 1;
+  min-width: 180px;
+}
+
 .list {
   display: flex;
   flex-direction: column;

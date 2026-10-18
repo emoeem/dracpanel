@@ -26,6 +26,10 @@ export interface PanelState {
   ok: boolean;
   version?: string;
   panel_version?: string;
+  /** Optional backend contract: increment when the panel HTTP API changes. */
+  api_version?: number;
+  /** Optional backend contract: supported feature keys (see panelCapabilities.ts). */
+  features?: string[];
   mode?: string;
   inbounds?: string[];
   service?: PanelServiceStatus;
@@ -53,6 +57,9 @@ export interface GeoIpInfo {
   lat: number;
   country?: string;
   city?: string;
+  asn?: number;
+  organization?: string;
+  org?: string;
 }
 
 export interface PanelBackup {
@@ -276,6 +283,36 @@ async function panelFetch(
     throw new PanelHttpError(response.status, `面板返回 HTTP ${response.status}${suffix}`);
   }
   return response;
+}
+
+const CAPABILITY_PROBE_TIMEOUT_MS = 5_000;
+
+/**
+ * One-shot capability probe for panels that do not advertise `features` in
+ * `/api/state`. A 404 with the panel's "unknown endpoint" message means the
+ * route is absent; any other response (even 4xx/5xx from a known route) means
+ * the route exists.
+ */
+export async function probePanelEndpoint(
+  path: string,
+  init: RequestInit = {},
+): Promise<{ supported: boolean | null; status?: number; message?: string }> {
+  try {
+    await panelFetch(path, init, CAPABILITY_PROBE_TIMEOUT_MS);
+    return { supported: true };
+  } catch (error) {
+    if (error instanceof PanelHttpError) {
+      const absent =
+        error.status === 404 &&
+        (error.message.includes("未知接口") || error.message.includes("Unknown endpoint"));
+      return {
+        supported: absent ? false : true,
+        status: error.status,
+        message: error.message,
+      };
+    }
+    return { supported: null };
+  }
 }
 
 async function request<T>(

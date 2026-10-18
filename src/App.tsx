@@ -38,6 +38,11 @@ import {
 } from "./app/desktop";
 import { loadDisableDeprecatedWarnings } from "./app/deprecatedWarnings";
 import { dismissError, showError, useCurrentError } from "./app/errorStore";
+import {
+  AUTO_TEST_EVENT,
+  loadAutoTestInterval,
+  type AutoTestInterval,
+} from "./app/groupPreferences";
 import { useDismiss, useStreamOutage, useUnaryOnce } from "./app/hooks";
 import { I18nProvider, useI18n, type Translate } from "./app/i18n";
 import {
@@ -99,6 +104,8 @@ import {
 import { SetupView } from "./views/SetupView";
 import { UpdatesGate } from "./views/UpdateViews";
 import { NetworkQualityView, STUNTestView, ToolsView } from "./views/ToolsView";
+import { DnsToolsView } from "./views/DnsToolsView";
+import { ConnectivityTestView } from "./views/ConnectivityTestView";
 import { TaildropNavBadge, TaildropSendRequestDialog, TaildropView } from "./views/TaildropView";
 import { TailscaleEndpointView } from "./views/TailscaleView";
 import { TailscaleSSHView } from "./views/TerminalView";
@@ -123,6 +130,8 @@ export type Route =
   | { page: "tools" }
   | { page: "tools/network-quality" }
   | { page: "tools/stun" }
+  | { page: "tools/dns" }
+  | { page: "tools/connectivity" }
   | { page: "tools/tailscale"; tag: string }
   | { page: "tools/tailscale/ssh"; tag: string; peerID: string; username: string; terminalType: string }
   | { page: "tools/tailscale/taildrop"; tag: string }
@@ -189,6 +198,10 @@ function routeFromHash(locationHash: string): Route {
           return { page: "tools/network-quality" };
         case "stun":
           return { page: "tools/stun" };
+        case "dns":
+          return { page: "tools/dns" };
+        case "connectivity":
+          return { page: "tools/connectivity" };
         case "tailscale":
           if (segments[3] === "ssh" && segments[4]) {
             return {
@@ -338,6 +351,10 @@ function routeTitle(route: Route, t: Translate, language: string): string {
       return t("Network Quality");
     case "tools/stun":
       return t("STUN Test");
+    case "tools/dns":
+      return t("DNS Tools");
+    case "tools/connectivity":
+      return t("Connectivity Test");
     case "tools/tailscale":
       return route.tag !== "" ? t("Tailscale: {tag}", { tag: route.tag }) : "Tailscale";
     case "tools/tailscale/ssh":
@@ -729,10 +746,24 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
   const route = props.route;
   const serviceStatus = useStream(api.serviceStatus);
   const groups = useStream(api.groups);
+  const groupsRef = useRef(groups.data.groups);
+  const [autoTestInterval, setAutoTestInterval] = useState<AutoTestInterval>(() =>
+    loadAutoTestInterval(api.config.id),
+  );
   const [menuOpen, setMenuOpen] = useState(false);
   const [leadSlot, setLeadSlot] = useState<HTMLElement | null>(null);
   const [endSlot, setEndSlot] = useState<HTMLElement | null>(null);
   const reportedFatalError = useRef<string | null>(null);
+
+  useEffect(() => {
+    groupsRef.current = groups.data.groups;
+  }, [groups.data.groups]);
+
+  useEffect(() => {
+    const refresh = () => setAutoTestInterval(loadAutoTestInterval(api.config.id));
+    window.addEventListener(AUTO_TEST_EVENT, refresh);
+    return () => window.removeEventListener(AUTO_TEST_EVENT, refresh);
+  }, [api.config.id]);
 
   const serviceStatusType = serviceStatus.data.status?.status;
   const fatalError =
@@ -799,6 +830,47 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
 
   const started = serviceStatusType === ServiceStatus_Type.STARTED;
   const hasGroups = started && groups.data.loaded && groups.data.groups.length > 0;
+
+  useEffect(() => {
+    if (!started || autoTestInterval === "off") {
+      return;
+    }
+    let cancelled = false;
+    let running = false;
+    const run = async () => {
+      if (running) {
+        return;
+      }
+      running = true;
+      let firstError: unknown = null;
+      try {
+        for (const group of groupsRef.current) {
+          if (cancelled) {
+            return;
+          }
+          try {
+            await api.urlTest(group.tag);
+          } catch (error) {
+            firstError ??= error;
+          }
+        }
+      } finally {
+        running = false;
+      }
+      if (!cancelled && firstError !== null) {
+        showError(firstError);
+      }
+    };
+    void run();
+    const timer = window.setInterval(
+      () => void run(),
+      Number(autoTestInterval) * 60_000,
+    );
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [api, started, autoTestInterval]);
   const known = serviceStatus.phase !== "connecting" || serviceStatus.data.status !== null;
 
   const groupsKnown = groups.data.loaded || groups.phase === "error";
@@ -954,6 +1026,8 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
       {route.page === "tools" && <ToolsView />}
       {route.page === "tools/network-quality" && <NetworkQualityView />}
       {route.page === "tools/stun" && <STUNTestView />}
+      {route.page === "tools/dns" && <DnsToolsView />}
+      {route.page === "tools/connectivity" && <ConnectivityTestView />}
       {route.page === "tools/tailscale" && <TailscaleEndpointView tag={route.tag} />}
       {route.page === "tools/tailscale/taildrop" && <TaildropView tag={route.tag} />}
       {route.page === "tools/usbip" && <UsbipView tag={route.tag} />}

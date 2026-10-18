@@ -78,6 +78,10 @@ export class StreamStore<T> {
     this.start();
   };
 
+  mutate = (updater: (data: T) => T): void => {
+    this.setSnapshot({ ...this.snapshot, data: updater(this.snapshot.data) });
+  };
+
   private setSnapshot(next: StreamSnapshot<T>) {
     this.snapshot = next;
     if (this.flushHandle === null) {
