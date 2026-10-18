@@ -197,7 +197,7 @@ export function PanelGate(props: { children: ReactNode }) {
         <div className={styles.brandRow}>
           <DraculaMark />
           <div>
-            <h1 className={styles.title}>Dracula Panel</h1>
+            <h1 className={styles.title}>DracPanel</h1>
             <p className={styles.subtitle}>for sing-box</p>
           </div>
         </div>

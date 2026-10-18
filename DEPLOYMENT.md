@@ -1,6 +1,6 @@
 # Deployment & operations
 
-Unofficial Dracula-themed desktop web panel for sing-box. It is a fork of
+DracPanel is an unofficial Dracula-themed desktop web panel for sing-box. It is a fork of
 [SagerNet/sing-box-dashboard](https://github.com/SagerNet/sing-box-dashboard)
 (React 19 + Vite + TypeScript + Connect RPC), with a Dracula/Alucard color
 system and an added management module backed by `sing-box-panel`.
@@ -195,8 +195,8 @@ RPCs. The connections list is windowed (virtual scrolling), not capped at 500.
 ## Build
 
 ```bash
-git clone --recursive https://github.com/emoeem/dracula-panel-for-sing-box.git
-cd dracula-panel-for-sing-box
+git clone --recursive https://github.com/emoeem/dracpanel.git
+cd dracpanel
 # if cloned without --recursive:
 git submodule update --init --depth 1
 
@@ -225,7 +225,7 @@ sudo ./deploy/install.sh --refresh-geoip  # re-download the DB-IP City Lite mmdb
 The script backs up `/etc/sing-box/config.json` with a timestamp, adds (or
 updates) the `services[type=api]` entry on `127.0.0.1:9091` with the
 9096-only CORS whitelist, keeps its dashboard disabled, installs the build
-into `/usr/local/share/sing-box-panel-ui` (the previous UI is moved to
+into `/usr/local/share/dracpanel-ui` (the previous UI is moved to
 `...legacy-<timestamp>`), copies this runbook as the local
 `README.md`/`DEPLOYMENT.md`, installs the permission path unit, and restarts
 the affected services with health checks. **An existing secret is preserved
@@ -261,7 +261,7 @@ build.
 1. Restore the previous sing-box config and restart the core:
 
 ```bash
-BACKUP=$(ls -t /etc/sing-box/backups/config.json.bak.*-dracula | head -1)
+BACKUP=$(ls -t /etc/sing-box/backups/config.json.bak.*-dracpanel | head -1)
 sudo cp -a "$BACKUP" /etc/sing-box/config.json
 sudo chmod 600 /etc/sing-box/config.json
 sudo systemctl restart sing-box
@@ -270,9 +270,9 @@ sudo systemctl restart sing-box
 2. Restore the previous UI directory and restart the panel:
 
 ```bash
-LEGACY=$(ls -d /usr/local/share/sing-box-panel-ui.legacy-* | tail -1)
-sudo rm -rf /usr/local/share/sing-box-panel-ui
-sudo mv "$LEGACY" /usr/local/share/sing-box-panel-ui
+LEGACY=$(ls -d /usr/local/share/dracpanel-ui.legacy-* | tail -1)
+sudo rm -rf /usr/local/share/dracpanel-ui
+sudo mv "$LEGACY" /usr/local/share/dracpanel-ui
 sudo systemctl restart sing-box-panel
 ```
 
@@ -362,5 +362,5 @@ GPL-3.0-or-later. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 This project is an unofficial fork of SagerNet/sing-box-dashboard. The upstream
 license requires that derivative works must not use the upstream name or imply
-official association; this project uses "Dracula Panel for sing-box" and states
+official association; this project uses "DracPanel for sing-box" and states
 the non-affiliation explicitly.

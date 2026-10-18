@@ -82,7 +82,7 @@ export function Brand(props: { className?: string; product?: string | null }) {
   const product = props.product === undefined ? "for sing-box" : props.product;
   return (
     <div className={cx("setup-brand", props.className)}>
-      Dracula Panel
+      DracPanel
       {product !== null && <small>{product}</small>}
     </div>
   );

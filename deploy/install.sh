@@ -1,11 +1,11 @@
 #!/bin/bash
-# Deploy Dracula Panel for sing-box on top of the local sing-box-panel setup.
+# Deploy DracPanel for sing-box on top of the local sing-box-panel setup.
 #
 # - backs up /etc/sing-box/config.json
 # - adds/updates services[type=api] on 127.0.0.1:9091, keeps an existing
 #   secret (use --rotate-secret to replace it), 9096-only CORS whitelist,
 #   dashboard disabled
-# - installs the build into /usr/local/share/sing-box-panel-ui
+# - installs the build into /usr/local/share/dracpanel-ui
 # - installs a systemd path unit enforcing config mode 600 with a stat %a check
 # - restarts both services with health checks and automatic rollback
 # - optionally installs the DB-IP City Lite mmdb for /api/geoip
@@ -53,23 +53,23 @@ DIST="$ROOT/dist"
 CFG=/etc/sing-box/config.json
 PANEL_CFG=/etc/sing-box-panel/panel.json
 PANEL_DROPIN=/etc/systemd/system/sing-box-panel.service.d/10-config-path.conf
-DST=/usr/local/share/sing-box-panel-ui
+DST=/usr/local/share/dracpanel-ui
 PERM_SCRIPT=/usr/local/bin/sing-box-config-perm
 PERM_SERVICE=/etc/systemd/system/sing-box-config-perm.service
 PERM_PATH=/etc/systemd/system/sing-box-config-perm.path
 TS=$(date +%Y%m%d-%H%M%S)
-BACKUP=/etc/sing-box/backups/config.json.bak.$TS-dracula
-NEWCFG=$(mktemp /tmp/dracula-panel-config.XXXXXX.json)
+BACKUP=/etc/sing-box/backups/config.json.bak.$TS-dracpanel
+NEWCFG=$(mktemp /tmp/dracpanel-config.XXXXXX.json)
 chmod 600 "$NEWCFG"
 UI_BACKUP="$DST.legacy-$TS"
 UI_STAGE="$DST.new-$TS"
-PANEL_CFG_BAK="$PANEL_CFG.bak.$TS-dracula"
-PANEL_DROPIN_BAK="$PANEL_DROPIN.bak.$TS-dracula"
+PANEL_CFG_BAK="$PANEL_CFG.bak.$TS-dracpanel"
+PANEL_DROPIN_BAK="$PANEL_DROPIN.bak.$TS-dracpanel"
 PANEL_JSON=/etc/sing-box/panel.json
-PANEL_JSON_BAK=/etc/sing-box/backups/panel.json.bak.$TS-dracula
-PERM_SCRIPT_BAK="$PERM_SCRIPT.bak.$TS-dracula"
-PERM_SERVICE_BAK="$PERM_SERVICE.bak.$TS-dracula"
-PERM_PATH_BAK="$PERM_PATH.bak.$TS-dracula"
+PANEL_JSON_BAK=/etc/sing-box/backups/panel.json.bak.$TS-dracpanel
+PERM_SCRIPT_BAK="$PERM_SCRIPT.bak.$TS-dracpanel"
+PERM_SERVICE_BAK="$PERM_SERVICE.bak.$TS-dracpanel"
+PERM_PATH_BAK="$PERM_PATH.bak.$TS-dracpanel"
 GEOIP_DIR=/usr/share/GeoIP
 GEOIP_DB="$GEOIP_DIR/dbip-city-lite.mmdb"
 GEOIP_URL="https://cdn.jsdelivr.net/npm/dbip-city-lite@1.0.18/dbip-city-lite.mmdb.gz"
@@ -381,7 +381,7 @@ if os.path.exists(path):
         print(f"✗ {path} 不是有效 JSON：{error}", file=sys.stderr)
         print("  请先修复或删除该文件；安装器不会覆盖无法解析的面板配置。", file=sys.stderr)
         sys.exit(1)
-data["ui_dir"] = "/usr/local/share/sing-box-panel-ui"
+data["ui_dir"] = "/usr/local/share/dracpanel-ui"
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(data, handle, ensure_ascii=False, indent=2)
     handle.write("\n")
@@ -538,10 +538,10 @@ else
 fi
 
 echo "== [8/9] 验收检查"
-if curl -fsS --max-time 5 http://127.0.0.1:9096/ | grep -q 'Dracula Panel'; then
-  echo "  ✓ 9096 返回 Dracula Panel"
+if curl -fsS --max-time 5 http://127.0.0.1:9096/ | grep -q 'DracPanel'; then
+  echo "  ✓ 9096 返回 DracPanel"
 else
-  fail "9096 未返回 Dracula Panel"
+  fail "9096 未返回 DracPanel"
 fi
 
 if curl -fsS --max-time 5 http://127.0.0.1:9096/api/ping >/dev/null; then

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dracula Panel acceptance test with real panel + native API."""
+"""DracPanel acceptance test with real panel + native API."""
 import asyncio
 import base64
 import json
@@ -152,7 +152,7 @@ async def main():
         check("顶栏状态为运行中", ok)
         version = await cdp.eval("""
             (() => {
-              const header = [...document.querySelectorAll('header')].find(h => h.textContent.includes('Dracula Panel'));
+              const header = [...document.querySelectorAll('header')].find(h => h.textContent.includes('DracPanel'));
               return header ? header.innerText.replace(/\\s+/g, ' ').slice(0, 200) : '';
             })()
         """)
@@ -199,7 +199,7 @@ async def main():
         await cdp.nav("概览", "#/overview", 15)
         theme_clicked = await cdp.eval("""
             (() => {
-              const header = [...document.querySelectorAll('header')].find(h => h.textContent.includes('Dracula Panel'));
+              const header = [...document.querySelectorAll('header')].find(h => h.textContent.includes('DracPanel'));
               if (!header) return false;
               const buttons = [...header.querySelectorAll('button')];
               const theme = buttons.find(b => /浅|亮|Light/i.test(b.getAttribute('title') || ''));
@@ -215,7 +215,7 @@ async def main():
         await cdp.shot("12-overview-light")
         await cdp.eval("""
             (() => {
-              const header = [...document.querySelectorAll('header')].find(h => h.textContent.includes('Dracula Panel'));
+              const header = [...document.querySelectorAll('header')].find(h => h.textContent.includes('DracPanel'));
               const buttons = [...header.querySelectorAll('button')];
               const theme = buttons.find(b => /深|暗|Dark/i.test(b.getAttribute('title') || ''));
               theme && theme.click();

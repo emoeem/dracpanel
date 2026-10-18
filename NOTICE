@@ -1,4 +1,4 @@
-Dracula Panel for sing-box
+DracPanel for sing-box
 ==========================
 
 SPDX-License-Identifier: GPL-3.0-or-later
@@ -16,7 +16,7 @@ text and the preserved upstream additional notice are in LICENSE.
 
 This build is NOT an official sing-box or SagerNet release and is not
 affiliated with or endorsed by SagerNet or the sing-box project. The name
-"Dracula Panel for sing-box" only describes what this software controls.
+"DracPanel for sing-box" only describes what this software controls.
 
 Theme
 -----

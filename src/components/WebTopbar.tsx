@@ -76,7 +76,7 @@ export function WebTopbar(props: {
         <span className={styles.markWrap}>
           <BrandMark />
         </span>
-        <span className={styles.appName}>Dracula Panel</span>
+        <span className={styles.appName}>DracPanel</span>
         <span className={styles.appSuffix}>for sing-box</span>
       </div>
 

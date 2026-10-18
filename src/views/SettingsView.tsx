@@ -112,9 +112,7 @@ export function SettingsView() {
           </div>
           {host === null && (
             <p className="hint" style={{ padding: "10px 14px 0", lineHeight: 1.6 }}>
-              非官方 Dracula 定制构建，与 SagerNet / sing-box 项目无关联。本机源码位于
-              {" "}
-              <code>/home/emo/Projects/dracula-panel-for-singbox</code>。
+              非官方 DracPanel 定制构建，与 SagerNet / sing-box 项目无关联。源码与文档见项目仓库。
             </p>
           )}
         </div>

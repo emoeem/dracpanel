@@ -1,17 +1,22 @@
-# Dracula Panel for sing-box
+# DracPanel
 
-**English summary:** An unofficial Dracula/Alucard-themed desktop web UI for
-[sing-box](https://sing-box.sagernet.org/). It keeps the upstream native-API
-dashboard and adds a local management module (service control, subscriptions,
-eBPF policy, JSON config editor) through `sing-box-panel`. One UI entry, one
-panel token, and the native API secret is bootstrapped and cached automatically.
+**English summary:** DracPanel is an unofficial Dracula/Alucard-themed desktop
+web UI for [sing-box](https://sing-box.sagernet.org/). It keeps the upstream
+native-API dashboard and adds a local management module (service control,
+subscriptions, eBPF policy, JSON config editor) through `sing-box-panel`. One
+UI entry, one panel token, and the native API secret is bootstrapped and cached
+automatically.
+
+> **Latest update:** 2026-10-18 — DNS tools, connection history/export/grouping,
+> traffic history, latency history with optional auto-test, and the DracPanel
+> rename. See [CHANGELOG.md](CHANGELOG.md).
 
 > **Unofficial fork.** This project is built on top of
 > [SagerNet/sing-box-dashboard](https://github.com/SagerNet/sing-box-dashboard)
 > (GPL-3.0-or-later). It is not affiliated with or endorsed by SagerNet or the sing-box
 > project. See [NOTICE](NOTICE) and [LICENSE](LICENSE).
 
-![Dracula Panel overview](artifacts/screenshots/01-overview-dark.png)
+![DracPanel overview](artifacts/screenshots/01-overview-dark.png)
 
 ## 这是什么
 
@@ -36,8 +41,18 @@ panel token, and the native API secret is bootstrapped and cached automatically.
 - 四模式顶栏下拉：`Rule` / `Proxy` / `RuleAllowAds` / `Direct`，走原生
   `SetClashMode`，切换后立即生效
 - 原生 API：节点切换、URLTest、连接流、日志流、实时流量、NetworkQuality/STUN
-- 规则页从**实时配置**派生（原生 API 没有规则 RPC），展示 route/DNS 规则、
-  规则集、final
+- **代理**：节点搜索、按名称/延迟排序、隐藏不可用节点；节点延迟历史与
+  可选自动 URLTest（关闭 / 5 / 15 / 30 分钟）
+- **连接**：暂停刷新、任意字段排序、按 host/process/outbound/rule/source
+  分组、来源 IP/TCP/UDP/隐藏链过滤、CSV/JSON 导出、关闭筛选结果、
+  目标 GeoIP 详情
+- **日志**：级别过滤、日志类型过滤、隐藏正则、保留条数、暂停与导出
+- **规则**：从**实时配置**派生（原生 API 没有规则 RPC），支持关键词/
+  action/outbound 过滤与排序，展示 route/DNS 规则、规则集、final
+- **概览**：实时流量、内存/连接数、1m/5m/1h 流量历史、连接历史聚合、
+  全球连接地图
+- **工具**：DNS 查询、DNS/FakeIP 缓存清理、按节点/多目标连通性测试、
+  NetworkQuality/STUN
 - 连接表窗口化虚拟滚动（不再截断 500 条）
 - 全球连接地图：GeoIP 城市聚合、动态贝塞尔弧线、30 条上限、亮暗主题跟随；
   无连接/缺少 GeoIP 数据库时优雅降级
@@ -68,7 +83,7 @@ panel token, and the native API secret is bootstrapped and cached automatically.
 Browser
   │
   ▼
-127.0.0.1:9096  Dracula Panel（React 静态产物，由 sing-box-panel 的 ui_dir 提供）
+127.0.0.1:9096  DracPanel（React 静态产物，由 sing-box-panel 的 ui_dir 提供）
   ├─ /api/*    sing-box-panel 管理 API（同源，X-Panel-Token）
   ├─ 127.0.0.1:9091  sing-box 原生 API（Connect / gRPC-Web，仅 RPC，dashboard 关闭）
   └─ 127.0.0.1:9090  Clash API（zashboard 回退和面板遗留节点接口）
@@ -76,7 +91,7 @@ Browser
 
 ### 为什么 UI 由 panel `ui_dir` 提供
 
-构建产物放在 `/usr/local/share/sing-box-panel-ui`，由 `sing-box-panel` 在
+构建产物放在 `/usr/local/share/dracpanel-ui`，由 `sing-box-panel` 在
 9096 提供，而不是放在 `/var/lib/sing-box/dashboard` 由原生 API 的
 `/dashboard/` 提供：
 
@@ -109,12 +124,13 @@ Browser
 
 | Page | 说明 |
 | --- | --- |
-| 概览 | 流量、内存、连接数、四模式卡片、全球连接地图 |
-| 代理 | 策略组、节点切换、延迟 |
-| 连接 | 实时连接、搜索、关闭、虚拟滚动 |
-| 日志 | 原生日志流、级别过滤、搜索 |
-| 规则 | 配置派生的路由/DNS 规则、规则集、final |
+| 概览 | 流量、内存、连接数、历史曲线、连接聚合、四模式卡片、全球连接地图 |
+| 代理 | 策略组、节点切换、搜索/排序、延迟历史、自动测速 |
+| 连接 | 实时连接、搜索、排序/分组/过滤、暂停、导出、批量关闭 |
+| 日志 | 原生日志流、级别/类型过滤、隐藏正则、搜索、暂停、导出 |
+| 规则 | 配置派生的路由/DNS 规则、搜索/过滤/排序、规则集、final |
 | 测速 | 分组 URLTest、网络质量/STUN 入口 |
+| 工具 | DNS 查询、缓存清理、连通性测试、NetworkQuality/STUN 及上游桌面工具 |
 | 设置 | 偏好、服务器、上游链接、非官方声明 |
 | 管理 | 运行状态、订阅、eBPF、配置 |
 
@@ -186,13 +202,13 @@ UI 登录后会优先读取 `/api/state.features`（可选，字符串数组）�
 - 已安装 `sing-box-panel`，并准备好它的 `--config` systemd drop-in
 - `deploy/install.sh` 假定 panel 监听 `127.0.0.1:9096`、二进制位于
   `/usr/bin/sing-box-panel`、UI 目录为
-  `/usr/local/share/sing-box-panel-ui`；不同发行版/目录结构请先阅读脚本再运行
+  `/usr/local/share/dracpanel-ui`；不同发行版/目录结构请先阅读脚本再运行
 
 ## 构建
 
 ```bash
-git clone --recursive https://github.com/emoeem/dracula-panel-for-sing-box.git
-cd dracula-panel-for-sing-box
+git clone --recursive https://github.com/emoeem/dracpanel.git
+cd dracpanel
 # 如果克隆时没有 --recursive：
 git submodule update --init --depth 1
 
@@ -236,7 +252,7 @@ sudo ./deploy/install.sh --refresh-geoip  # 重新下载 DB-IP 城市库
 
 配置可以包含 `//`、`/* */` 注释和 trailing comma；安装器会先把它们归一化
 为严格 JSON 再写入。**重写后的 `config.json` 不再保留注释**，原文件保存在
-`/etc/sing-box/backups/config.json.bak.*-dracula`。`--ui-only` 完全跳过配置
+`/etc/sing-box/backups/config.json.bak.*-dracpanel`。`--ui-only` 完全跳过配置
 步骤，适合只更新前端。
 
 脚本不会修改 `/usr/bin` 或 `/usr/share` 下由包管理的文件；GeoIP 数据写入
@@ -334,13 +350,13 @@ sudo cat /var/lib/sing-box-panel/token
 
 ```bash
 # 恢复 sing-box 配置（移除 9091 API）
-sudo cp -a /etc/sing-box/backups/config.json.bak.<timestamp>-dracula /etc/sing-box/config.json
+sudo cp -a /etc/sing-box/backups/config.json.bak.<timestamp>-dracpanel /etc/sing-box/config.json
 sudo chmod 600 /etc/sing-box/config.json
 sudo systemctl restart sing-box
 
 # 恢复旧 UI
-sudo rm -rf /usr/local/share/sing-box-panel-ui
-sudo mv /usr/local/share/sing-box-panel-ui.legacy-<timestamp> /usr/local/share/sing-box-panel-ui
+sudo rm -rf /usr/local/share/dracpanel-ui
+sudo mv /usr/local/share/dracpanel-ui.legacy-<timestamp> /usr/local/share/dracpanel-ui
 sudo systemctl restart sing-box-panel
 ```
 
@@ -385,4 +401,4 @@ Dracula UI 本身。
 - Dracula / Alucard 色板来自 [Dracula Theme](https://github.com/dracula/dracula-theme)。
 - 图标来自 Material Design Icons（Apache-2.0）。
 - 上游许可证明确要求衍生作品不得使用原名或暗示官方关联；本项目使用
-  “Dracula Panel for sing-box” 并明确声明非官方。
+  “DracPanel for sing-box” 并明确声明非官方。

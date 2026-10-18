@@ -95,7 +95,7 @@ class CDP:
         return """
             (() => {
               const header = [...document.querySelectorAll('header')]
-                .find((h) => h.getBoundingClientRect().height > 0 && h.textContent.includes('Dracula Panel'));
+                .find((h) => h.getBoundingClientRect().height > 0 && h.textContent.includes('DracPanel'));
               return header ? header.innerText.replace(/\\s+/g, ' ') : '';
             })()
         """
@@ -319,7 +319,7 @@ async def main():
         clicked = await cdp.eval(f"""
             (() => {{
               const header = [...document.querySelectorAll('header')]
-                .find((h) => h.getBoundingClientRect().height > 0 && h.textContent.includes('Dracula Panel'));
+                .find((h) => h.getBoundingClientRect().height > 0 && h.textContent.includes('DracPanel'));
               if (!header) return false;
               const actions = header.lastElementChild;
               const button = actions ? actions.querySelector('button') : null;
@@ -336,7 +336,7 @@ async def main():
         await cdp.eval(f"""
             (() => {{
               const header = [...document.querySelectorAll('header')]
-                .find((h) => h.getBoundingClientRect().height > 0 && h.textContent.includes('Dracula Panel'));
+                .find((h) => h.getBoundingClientRect().height > 0 && h.textContent.includes('DracPanel'));
               const actions = header && header.lastElementChild;
               const button = actions && actions.querySelector('button');
               button && button.click();

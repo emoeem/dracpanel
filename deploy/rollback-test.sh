@@ -8,14 +8,14 @@ set -euo pipefail
 if [ "$(id -u)" -ne 0 ]; then echo "需要 root" >&2; exit 1; fi
 
 TS=$(date +%Y%m%d-%H%M%S)
-DST=/usr/local/share/sing-box-panel-ui
+DST=/usr/local/share/dracpanel-ui
 CFG=/etc/sing-box/config.json
 CURRENT=/etc/sing-box/backups/config.json.bak.$TS-before-rollback-test
 UI_HOLD="${DST}.new-hold-$TS"
 
 shopt -s nullglob
-LEGACIES=(/usr/local/share/sing-box-panel-ui.legacy-*)
-BACKUPS=(/etc/sing-box/backups/config.json.bak.*-dracula)
+LEGACIES=(/usr/local/share/dracpanel-ui.legacy-*)
+BACKUPS=(/etc/sing-box/backups/config.json.bak.*-dracpanel)
 shopt -u nullglob
 
 LEGACY=""
@@ -82,7 +82,7 @@ LEGACY_AT_DST=0
 mv "$UI_HOLD" "$DST"
 systemctl restart sing-box-panel
 sleep 1
-curl -fsS --max-time 5 http://127.0.0.1:9096/ | grep -q 'Dracula Panel' || { echo "新 UI 未恢复"; exit 1; }
+curl -fsS --max-time 5 http://127.0.0.1:9096/ | grep -q 'DracPanel' || { echo "新 UI 未恢复"; exit 1; }
 echo "  ✓ 新 Dracula UI 已恢复"
 
 echo "== [3/4] 配置回滚演练（移除 9091）"

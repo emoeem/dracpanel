@@ -1,6 +1,10 @@
 # Acceptance artifacts
 
-Dracula Panel for sing-box — real-environment acceptance run (2026-10-17).
+DracPanel — real-environment acceptance run (2026-10-17).
+
+> **Naming note:** these screenshots predate the 2026-10-18 rename from
+> Dracula Panel to DracPanel; the topbar text inside the images still shows the
+> old product name. Re-capture the branded screenshots when refreshing docs.
 
 > **Privacy:** these screenshots were captured from a live local instance.
 > The connections, speedtest, subscription-test, and eBPF images have been
@@ -67,7 +71,7 @@ contains node passwords and API secrets and is intentionally not captured.
 ## Backups from the deployment
 
 - sing-box config: `/etc/sing-box/backups/config.json.bak.20261017-230321-dracula`
-- previous UI: `/usr/local/share/sing-box-panel-ui.legacy-20261017-230321`
+- previous UI: `/usr/local/share/dracpanel-ui.legacy-20261017-230321`
 - rollback-drill safety copy: `/etc/sing-box/backups/config.json.bak.20261017-231437-before-rollback-test`
 
 ## Scripts

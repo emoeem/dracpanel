@@ -82,7 +82,7 @@ export function loadThemePreference(): ThemePreference {
   if (value === "light" || value === "dark" || value === "auto") {
     return value;
   }
-  // Dracula Panel defaults to dark; light is the official Alucard variant.
+  // DracPanel defaults to dark; light is the official Alucard variant.
   return "dark";
 }
 
