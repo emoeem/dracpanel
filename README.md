@@ -47,8 +47,9 @@ panel token, and the native API secret is bootstrapped and cached automatically.
 
 ## 功能截图
 
-> 以下截图来自已经验收的本机实例。本次新增的全球连接地图、订阅流量/自动更新、
-> 系统日志与集成/备用入口，需要安装 `sing-box-panel 0.1.0-8` 和新版 UI 后显示。
+> 前六张截图来自已经验收的本机实例；最后两张是 `TrafficMap` 组件的合成连接预览
+> （不是线上流量），用于展示地图布局。订阅流量/自动更新、系统日志、集成卡和
+> 真实地图需要安装 `sing-box-panel 0.1.0-8` 和新版 UI 后显示。
 
 | | |
 | --- | --- |
@@ -58,6 +59,8 @@ panel token, and the native API secret is bootstrapped and cached automatically.
 | 管理 · 运行状态 | 管理 · 订阅 |
 | ![管理配置](artifacts/screenshots/11-manage-config-dark.png) | ![窄屏布局](artifacts/screenshots/17-overview-mobile.png) |
 | 管理 · 配置编辑器 | 窄屏布局 |
+| ![全球连接地图预览（Dracula）](artifacts/screenshots/21-traffic-map-preview-dark.png) | ![全球连接地图预览（Alucard）](artifacts/screenshots/22-traffic-map-preview-light.png) |
+| 全球连接地图预览 · Dracula（合成数据） | 全球连接地图预览 · Alucard（合成数据） |
 
 ## 架构
 

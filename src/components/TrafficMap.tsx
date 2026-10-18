@@ -101,6 +101,7 @@ function traceGeometry(
   geometry: TopoFeature["geometry"],
   width: number,
   height: number,
+  closePaths: boolean,
 ): void {
   if (geometry === null) {
     return;
@@ -114,17 +115,25 @@ function traceGeometry(
       if (ring.length < 2) {
         continue;
       }
+      let previousX: number | null = null;
       for (let index = 0; index < ring.length; index += 1) {
         const [lon, lat] = ring[index];
         const x = projectX(lon, width);
         const y = projectY(lat, height);
-        if (index === 0) {
+        if (
+          index === 0 ||
+          (previousX !== null && Math.abs(x - previousX) > width / 2)
+        ) {
+          // A ring crossing the antimeridian must not draw a line across the map.
           ctx.moveTo(x, y);
         } else {
           ctx.lineTo(x, y);
         }
+        previousX = x;
       }
-      ctx.closePath();
+      if (closePaths) {
+        ctx.closePath();
+      }
     }
   }
 }
@@ -414,7 +423,7 @@ class TrafficMapRenderer {
         continue;
       }
       ctx.beginPath();
-      traceGeometry(ctx, country.geometry, this.width, this.height);
+      traceGeometry(ctx, country.geometry, this.width, this.height, true);
       ctx.fill("evenodd");
     }
 
@@ -426,7 +435,7 @@ class TrafficMapRenderer {
         continue;
       }
       ctx.beginPath();
-      traceGeometry(ctx, country.geometry, this.width, this.height);
+      traceGeometry(ctx, country.geometry, this.width, this.height, false);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
