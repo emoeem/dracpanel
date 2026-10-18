@@ -4,7 +4,8 @@ import {
   ensureNativeServer,
   getPanelState,
   getPanelToken,
-  clearPanelToken,
+  lockPanel,
+  PANEL_TOKEN_KEY,
   serviceAction,
   setPanelToken,
   PanelAuthError,
@@ -53,21 +54,24 @@ export function PanelGate(props: { children: ReactNode }) {
         return;
       }
       setState(current);
-      await ensureNativeServer();
+      // The recovery screen only needs the panel API. Do not let a failed
+      // native bootstrap (unreadable config, missing services.api) hide the
+      // start/restart controls when we already know the core is stopped.
+      if (current.service && !current.service.active) {
+        setPhase("recovery");
+        return;
+      }
+      await ensureNativeServer({ state: current });
       if (!mounted.current) {
         return;
       }
-      if (current.service && !current.service.active) {
-        setPhase("recovery");
-      } else {
-        setPhase("ready");
-      }
+      setPhase("ready");
     } catch (error) {
       if (!mounted.current) {
         return;
       }
       if (error instanceof PanelAuthError) {
-        clearPanelToken();
+        lockPanel();
         setPhase("gate");
         setMessage("令牌无效或已失效，请重新输入。");
       } else {
@@ -89,12 +93,24 @@ export function PanelGate(props: { children: ReactNode }) {
 
   useEffect(() => {
     const onAuthError = () => {
-      clearPanelToken();
+      lockPanel();
       setPhase("gate");
       setMessage("面板令牌已失效，请重新登录。");
     };
     window.addEventListener("panel-auth-error", onAuthError);
     return () => window.removeEventListener("panel-auth-error", onAuthError);
+  }, []);
+
+  useEffect(() => {
+    // Locking in one tab removes panel_token; reload every other tab so no
+    // in-memory native connection survives behind the lock screen.
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === PANEL_TOKEN_KEY && event.newValue === null) {
+        window.location.reload();
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   const submit = (event: FormEvent) => {
@@ -131,7 +147,7 @@ export function PanelGate(props: { children: ReactNode }) {
           return;
         }
       }
-      setMessage("服务启动超时，请查看面板日志。");
+      setMessage("服务启动超时，请查看系统日志：journalctl -u sing-box。");
     } catch (error) {
       if (error instanceof PanelAuthError) {
         return;
@@ -143,6 +159,9 @@ export function PanelGate(props: { children: ReactNode }) {
       }
     }
   };
+
+  const fallbackUrl = state?.zash_setup_url ?? "/dash/";
+  const showFallback = state?.zashboard_available !== false;
 
   if (phase === "ready") {
     return <>{props.children}</>;
@@ -202,7 +221,7 @@ export function PanelGate(props: { children: ReactNode }) {
                 type="button"
                 className={styles.secondary}
                 onClick={() => {
-                  clearPanelToken();
+                  lockPanel();
                   setPhase("gate");
                 }}
               >
@@ -225,6 +244,9 @@ export function PanelGate(props: { children: ReactNode }) {
             </div>
             {state?.version && <p className={styles.hint}>内核版本：{state.version}</p>}
             {state?.config_path && <p className={styles.hint}>配置：{state.config_path}</p>}
+            {state?.config_error ? (
+              <p className={styles.error}>配置读取失败：{state.config_error}</p>
+            ) : null}
             <div className={styles.actions}>
               <button type="button" className={styles.primary} onClick={() => void runServiceAction("start")} disabled={busy}>
                 启动核心
@@ -239,15 +261,19 @@ export function PanelGate(props: { children: ReactNode }) {
 
         {phase !== "gate" && phase !== "checking" && (
           <p className={styles.footerLink}>
-            <a href="/dash/" target="_blank" rel="noreferrer">
-              回退面板
-            </a>
-            <span aria-hidden="true"> · </span>
+            {showFallback ? (
+              <>
+                <a href={fallbackUrl} target="_blank" rel="noreferrer">
+                  回退面板
+                </a>
+                <span aria-hidden="true"> · </span>
+              </>
+            ) : null}
             <button
               type="button"
               className={styles.textButton}
               onClick={() => {
-                clearPanelToken();
+                lockPanel();
                 setPhase("gate");
               }}
             >

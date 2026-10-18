@@ -1,47 +1,79 @@
 #!/bin/bash
+# Drill the documented UI/config rollback without leaving the system changed.
+#
+# The oldest legacy UI is the pre-install upstream UI, and the oldest dracula
+# config backup predates the first 9091 install. Both are intentionally used to
+# simulate a full rollback; newer backups would already contain the deployment.
 set -euo pipefail
 if [ "$(id -u)" -ne 0 ]; then echo "需要 root" >&2; exit 1; fi
 
 TS=$(date +%Y%m%d-%H%M%S)
 DST=/usr/local/share/sing-box-panel-ui
-LEGACY=$(ls -d /usr/local/share/sing-box-panel-ui.legacy-* 2>/dev/null | head -1 || true)
 CFG=/etc/sing-box/config.json
-PRE=$(ls -t /etc/sing-box/backups/config.json.bak.*-dracula 2>/dev/null | tail -1 || true)
 CURRENT=/etc/sing-box/backups/config.json.bak.$TS-before-rollback-test
+UI_HOLD="${DST}.new-hold-$TS"
 
+shopt -s nullglob
+LEGACIES=(/usr/local/share/sing-box-panel-ui.legacy-*)
+BACKUPS=(/etc/sing-box/backups/config.json.bak.*-dracula)
+shopt -u nullglob
+
+LEGACY=""
+if [ "${#LEGACIES[@]}" -gt 0 ]; then
+  LEGACY="${LEGACIES[0]}"
+fi
+PRE=""
+if [ "${#BACKUPS[@]}" -gt 0 ]; then
+  PRE="${BACKUPS[0]}"
+fi
+
+LEGACY_AT_DST=0
 DONE=0
+
 restore_all() {
   echo "↩ 恢复部署状态…" >&2
+  set +e
   if [ -f "$CURRENT" ]; then
     cp -a "$CURRENT" "$CFG"
     chmod 600 "$CFG"
   fi
-  if [ -d "${DST}.new-hold-$TS" ]; then
-    rm -rf "$DST"
-    mv "${DST}.new-hold-$TS" "$DST"
+  if [ "$LEGACY_AT_DST" -eq 1 ] && [ -n "$LEGACY" ] && [ -d "$DST" ]; then
+    # DST currently holds the legacy UI; put it back before restoring the new one.
+    mv "$DST" "$LEGACY"
+    LEGACY_AT_DST=0
   fi
-  systemctl restart sing-box || true
-  systemctl restart sing-box-panel || true
+  if [ -d "$UI_HOLD" ]; then
+    rm -rf "$DST"
+    mv "$UI_HOLD" "$DST"
+  fi
+  systemctl restart sing-box >/dev/null 2>&1
+  systemctl restart sing-box-panel >/dev/null 2>&1
+  set -e
 }
-trap 'if [ "$DONE" -eq 0 ]; then restore_all; fi' EXIT
 
 [ -f "$CFG" ] || { echo "缺少配置"; exit 1; }
+[ -d "$DST" ] || { echo "缺少当前 UI 目录 $DST"; exit 1; }
 [ -n "$LEGACY" ] && [ -d "$LEGACY" ] || { echo "缺少旧 UI 备份"; exit 1; }
 [ -n "$PRE" ] && [ -f "$PRE" ] || { echo "缺少配置备份"; exit 1; }
+[ ! -e "$UI_HOLD" ] || { echo "临时目录已存在：$UI_HOLD"; exit 1; }
+
+trap 'if [ "$DONE" -eq 0 ]; then restore_all; fi' EXIT
 
 echo "== [1/4] 备份当前配置"
 cp -a "$CFG" "$CURRENT"
 chmod 600 "$CURRENT"
 
 echo "== [2/4] UI 回滚演练"
-mv "$DST" "${DST}.new-hold-$TS"
+mv "$DST" "$UI_HOLD"
+LEGACY_AT_DST=1
 mv "$LEGACY" "$DST"
 systemctl restart sing-box-panel
 sleep 1
 curl -fsS --max-time 5 http://127.0.0.1:9096/ | grep -q 'shell.js' || { echo "旧 UI 未生效"; exit 1; }
 echo "  ✓ 旧 iframe 外壳可恢复"
 mv "$DST" "$LEGACY"
-mv "${DST}.new-hold-$TS" "$DST"
+LEGACY_AT_DST=0
+mv "$UI_HOLD" "$DST"
 systemctl restart sing-box-panel
 sleep 1
 curl -fsS --max-time 5 http://127.0.0.1:9096/ | grep -q 'Dracula Panel' || { echo "新 UI 未恢复"; exit 1; }
