@@ -8,9 +8,11 @@ system and an added management module backed by `sing-box-panel`.
 > This build is not affiliated with or endorsed by SagerNet. See `NOTICE`.
 > Project overview: [README.md](README.md).
 
-Tested on Linux/systemd with `sing-box v1.14.3-reF1nd` and
-`sing-box-panel 0.1.0-6`. This is a deployment runbook for that layout, not a
-distro-agnostic installer.
+Tested on Linux/systemd with `sing-box v1.14.3-reF1nd`. The base UI was
+validated with `sing-box-panel 0.1.0-6`; the per-subscription auto-update,
+`Subscription-Userinfo`, backup-download, and GeoIP endpoints are in the local
+`0.1.0-8` build and were exercised with a dry-run integration test. This is a
+deployment runbook for that layout, not a distro-agnostic installer.
 
 ## Architecture
 
@@ -19,8 +21,9 @@ distro-agnostic installer.
 | `http://127.0.0.1:9096/` | **The only UI entry.** React dashboard + management module, served from the panel `ui_dir`. |
 | `http://127.0.0.1:9091/` | sing-box native API (Connect / gRPC-Web). **RPC only**; its own dashboard is disabled. |
 | `http://127.0.0.1:9090/` | Clash API, kept for the zashboard fallback and legacy panel node APIs. |
-| `http://127.0.0.1:9096/dash/` | zashboard fallback (kept as a safety net). |
+| `http://127.0.0.1:9096/dash/` | Optional zashboard fallback when the panel's `zashboard_dir` is configured. |
 | `http://127.0.0.1:9096/api/*` | Privileged management API (same origin, `X-Panel-Token`). |
+| `GET /api/geoip?ip=...` | Local City lookup from the configured mmdb; 404 for private/unresolvable IPs, 503 when the database is missing. |
 
 The UI and panel API are same-origin, so management requests need no CORS.
 The native API is cross-origin from the UI, so its CORS whitelist contains
@@ -32,23 +35,120 @@ only `http://127.0.0.1:9096` and `http://localhost:9096` (never `*`).
 2. After validating it, the gate reads `/api/config` once, extracts the
    `services[type=api]` secret/port, and stores a managed server entry in the
    dashboard's server list.
-3. The config mtime is cached (`panel-api-cache`), so subsequent loads only
-   fetch `/api/state`; the full config is fetched again only when the config
-   actually changed. The panel token stays in `localStorage.panel_token`.
-4. If the core is stopped, the gate offers a Dracula-styled recovery screen
-   (start/restart via the panel API).
-5. If the native connection drops at runtime, the management page remains
+3. The config mtime **and byte size** are cached (`panel-api-cache`), so
+   subsequent loads only fetch `/api/state`; the full config is fetched again
+   only when the config actually changed. The panel token stays in
+   `localStorage.panel_token`.
+4. If the core is stopped, the gate shows the Dracula-styled recovery screen
+   (start/restart via the panel API) **before** syncing the native server, so
+   an unreadable config cannot hide the recovery controls.
+5. Config text may contain `//`, `/* */`, and trailing commas (sing-box
+   accepts them); the gate and installer normalize that subset before parsing.
+   Full JSON5 (unquoted keys, single quotes) is rejected by sing-box.
+6. If the native connection drops at runtime, the management page remains
    accessible; after a config apply/restart the dashboard streams are
    reconnected via `DaemonApi.reconnectNow()`.
+7. “Lock panel” clears the panel token, `panel-api-cache`, and the managed
+   `panel-local` server entry, and reloads other open tabs back to the gate.
+
+### Threat model
+
+The panel runs as root and can rewrite the core config and restart services.
+The panel token and native API secret live in browser localStorage. The lock
+button prevents accidental/on-screen use; it is not a boundary against
+same-user processes, malicious browser extensions, or XSS. Use a separate OS
+user/browser profile if that matters.
+
+The UI is local-only by design: the native API URL is hard-coded to
+`127.0.0.1:9091`, and CORS allows only `127.0.0.1:9096` /
+`localhost:9096`. LAN IPs, reverse proxies, and HTTPS are not supported. If
+`services.api.secret` is empty, sing-box disables native API authentication;
+the management status tab warns about it. Downloaded config backups contain
+the same secrets as the live config (API secret, Clash secret, outbound
+passwords); treat them as sensitive files.
+
+GeoIP lookups are served only by the local panel's `/api/geoip` from an
+in-memory mmdb; the panel does not log, persist, or forward queried IPs. The
+browser never calls an external geolocation service. The optional
+`egress_ip_probe_url` is the only GeoIP-related external request and is empty
+by default; when enabled, it receives a single cached GET with no connection
+data.
 
 ## Management module
 
 - **运行状态** — service start/stop/restart/reload, PID/start time, config path,
-  native traffic stream.
-- **订阅** — add/update/update-all/apply/delete through the panel.
-- **eBPF** — policy mode, UID selection, app list, capability probe.
+  native traffic stream; config read errors, `journalctl -u sing-box` logs,
+  Clash API/key, and availability-gated fallback entries (zashboard with
+  auto-filled secret, MetaCubeXD, official dashboard).
+- **订阅** — add/update/update-all/apply/delete through the panel; per-subscription
+  auto-update intervals, `Subscription-Userinfo` traffic/expiry, managed
+  tags/groups, skipped protocols, and per-subscription failures are shown.
+- **eBPF** — policy mode, UID selection, app list with execs/PIDs, and a
+  structured PASS/FAIL/UNKNOWN capability probe.
 - **配置** — CodeMirror (JSON5) editor with Dracula syntax colors, validate,
-  apply with panel-side backup/rollback, backup list and restore.
+  apply with panel-side backup/rollback, backup list, restore, and download.
+  Comments and trailing commas are accepted because sing-box accepts them;
+  other JSON5 extensions are rejected by both.
+
+The management module's UI strings are currently Chinese-only. The status tab
+warns when `services.api.secret` is empty, because that disables native API
+authentication for any local process.
+
+The new subscription, backup, and GeoIP features require the companion
+`sing-box-panel 0.1.0-8` build:
+
+- `POST /api/subscriptions/<id>/schedule` with `{"update_interval": seconds}`
+  (0 disables, values below 300s are clamped to 300s, maximum 30 days);
+- `GET /api/subscriptions` now includes `update_interval`, `last_attempt`,
+  `next_update`, and parsed `userinfo` (`upload`/`download`/`total`/`expire`);
+- `GET /api/subscriptions/managed` returns managed `outbound_tags`,
+  `group_members`, `updated`, `by_subscription`, and the configured group names;
+- `GET /api/config/backups/<name>` returns the backup as an attachment;
+- `GET /api/logs` and `GET /api/clash/version` power the status diagnostics;
+- `/api/state` adds `zashboard_available`, `official_dashboard_available`, and
+  `egress_ip` (the official URL is empty when its dashboard is disabled). The
+  UI also uses `config_error`, `clash_api`/`clash_secret`, `token_file`,
+  `panel_version`, `dry_run`, `inbounds`, `managed_group`, and
+  `managed_urltest`;
+- `GET /api/geoip?ip=1.2.3.4` returns
+  `{"ok":true,"ip":...,"lon":...,"lat":...,"country":...,"city":...}`;
+  private/reserved/invalid IPs return 404, and a missing database/library
+  returns 503. The lookup is in-memory only.
+
+Older panels lack these endpoints; the new controls show the resulting 404 and
+the rest of the page keeps working. The scheduler only refreshes subscription
+nodes; it never applies them to the live config. "写入配置" remains a manual
+action.
+
+### GeoIP and the traffic map
+
+The overview's "全球连接" card consumes the connection stream, extracts public
+destination IPs, and asks only the local panel for coordinates. It does not
+resolve domains and never sends a query to a third party. The panel uses a
+lazy-loaded, memory-mapped mmdb; query IPs are not logged or persisted.
+
+- Data: **DB-IP City Lite** (MMDB, CC BY 4.0), upstream
+  <https://db-ip.com>, attribution "IP Geolocation by DB-IP".
+- Install: `deploy/install.sh` downloads the pinned
+  `dbip-city-lite@1.0.18` archive from the jsDelivr/npm mirror, verifies both
+  the archive and extracted MMDB SHA-256, and installs
+  `/usr/share/GeoIP/dbip-city-lite.mmdb` (about 122 MB). A download or
+  checksum failure only warns; `/api/geoip` then returns 503 and the card shows
+  `missing GeoIP database, see README`.
+- Refresh: `sudo ./deploy/install.sh --refresh-geoip` (or reinstall a newer
+  pinned package). The file is data, not a package-owned file.
+- Config: the panel defaults to `/usr/share/GeoIP/GeoLite2-City.mmdb`, then
+  falls back to `/usr/share/GeoIP/dbip-city-lite.mmdb`; set
+  `geoip_database` in `panel.json` to use another mmdb. The Python dependency
+  is `python-maxminddb` (declared by the panel package).
+- Origin: the UI prefers panel `egress_ip`, then the first connection's
+  `source` IP, then a Chengdu fallback (TODO in `TrafficMap.tsx`). `egress_ip`
+  can be set statically; an optional `egress_ip_probe_url` (default empty)
+  makes the panel perform one cached GET to that URL. It never includes
+  connection destinations.
+- Frontend: 500-entry GeoIP LRU, pending dedupe, 1° clustering, 30-arc cap,
+  theme-aware canvas colors, reduced-motion static mode, and visibility-based
+  rAF pause.
 
 All management writes go through the panel's existing validation/backup/
 atomic-replace/restart/rollback pipeline. A systemd path unit
@@ -97,18 +197,45 @@ lockfile is the upstream pinned lockfile. Omit it on fast/clean networks.
 ## Install / update
 
 ```bash
-sudo ./deploy/install.sh
+sudo ./deploy/install.sh                  # config + UI + GeoIP data
+sudo ./deploy/install.sh --ui-only        # UI only; no config rewrite, no core restart
+sudo ./deploy/install.sh --rotate-secret  # explicitly rotate the native API secret
+sudo ./deploy/install.sh --refresh-geoip  # re-download the DB-IP City Lite mmdb
 ```
 
 The script backs up `/etc/sing-box/config.json` with a timestamp, adds (or
-updates) the `services[type=api]` entry on `127.0.0.1:9091` with a random
-secret and the 9096-only CORS whitelist, keeps its dashboard disabled,
-installs the build into `/usr/local/share/sing-box-panel-ui` (the previous UI
-is moved to `...legacy-<timestamp>`), copies this runbook as the local
+updates) the `services[type=api]` entry on `127.0.0.1:9091` with the
+9096-only CORS whitelist, keeps its dashboard disabled, installs the build
+into `/usr/local/share/sing-box-panel-ui` (the previous UI is moved to
+`...legacy-<timestamp>`), copies this runbook as the local
 `README.md`/`DEPLOYMENT.md`, installs the permission path unit, and restarts
-both services with health checks. It never modifies `/usr/bin` or
-`/usr/share`. The script resolves the repository root from its own location,
-so it can be run from any checkout.
+the affected services with health checks. **An existing secret is preserved
+by default**; a new one is generated only on first install or with
+`--rotate-secret`. The secret is generated inside the installer's Python
+process and is never passed on a command line.
+
+Panel config, its systemd drop-in, the permission units, and the UI are backed
+up before modification. A failed run restores all of them (best-effort) and
+restarts the affected services. `/etc/sing-box/panel.json` is moved to
+`/etc/sing-box/backups/` instead of being deleted, because `sing-box -C
+/etc/sing-box` would otherwise read every top-level `.json` file.
+
+The config may contain comments and trailing commas; the installer normalizes
+them to strict JSON before writing, so the rewritten `config.json` no longer
+contains comments. The original remains in the backup. It never modifies
+`/usr/bin` or package-managed files, but it does write GeoIP data under
+`/usr/share/GeoIP`. The script resolves the repository root from its own
+location, so it can be run from any checkout.
+
+The DB-IP download is a warning-only step: if curl, gzip, or either SHA-256
+check fails, the rest of the installation still proceeds and `/api/geoip`
+returns 503. Existing databases are left alone unless `--refresh-geoip` is
+passed.
+
+The subscription schedule/Userinfo, backup-download, and GeoIP endpoints are
+part of the companion `sing-box-panel` package, not this UI. Rebuild/install
+that package (0.1.0-8) separately; `deploy/install.sh` only copies the static
+build.
 
 ## Rollback
 
@@ -140,8 +267,16 @@ sudo rm -f /etc/systemd/system/sing-box-config-perm.path \
 sudo systemctl daemon-reload
 ```
 
-The zashboard fallback at `http://127.0.0.1:9096/dash/` remains available
-throughout. Package integrity can be checked with:
+4. Optionally remove the downloaded GeoIP database:
+
+```bash
+sudo rm -f /usr/share/GeoIP/dbip-city-lite.mmdb
+```
+
+The zashboard fallback at `http://127.0.0.1:9096/dash/` is available only if
+the panel's `zashboard_dir` points at a real zashboard build; `install.sh` does
+not set that field. A panel configured with `zashboard_dir` pointing at an
+empty directory returns 404 there. Package integrity can be checked with:
 
 ```bash
 pacman -Qkk sing-box-panel
@@ -154,8 +289,12 @@ pacman -Qkk sing-box-panel
 | `panel_token` | panel access token |
 | `sing-box-dashboard.servers` | dashboard server list (includes the managed local API secret) |
 | `sing-box-dashboard.theme` / `.accent` | theme preferences |
-| `sing-box-dashboard.panel-api-cache` | config mtime + API port/secret cache |
+| `sing-box-dashboard.panel-api-cache` | config mtime/bytes + API port/secret cache |
 | `panel-last-route` | last primary page |
+
+The GeoIP database lives at `/usr/share/GeoIP/dbip-city-lite.mmdb` (or the
+configured `geoip_database`). The frontend's GeoIP cache is module-memory only,
+bounded to 500 entries, and is discarded with the page.
 
 ## Verification record
 

@@ -24,8 +24,11 @@ panel token, and the native API secret is bootstrapped and cached automatically.
 - 增加一个**管理模块**：服务启停/重启/重载、订阅、eBPF 分应用策略、配置编辑
   （校验 → 备份 → 原子替换 → 重启 → 失败回滚），与官方页面同一设计系统，
   没有 iframe。
+- **全球连接实时地图**：概览页底部按目标城市聚合实时连接，Canvas 绘制动态
+  弧线；GeoIP 只通过本机 panel 的 `/api/geoip` 查询。
 - **一个浏览器入口**：`http://127.0.0.1:9096/`。原生 API 仅作为内部 RPC
-  (`9091`)，自带 dashboard 已关闭；zashboard 保留在 `/dash/` 作回退。
+  (`9091`)，自带 dashboard 已关闭；如果 panel 配置了 `zashboard_dir`，
+  zashboard 仍在 `/dash/` 作为可选回退。
 
 ## 功能
 
@@ -36,9 +39,25 @@ panel token, and the native API secret is bootstrapped and cached automatically.
 - 规则页从**实时配置**派生（原生 API 没有规则 RPC），展示 route/DNS 规则、
   规则集、final
 - 连接表窗口化虚拟滚动（不再截断 500 条）
+- 全球连接地图：GeoIP 城市聚合、动态贝塞尔弧线、30 条上限、亮暗主题跟随；
+  无连接/缺少 GeoIP 数据库时优雅降级
 - `Ctrl+1…8` 切换八个主页面；主题/强调色/最后页面/管理标签页持久化
 - 44px 顶栏：logo、运行状态灯、版本、模式下拉、亮暗、刷新
 - 窄屏自动降级：侧栏抽屉、模式选择器降级为下拉、无横向溢出
+
+## 功能截图
+
+> 以下截图来自已经验收的本机实例。本次新增的全球连接地图、订阅流量/自动更新、
+> 系统日志与集成/备用入口，需要安装 `sing-box-panel 0.1.0-8` 和新版 UI 后显示。
+
+| | |
+| --- | --- |
+| ![概览（Dracula）](artifacts/screenshots/01-overview-dark.png) | ![概览（Alucard）](artifacts/screenshots/12-overview-light.png) |
+| 概览 · Dracula | 概览 · Alucard |
+| ![管理运行状态](artifacts/screenshots/08-manage-status-dark.png) | ![管理订阅](artifacts/screenshots/09-manage-subscriptions-dark.png) |
+| 管理 · 运行状态 | 管理 · 订阅 |
+| ![管理配置](artifacts/screenshots/11-manage-config-dark.png) | ![窄屏布局](artifacts/screenshots/17-overview-mobile.png) |
+| 管理 · 配置编辑器 | 窄屏布局 |
 
 ## 架构
 
@@ -61,7 +80,8 @@ Browser
 - 管理 API 与 UI 同源，不需要给 panel 再加 CORS；
 - 原生 API 支持 CORS 白名单，9096 可以安全访问 9091；
 - 最终只有一个浏览器入口（9096），9091 只做内部 RPC；
-- zashboard 继续在 `/dash/` 作为回退。
+- 如果 panel 配置了 `zashboard_dir`，zashboard 继续在 `/dash/` 作为回退；
+  `install.sh` 不修改该字段。
 
 原生 API 的 `services.api` 显式配置了
 `access_control_allow_origin = ["http://127.0.0.1:9096", "http://localhost:9096"]`，
@@ -72,16 +92,21 @@ Browser
 1. 登录只需 **panel token**（`/var/lib/sing-box-panel/token`）。
 2. 校验后从 `/api/config` 读取一次完整配置，提取 `services[type=api]` 的
    secret 和端口，写入 dashboard 的 server 列表并连接原生 API。
-3. 配置 mtime 会缓存：普通刷新只请求 `/api/state`，不重复拉全量配置；只有
-   配置真的变化后才重新同步一次。
-4. 核心停止时登录闸门提供 Dracula 风格的服务恢复界面；配置应用/重启后
-   `DaemonApi.reconnectNow()` 自动恢复数据流，不整页刷新。
+3. 配置的 mtime **和字节数**会一起缓存：普通刷新只请求 `/api/state`，不重复
+   拉全量配置；只有配置真的变化后才重新同步一次。配置里的 `//`、`/* */`
+   注释和 trailing comma 会被正确解析（sing-box 接受它们）。
+4. 核心停止时，登录闸门**先**显示 Dracula 风格的服务恢复界面，再尝试同步
+   原生 API；因此即使配置暂时读不出来，启动/重启按钮也不会被错误页挡住。
+   配置应用/重启后 `DaemonApi.reconnectNow()` 自动恢复数据流，不整页刷新。
+5. 点击“锁定面板”会清除 panel token、原生 API secret 缓存和托管服务器条目，
+   并让其他已打开的面板标签页刷新回登录页。它防的是误操作和他人顺手使用
+   当前浏览器，不是本机同用户进程或恶意扩展的安全边界。
 
 ## 页面与快捷键
 
 | Page | 说明 |
 | --- | --- |
-| 概览 | 流量、内存、连接数、四模式卡片 |
+| 概览 | 流量、内存、连接数、四模式卡片、全球连接地图 |
 | 代理 | 策略组、节点切换、延迟 |
 | 连接 | 实时连接、搜索、关闭、虚拟滚动 |
 | 日志 | 原生日志流、级别过滤、搜索 |
@@ -96,12 +121,25 @@ Browser
 ## 管理模块
 
 - **运行状态**：启动/停止/重启/重载（panel API），PID/启动时间/配置路径，
-  原生实时流量。核心停止时该页面仍然可用。
-- **订阅**：添加 URL、全量更新、单条更新、写入配置、删除；写入走 panel 的
-  校验/备份/重启/回滚事务。
-- **eBPF**：策略模式、应用列表、UID 选择、能力预检。
+  原生实时流量；显示配置读取错误、`journalctl -u sing-box` 系统日志、
+  Clash API/密钥和按可用性显示的备用入口（zashboard 自动填密钥、MetaCubeXD、
+  官方 dashboard）。核心停止时该页面仍然可用。
+- **订阅**：添加 URL、全量更新、单条更新、写入配置、删除；支持按订阅设置
+  自动更新间隔，展示 `Subscription-Userinfo` 的已用流量/总量/到期时间，
+  以及当前托管节点、托管组、未支持协议和逐条更新失败信息。写入仍走 panel
+  的校验/备份/重启/回滚事务。
+- **eBPF**：策略模式、应用列表、UID 选择、能力预检；预检结果按
+  PASS/FAIL/UNKNOWN 和 findings 展示，应用行显示可执行文件和运行进程数。
 - **配置**：CodeMirror JSON5 编辑器（Dracula 语法色）、校验、应用并重启、
-  备份列表与恢复。应用失败由 panel 自动回滚。
+  备份列表、恢复和下载。应用失败由 panel 自动回滚。配置可以带注释/trailing
+  comma，panel 与原生 API 都按 sing-box 实际支持的子集解析。
+
+管理模块目前只提供中文界面；上游 dashboard 页面仍跟随其语言设置。上述
+panel 侧能力和全球连接地图需要配套的 `sing-box-panel 0.1.0-8`，包括
+`POST /api/subscriptions/<id>/schedule`、`GET /api/subscriptions/managed`、
+`GET /api/config/backups/<name>`、`GET /api/geoip?ip=...`、`/api/logs` 和
+`/api/state` 的可用性/`egress_ip` 字段；仍在使用 0.1.0-6 时新控件会收到
+404，其余管理功能不受影响。
 
 ## 主题
 
@@ -115,12 +153,17 @@ Browser
 
 ## 环境要求
 
-- Linux + systemd；本项目在 CachyOS（Arch 系）上用 `sing-box-panel 0.1.0-6`
-  和 `sing-box v1.14.3-reF1nd` 验证
+- Linux + systemd；基础管理功能在 CachyOS（Arch 系）的
+  `sing-box-panel 0.1.0-6` + `sing-box v1.14.3-reF1nd` 上验证；订阅/备份/
+  GeoIP 端点来自本地构建的 `sing-box-panel 0.1.0-8`（已通过 dry-run 集成
+  测试，需单独重新打包安装）
 - sing-box 1.14+，支持 `services.api` / Connect API
+- 面板需要 `python-maxminddb`；GeoIP 城市库推荐由 `deploy/install.sh`
+  下载的 DB-IP City Lite（也可配置自备的 GeoLite2/DB-IP mmdb）
 - Node.js 22+（验证使用 24.22.0）、pnpm 11、Git
 - 已安装 `sing-box-panel`，并准备好它的 `--config` systemd drop-in
-- `deploy/install.sh` 假定 panel 在 `127.0.0.1:9096`、UI 目录为
+- `deploy/install.sh` 假定 panel 监听 `127.0.0.1:9096`、二进制位于
+  `/usr/bin/sing-box-panel`、UI 目录为
   `/usr/local/share/sing-box-panel-ui`；不同发行版/目录结构请先阅读脚本再运行
 
 ## 构建
@@ -146,21 +189,41 @@ npx --yes pnpm@11.13.0 generate   # protobuf + 图标 + 终端主题
 ## 部署
 
 ```bash
-sudo ./deploy/install.sh
+sudo ./deploy/install.sh                  # 配置 + UI + GeoIP 数据
+sudo ./deploy/install.sh --ui-only        # 只更新 UI，不改配置、不重启核心
+sudo ./deploy/install.sh --rotate-secret  # 显式轮换原生 API secret
+sudo ./deploy/install.sh --refresh-geoip  # 重新下载 DB-IP 城市库
 ```
 
 脚本会（一次 sudo）：
 
 1. 备份 `/etc/sing-box/config.json`（时间戳，600）；
-2. 添加/更新 `services[type=api]`：`127.0.0.1:9091`、随机 secret、
-   9096-only CORS 白名单、私有网络、dashboard 关闭；
-3. 确认 panel 配置（`/etc/sing-box-panel/panel.json`）和 systemd drop-in；
+2. 添加/更新 `services[type=api]`：`127.0.0.1:9091`、9096-only CORS 白名单、
+   私有网络、dashboard 关闭。**默认保留已有 secret**，只有首次安装或显式
+   `--rotate-secret` 才生成新的；secret 在生成后不会输出；
+3. 确认 panel 配置（`/etc/sing-box-panel/panel.json`）和 systemd drop-in，
+   改动前先备份；
 4. 安装 `sing-box-config-perm.path`（配置变更后 `chmod 600`，并用
-   `stat -c %a` 复核）；
-5. 备份旧 UI 到 `...legacy-<timestamp>`，安装新构建；
-6. 重启两个服务并做健康检查（失败自动回滚）。
+   `stat -c %a` 复核），改动前先备份；
+5. 把旧 UI 移到 `...legacy-<timestamp>`，在新目录复制完成后一次性切换；
+6. 下载 DB-IP City Lite 到 `/usr/share/GeoIP/dbip-city-lite.mmdb`，校验
+   SHA-256 后解压；下载/校验失败只警告，`/api/geoip` 返回 503，不影响其余
+   安装；
+7. 重启服务并等待就绪（失败自动回滚 config、panel 配置、drop-in、path unit
+   和 UI）。
 
-脚本不会修改 `/usr/bin` 或 `/usr/share` 下的包文件。
+配置可以包含 `//`、`/* */` 注释和 trailing comma；安装器会先把它们归一化
+为严格 JSON 再写入。**重写后的 `config.json` 不再保留注释**，原文件保存在
+`/etc/sing-box/backups/config.json.bak.*-dracula`。`--ui-only` 完全跳过配置
+步骤，适合只更新前端。
+
+脚本不会修改 `/usr/bin` 或 `/usr/share` 下由包管理的文件；GeoIP 数据写入
+`/usr/share/GeoIP`。
+
+> 订阅自动更新/Userinfo、备份下载和全球连接地图需要配套的
+> `sing-box-panel 0.1.0-8`；
+> `deploy/install.sh` 只部署 UI，不构建或安装面板包。仍使用 0.1.0-6 时，
+> 这些新控件会收到 404，UI 会显示错误但不会影响其他管理功能。
 
 ### 首次登录
 
@@ -178,8 +241,48 @@ sudo cat /var/lib/sing-box-panel/token
 - 9091 的 dashboard 已关闭（`/dashboard/` = 404）；
 - panel 写配置时是 0644，`sing-box-config-perm.path` 会立即恢复 600 并复核；
 - 静态产物不含任何 token/secret；登录后 secret 存在本机 localStorage；
+- **仅支持本机使用**：入口固定为 `http://127.0.0.1:9096`（或
+  `http://localhost:9096`），原生 API 地址写死为 `127.0.0.1:9091`，CORS
+  也只允许这两个 Origin。从局域网 IP、反向代理或 HTTPS 打开时原生连接会
+  失败，这是设计约束，不是待配置项；
+- 如果 `services.api.secret` 为空，管理页会显示警告：sing-box 会关闭原生
+  API 鉴权，本机其他进程可直接控制核心。正常安装会生成非空 secret；
+- 下载的配置备份包含 `services.api` secret、Clash secret 和出站密码，应按
+  敏感文件保存；它和当前配置一样只通过 panel token 鉴权；
+- **威胁模型**：panel 以 root 身份写配置、重启服务，登录令牌和原生 secret
+  都存在浏览器 localStorage。锁定面板会清 token、API 缓存和托管服务器
+  条目，并让其他标签页刷新回登录页，但它只防误操作/他人顺手使用当前浏览器，
+  **不防本机同用户进程、恶意浏览器扩展或 XSS**。需要更强隔离时，应使用独立
+  的桌面用户/浏览器 profile；
 - 仓库中的验收截图来自真实本机实例，**部分截图包含本地测试域名/流量**；
   如果要把本仓库公开，请先审阅/脱敏 `artifacts/screenshots/`。
+
+## 全球连接地图与 GeoIP
+
+- 概览页底部的“全球连接”卡片从 `api.connections` 快照对比出新建/关闭连接，
+  取 `connection.destination` 的 IP（域名或无 IP 时跳过，不做 DNS 解析），
+  通过本机 panel 的 `GET /api/geoip?ip=...` 得到城市坐标。浏览器不会向
+  panel 以外的地址发地理查询。
+- 目标按 1° 网格聚类，同一格合并为一条弧线并显示 `×N`；并发弧线最多 30 条，
+  超出淘汰最旧。前端有 500 条 LRU 和 pending 去重，300+ 连接不会逐连接重复
+  查询同一 IP。
+- 本机原点优先级：panel 配置/探测的 `egress_ip` → 第一个连接的
+  `source` 公网 IP → 成都回退（见代码中的 TODO）。
+- **数据源**：DB-IP City Lite（MMDB，CC BY 4.0）。上游为
+  <https://db-ip.com>；安装脚本从版本固定的 jsDelivr/npm 镜像
+  `dbip-city-lite@1.0.18` 下载 `.mmdb.gz`，校验 `.gz` 和 `.mmdb` 的
+  SHA-256 后解压到 `/usr/share/GeoIP/dbip-city-lite.mmdb`。
+  Attribution: **IP Geolocation by DB-IP (https://db-ip.com)**，许可：
+  <https://creativecommons.org/licenses/by/4.0/>。
+- panel 默认先找 `/usr/share/GeoIP/GeoLite2-City.mmdb`，再回退到
+  `/usr/share/GeoIP/dbip-city-lite.mmdb`；可以用 panel.json 的
+  `geoip_database` 指定自备库。需要 `python-maxminddb`。
+- `egress_ip` 是静态出口 IP；`egress_ip_probe_url` 是**可选**的探测 URL
+  （默认空，不产生外部请求）。如果启用，panel 只向该 URL 发一次 GET 并缓存，
+  不包含任何连接目的地信息。
+- GeoIP 查询只在 panel 进程内存中完成：不记录查询 IP、不落盘、不向第三方
+  发送。缺库/缺依赖时 `/api/geoip` 返回 503，卡片显示一次
+  `missing GeoIP database, see README`，不会逐连接重试。
 
 ## 验收
 
@@ -216,7 +319,10 @@ sudo mv /usr/local/share/sing-box-panel-ui.legacy-<timestamp> /usr/local/share/s
 sudo systemctl restart sing-box-panel
 ```
 
-zashboard 回退入口 `http://127.0.0.1:9096/dash/` 始终保留。
+zashboard 回退入口 `http://127.0.0.1:9096/dash/` 取决于 panel 的
+`zashboard_dir` 配置；`install.sh` 不设置该字段。如果 panel 配置把
+`zashboard_dir` 指向一个空目录（例如 `no-zashboard`），该链接会 404，不影响
+Dracula UI 本身。
 
 ## 限制
 
@@ -227,6 +333,8 @@ zashboard 回退入口 `http://127.0.0.1:9096/dash/` 始终保留。
 - `Global` 模式保留在配置中供 zashboard 回退使用，但新 UI 只展示四个目标模式。
 - 订阅的“写入配置”使用与配置应用相同的 panel 事务；验收中未把测试节点写入
   真实配置。
+- 全球连接地图不做 DNS 解析；只有 `destination` 是公网 IP 的连接会出现弧线，
+  内网/保留地址或无 IP 的连接会被跳过。缺少 mmdb 时地图只显示提示。
 - `deploy/install.sh` 是针对本机 systemd/panel 布局的部署脚本，不是通用安装器。
 
 ## 目录

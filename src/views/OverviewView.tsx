@@ -23,6 +23,7 @@ import {
 import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/PageHeader";
 import { StreamBanner } from "../components/StreamBanner";
+import { TrafficMap } from "../components/TrafficMap";
 import { AdaptiveSegmented, Button, Card, DataLine, Dialog, EmptyState, IconButton, Sparkline } from "../components/ui";
 import { ServiceStatus_Type } from "../gen/daemon/started_service_pb";
 import { ProfileCard, SystemProxyCard } from "./ProfileViews";
@@ -84,6 +85,9 @@ export function OverviewView() {
       ) : (
         stateLabel !== null && <EmptyState icon="dashboard">{stateLabel}</EmptyState>
       )}
+      <div className={styles.cardGrid}>
+        <TrafficMap />
+      </div>
       {managing && (
         <CardManagementDialog
           config={cardsConfig}
