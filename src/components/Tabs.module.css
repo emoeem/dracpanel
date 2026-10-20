@@ -1,0 +1,25 @@
+.tabs {
+  display: flex;
+  gap: var(--space-16);
+}
+
+.tab {
+  padding: var(--space-8) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}

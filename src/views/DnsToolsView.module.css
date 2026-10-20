@@ -119,7 +119,7 @@
   color: var(--text-secondary);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .record {
     grid-template-columns: minmax(0, 1fr) auto;
   }

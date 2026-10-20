@@ -173,7 +173,7 @@
   font-size: var(--text-lg);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .topbar {
     display: none;
   }

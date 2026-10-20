@@ -17,9 +17,19 @@ import {
   unknownPanelCapabilities,
   type PanelCapabilities,
 } from "../api/panelCapabilities";
+import {
+  clearLoginThrottle,
+  noteLoginFailure,
+  readLoginThrottle,
+  throttleLockRemaining,
+} from "./loginThrottle";
 import styles from "./PanelGate.module.css";
 
 type Phase = "checking" | "gate" | "error" | "recovery" | "ready";
+
+function lockMessage(remaining: number): string {
+  return `尝试过于频繁，请在 ${Math.ceil(remaining / 1000)} 秒后重试。`;
+}
 
 function DraculaMark() {
   return (
@@ -45,7 +55,11 @@ export function PanelGate(props: { children: ReactNode }) {
     unknownPanelCapabilities(),
   );
   const [busy, setBusy] = useState(false);
+  const [lockRemaining, setLockRemaining] = useState(() =>
+    throttleLockRemaining(readLoginThrottle(), Date.now()),
+  );
   const mounted = useRef(true);
+  const locked = lockRemaining > 0;
 
   useEffect(() => {
     mounted.current = true;
@@ -53,6 +67,20 @@ export function PanelGate(props: { children: ReactNode }) {
       mounted.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!locked) {
+      return;
+    }
+    const timer = setInterval(() => {
+      const remaining = throttleLockRemaining(readLoginThrottle(), Date.now());
+      setLockRemaining(remaining);
+      if (remaining === 0) {
+        setMessage("");
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [locked]);
 
   const bootstrap = useCallback(async () => {
     setBusy(true);
@@ -76,6 +104,7 @@ export function PanelGate(props: { children: ReactNode }) {
       }
       setCapabilities(unknownPanelCapabilities());
       setPhase("ready");
+      clearLoginThrottle();
       // Do not make login wait for the probes; unknown capabilities stay
       // optimistic until the backend list or probe results arrive.
       void detectPanelCapabilities(current)
@@ -91,8 +120,10 @@ export function PanelGate(props: { children: ReactNode }) {
       }
       if (error instanceof PanelAuthError) {
         lockPanel();
+        const remaining = throttleLockRemaining(noteLoginFailure(), Date.now());
         setPhase("gate");
-        setMessage("令牌无效或已失效，请重新输入。");
+        setLockRemaining(remaining);
+        setMessage(remaining > 0 ? lockMessage(remaining) : "令牌无效或已失效，请重新输入。");
       } else {
         setPhase("error");
         setMessage(error instanceof Error ? error.message : String(error));
@@ -134,6 +165,12 @@ export function PanelGate(props: { children: ReactNode }) {
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    const remaining = throttleLockRemaining(readLoginThrottle(), Date.now());
+    if (remaining > 0) {
+      setLockRemaining(remaining);
+      setMessage(lockMessage(remaining));
+      return;
+    }
     const token = tokenInput.trim();
     if (token === "") {
       setMessage("请输入访问令牌。");
@@ -221,15 +258,20 @@ export function PanelGate(props: { children: ReactNode }) {
                 placeholder="粘贴 sing-box-panel 访问令牌"
                 autoComplete="current-password"
                 spellCheck={false}
+                disabled={locked}
               />
             </label>
-            <button type="submit" className={styles.primary} disabled={busy}>
-              {busy ? "正在登录…" : "进入面板"}
+            <button type="submit" className={styles.primary} disabled={busy || locked}>
+              {busy ? "正在登录…" : locked ? "已锁定" : "进入面板"}
             </button>
             <p className={styles.hint}>
               令牌位于 <code>/var/lib/sing-box-panel/token</code>，可用 <code>sudo cat</code> 查看。
             </p>
-            {message !== "" && <p className={styles.error}>{message}</p>}
+            {message !== "" && (
+              <p className={styles.error} role="alert" aria-live="assertive">
+                {message}
+              </p>
+            )}
           </form>
         )}
 

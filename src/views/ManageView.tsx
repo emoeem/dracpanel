@@ -1,8 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { loadServersState } from "../api/config";
+
+/** How often the manage tab refreshes the panel state while it is visible. */
+const STATE_POLL_INTERVAL_MS = 5000;
 import type { DaemonApi } from "../api/daemon";
-import { formatBytes, formatDateTime } from "../api/format";
+import { formatBytes, formatDateTime, isHttpUrl } from "../api/format";
 import {
   addSubscription,
   applyPanelConfig,
@@ -47,18 +50,42 @@ import { useStream } from "../api/stream";
 import type { JsonEditorSchema } from "../components/JsonEditor";
 import { useApi, useNow } from "../app/context";
 import { useI18n } from "../app/i18n";
+import { useAsyncGeneration } from "../app/useAsyncGeneration";
 import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/PageHeader";
 import { Button, Card, Dialog, SearchInput, Spinner } from "../components/ui";
 import { diffConfig, diffLines, formatDiffValue } from "../lib/configDiff";
+import {
+  clearConfigDraft,
+  draftIsMeaningful,
+  formatAge,
+  pushUndoEntry,
+  readConfigDraft,
+  readLastApplied,
+  undoTop,
+  UNDO_COALESCE_MS,
+  writeConfigDraft,
+  writeLastApplied,
+  type AppliedSnapshot,
+  type ConfigDraft,
+} from "../lib/configDraft";
 import { cx } from "../lib/cx";
+import {
+  isNotifyEnabled,
+  loadNotifierConfig,
+  NOTIFY_EVENTS,
+  saveNotifierConfig,
+  sendNotification,
+  type NotifierConfig,
+  type NotifyEvent,
+} from "../lib/notifier";
 import styles from "./ManageView.module.css";
 
 const JsonEditor = lazy(() =>
   import("../components/JsonEditor").then((module) => ({ default: module.JsonEditor })),
 );
 
-type Tab = "status" | "subscriptions" | "ebpf" | "config";
+type Tab = "status" | "subscriptions" | "ebpf" | "config" | "notify";
 const TAB_KEY = "panel_manage_tab";
 
 const PANEL_FEATURE_LABELS: Partial<Record<PanelFeature, string>> = {
@@ -274,7 +301,12 @@ export function ManageView() {
     : [];
   const [tab, setTab] = useState<Tab>(() => {
     const stored = localStorage.getItem(TAB_KEY);
-    return stored === "subscriptions" || stored === "ebpf" || stored === "config" ? stored : "status";
+    return stored === "subscriptions" ||
+      stored === "ebpf" ||
+      stored === "config" ||
+      stored === "notify"
+      ? stored
+      : "status";
   });
   // Keep a tab mounted after its first visit so drafts survive switching, but
   // do not mount Status (5s polling) or fetch the full config until needed.
@@ -325,6 +357,9 @@ export function ManageView() {
         <button type="button" className={cx(styles.tab, tab === "config" && styles.active)} onClick={() => selectTab("config")}>
           <Icon name="description" /> 配置
         </button>
+        <button type="button" className={cx(styles.tab, tab === "notify" && styles.active)} onClick={() => selectTab("notify")}>
+          <Icon name="notifications" /> 通知
+        </button>
       </div>
 
       {tab === "status" && <StatusTab />}
@@ -343,6 +378,94 @@ export function ManageView() {
           <ConfigTab />
         </div>
       )}
+      {visited.has("notify") && (
+        <div hidden={tab !== "notify"}>
+          <NotificationsTab />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── 通知 ─────────────────────────────────────────────────── */
+
+function NotificationsTab() {
+  const [config, setConfig] = useState<NotifierConfig>(() => loadNotifierConfig());
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState("");
+
+  const update = (next: NotifierConfig) => {
+    setConfig(next);
+    saveNotifierConfig(next);
+    setResult("");
+  };
+
+  const toggleEvent = (event: NotifyEvent, on: boolean) => {
+    update({ ...config, events: on ? [...config.events, event] : config.events.filter((e) => e !== event) });
+  };
+
+  const test = async () => {
+    if (!isNotifyEnabled(config, "error")) {
+      setResult("请先填写 Webhook 地址并勾选至少一个事件。");
+      return;
+    }
+    setTesting(true);
+    setResult("");
+    const delivered = await sendNotification(
+      { event: "error", title: "DracPanel 测试通知", detail: "收到即表示 Webhook 配置正确。", at: Date.now() },
+      config,
+    );
+    setResult(delivered ? "已送达。" : "发送失败，请检查地址与网络。");
+    setTesting(false);
+  };
+
+  return (
+    <div className={styles.section}>
+      <Card title="Webhook 通知">
+        <p className={styles.note}>
+          面板只在这个标签页打开时运行，浏览器不允许后台推送；若希望关闭页面后仍能收到告警，
+          唯一可行的办法是把事件 POST 给你自己的 Webhook（Slack、钉钉、ntfy、自建服务等）。
+          地址只保存在本机浏览器，不会上传。
+        </p>
+        <div className={styles.formRow}>
+          <label className={cx(styles.label, styles.grow)}>
+            Webhook 地址
+            <input
+              placeholder="https://ntfy.sh/dracpanel"
+              value={config.url}
+              onChange={(event) => update({ ...config, url: event.target.value })}
+            />
+          </label>
+        </div>
+        {config.url !== "" && !isHttpUrl(config.url) && (
+          <div className={styles.errorText}>只接受 http(s) 地址。</div>
+        )}
+        <div className={styles.eventList}>
+          {NOTIFY_EVENTS.map((event) => (
+            <label key={event.id} className={styles.eventRow}>
+              <input
+                type="checkbox"
+                checked={config.events.includes(event.id)}
+                onChange={(change) => toggleEvent(event.id, change.target.checked)}
+              />
+              <span>{event.label}</span>
+              <span className={styles.muted}>{event.hint}</span>
+            </label>
+          ))}
+        </div>
+        <div className={styles.actions}>
+          <Button disabled={testing || config.url === ""} onClick={() => void test()}>
+            {testing ? <Spinner /> : "发送测试"}
+          </Button>
+          {result !== "" && <span className={styles.muted}>{result}</span>}
+        </div>
+        <pre className={styles.codeBlock} aria-hidden="true">
+          {`POST ${config.url === "" ? "https://…" : config.url}
+content-type: application/json
+
+{"event":"error","title":"…","detail":"…","at":1700000000000}`}
+        </pre>
+      </Card>
     </div>
   );
 }
@@ -428,8 +551,20 @@ function StatusTab() {
     void load();
     void loadLogs();
     void loadClash();
-    const handle = window.setInterval(() => void load(), 5000);
-    return () => window.clearInterval(handle);
+    // Skip the poll while the tab is in the background, then refresh immediately
+    // on return so the panel never shows a stale 5-second-old snapshot.
+    const tick = () => {
+      if (document.hidden) {
+        return;
+      }
+      void load();
+    };
+    const handle = window.setInterval(tick, STATE_POLL_INTERVAL_MS);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      window.clearInterval(handle);
+      document.removeEventListener("visibilitychange", tick);
+    };
   }, [load, loadLogs, loadClash]);
 
   const copyClashSecret = async () => {
@@ -667,17 +802,17 @@ function StatusTab() {
           <dd>{state?.inbounds?.length ? state.inbounds.join(" / ") : "—"}</dd>
         </dl>
         <div className={styles.actions}>
-          {state?.zash_setup_url && state?.zashboard_available !== false ? (
+          {state?.zash_setup_url && state?.zashboard_available !== false && isHttpUrl(state.zash_setup_url) ? (
             <a href={state.zash_setup_url} target="_blank" rel="noreferrer">
               zashboard（自动填密钥）
             </a>
           ) : null}
-          {state?.metacubexd_url ? (
+          {state?.metacubexd_url && isHttpUrl(state.metacubexd_url) ? (
             <a href={state.metacubexd_url} target="_blank" rel="noreferrer">
               MetaCubeXD
             </a>
           ) : null}
-          {state?.official_dashboard_available === true && state.official_dashboard_url ? (
+          {state?.official_dashboard_available === true && state.official_dashboard_url && isHttpUrl(state.official_dashboard_url) ? (
             <a href={state.official_dashboard_url} target="_blank" rel="noreferrer">
               官方 dashboard
             </a>
@@ -740,14 +875,19 @@ function SubscriptionsTab() {
   const [confirmApply, setConfirmApply] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PanelSubscription | null>(null);
   const [managed, setManaged] = useState<PanelManagedSubscriptions | null>(null);
+  const generation = useAsyncGeneration();
 
   const load = useCallback(async () => {
+    const round = generation.begin();
     setLoading(true);
     try {
       const [result, managedResult] = await Promise.allSettled([
         listSubscriptions(),
         managedSupported ? getManagedSubscriptions() : Promise.resolve(null),
       ]);
+      if (!generation.isCurrent(round)) {
+        return;
+      }
       if (result.status === "rejected") {
         throw result.reason;
       }
@@ -759,11 +899,16 @@ function SubscriptionsTab() {
       );
       setError("");
     } catch (cause) {
+      if (!generation.isCurrent(round)) {
+        return;
+      }
       setError(errorText(cause));
     } finally {
-      setLoading(false);
+      if (generation.isCurrent(round)) {
+        setLoading(false);
+      }
     }
-  }, [managedSupported]);
+  }, [generation, managedSupported]);
 
   useEffect(() => {
     void load();
@@ -1084,18 +1229,26 @@ function EbpfTab() {
   const [error, setError] = useState("");
   const [confirmApply, setConfirmApply] = useState(false);
 
+  const generation = useAsyncGeneration();
+
   const load = useCallback(async () => {
+    const round = generation.begin();
     try {
       const [nextPolicy, nextApps] = await Promise.all([getEbpfPolicy(), listApps()]);
+      if (!generation.isCurrent(round)) {
+        return;
+      }
       setPolicy(nextPolicy);
       setApps(nextApps.apps ?? []);
       setMode(nextPolicy.mode === "blacklist" || nextPolicy.mode === "whitelist" ? nextPolicy.mode : "off");
       setSelected(new Set((nextPolicy.uids ?? []).map(Number)));
       setError("");
     } catch (cause) {
-      setError(errorText(cause));
+      if (generation.isCurrent(round)) {
+        setError(errorText(cause));
+      }
     }
-  }, []);
+  }, [generation]);
 
   useEffect(() => {
     void load();
@@ -1299,6 +1452,7 @@ function EbpfTab() {
 
 function ConfigTab() {
   const api = useApi();
+  const now = useNow(30_000);
   const { language } = useI18n();
   const capabilities = usePanelCapabilities();
   const canDownload =
@@ -1314,22 +1468,107 @@ function ConfigTab() {
   const [pending, setPending] = useState<{ kind: "restore"; name: string } | null>(null);
   const [showDiff, setShowDiff] = useState(false);
   const [schema, setSchema] = useState<JsonEditorSchema | null>(null);
+  const [undoStack, setUndoStack] = useState<string[]>([]);
+  const [draft, setDraft] = useState<ConfigDraft | null>(null);
+  const [applied, setApplied] = useState<AppliedSnapshot | null>(() => readLastApplied());
+  const [ready, setReady] = useState(false);
+  const generation = useAsyncGeneration();
+
+  // Undo snapshots are coalesced: a burst of keystrokes becomes one step.
+  const previousText = useRef(text);
+  const lastSnapshotAt = useRef(0);
+
+  useEffect(() => {
+    const before = previousText.current;
+    previousText.current = text;
+    if (before === text) {
+      return;
+    }
+    const now = Date.now();
+    if (now - lastSnapshotAt.current < UNDO_COALESCE_MS) {
+      return;
+    }
+    lastSnapshotAt.current = now;
+    setUndoStack((stack) => pushUndoEntry(stack, before));
+  }, [text]);
+
+  const applyText = useCallback((next: string) => {
+    previousText.current = next;
+    lastSnapshotAt.current = Date.now();
+    setText(next);
+  }, []);
+
+  const undo = () => {
+    setUndoStack((stack) => {
+      const result = undoTop(stack);
+      if (result.text !== null) {
+        applyText(result.text);
+      }
+      return result.stack;
+    });
+  };
+
+  const restoreApplied = () => {
+    if (applied === null) {
+      return;
+    }
+    setUndoStack((stack) => pushUndoEntry(stack, text));
+    applyText(applied.text);
+  };
+
+  const restoreDraft = () => {
+    if (draft === null) {
+      return;
+    }
+    setUndoStack((stack) => pushUndoEntry(stack, text));
+    applyText(draft.text);
+    setDraft(null);
+  };
+
+  // Autosave the draft while it differs from what the daemon holds.
+  useEffect(() => {
+    if (!ready) {
+      return;
+    }
+    if (text === original) {
+      if (draft === null) {
+        clearConfigDraft();
+      }
+      return;
+    }
+    const timer = setTimeout(() => writeConfigDraft(text, original), 600);
+    return () => clearTimeout(timer);
+  }, [draft, original, ready, text]);
 
   const load = useCallback(async () => {
+    const round = generation.begin();
     setLoading(true);
     try {
       const config: PanelConfig = await getPanelConfig();
+      if (!generation.isCurrent(round)) {
+        return;
+      }
       setText(config.text);
       setOriginal(config.text);
       setBackups(config.backups ?? []);
       setEditorKey((value) => value + 1);
       setError("");
+      // A draft from a previous session is only offered while it still differs
+      // from the config the daemon actually holds.
+      const saved = readConfigDraft();
+      setDraft(draftIsMeaningful(saved, config.text) ? saved : null);
+      setReady(true);
     } catch (cause) {
+      if (!generation.isCurrent(round)) {
+        return;
+      }
       setError(errorText(cause));
     } finally {
-      setLoading(false);
+      if (generation.isCurrent(round)) {
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [generation]);
 
   useEffect(() => {
     void load();
@@ -1381,6 +1620,12 @@ function ConfigTab() {
       const result = await applyPanelConfig(text);
       setMessage(result.message ?? "");
       if (result.ok) {
+        const snapshot = { text, appliedAt: Date.now() };
+        writeLastApplied(text);
+        setApplied(snapshot);
+        clearConfigDraft();
+        setDraft(null);
+        setUndoStack([]);
         await load();
         await afterConfigChange(api);
       } else {
@@ -1454,6 +1699,28 @@ function ConfigTab() {
     <div className={styles.section}>
       {error !== "" && <div className={styles.errorBox}>{error}</div>}
       {message !== "" && <div className={styles.successBox}>{message}</div>}
+      {draft !== null && (
+        <div className={styles.noticeBox}>
+          <div>
+            发现 {formatAge(now - draft.savedAt)}未应用的本地草稿
+            {draft.base !== original ? "（服务器配置此后已变化）" : ""}。
+          </div>
+          <div className={styles.noticeActions}>
+            <Button size="small" onClick={restoreDraft}>
+              恢复草稿
+            </Button>
+            <Button
+              size="small"
+              onClick={() => {
+                clearConfigDraft();
+                setDraft(null);
+              }}
+            >
+              丢弃
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className={styles.toolbar}>
         <span
@@ -1464,6 +1731,20 @@ function ConfigTab() {
           {schema !== null ? " · Schema 补全" : ""}
         </span>
         <div className={styles.actions}>
+          <Button
+            onClick={undo}
+            disabled={undoStack.length === 0 || busy}
+            title="撤销上一次编辑"
+          >
+            撤销
+          </Button>
+          <Button
+            onClick={restoreApplied}
+            disabled={busy || applied === null}
+            title="回到最近一次成功应用的配置"
+          >
+            上次应用
+          </Button>
           <Button onClick={() => void validate()} disabled={busy || loading}>
             校验
           </Button>

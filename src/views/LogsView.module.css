@@ -17,7 +17,17 @@
   height: calc(100vh - 170px);
 }
 
+.log-canvas {
+  position: relative;
+  width: 100%;
+}
+
+/* Only the rows intersecting the viewport are mounted; their heights are
+   measured after paint, so wrapped lines still scroll correctly. */
 .log-line {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
   display: block;
 }
 
@@ -32,7 +42,7 @@
   unicode-bidi: isolate;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   :global(.page):not(:global(.page-full)) .log-view {
       height: calc(100dvh - 230px);
     }

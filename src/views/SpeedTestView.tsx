@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { proxyDisplayType, urlTestDelayTone } from "../api/format";
 import { useStream } from "../api/stream";
@@ -10,27 +10,55 @@ import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/PageHeader";
 import { StreamStates } from "../components/StreamBanner";
 import { Badge, Button, Card, IconButton, Spinner } from "../components/ui";
+import { useToast } from "../components/Toast";
 import { ServiceStatus_Type, type Group } from "../gen/daemon/started_service_pb";
 import { cx } from "../lib/cx";
 import styles from "./SpeedTestView.module.css";
 
+// sing-box runs each URL test against the same core, so a high concurrency
+// mostly adds contention. A small pool keeps the batch fast without
+// overwhelming the daemon.
+const TEST_CONCURRENCY = 6;
+
 export function SpeedTestView() {
   const api = useApi();
   const { t } = useI18n();
+  const showToast = useToast();
   const groups = useStream(api.groups);
   const service = useStream(api.serviceStatus);
-  const [testing, setTesting] = useState<string | null>(null);
+  const [testing, setTesting] = useState<ReadonlySet<string>>(() => new Set());
   const [testingAll, setTestingAll] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const started = service.data.status?.status === ServiceStatus_Type.STARTED;
+  // Bump on each runAll() invocation so in-flight workers from an older run
+  // (or an unmounting view) cannot overwrite newer state.
+  const runIdRef = useRef(0);
+  useEffect(() => {
+    return () => {
+      runIdRef.current = -1;
+    };
+  }, []);
+
+  const setTagTesting = (tag: string, active: boolean) => {
+    setTesting((current) => {
+      const next = new Set(current);
+      if (active) {
+        next.add(tag);
+      } else {
+        next.delete(tag);
+      }
+      return next;
+    });
+  };
 
   const runOne = async (tag: string) => {
-    setTesting(tag);
+    setTagTesting(tag, true);
     try {
       await api.urlTest(tag);
     } catch (error) {
       showError(error);
     } finally {
-      setTesting(null);
+      setTagTesting(tag, false);
     }
   };
 
@@ -38,17 +66,63 @@ export function SpeedTestView() {
     if (testingAll) {
       return;
     }
+    const tags = groups.data.groups.map((group) => group.tag);
+    if (tags.length === 0) {
+      return;
+    }
+    const runId = ++runIdRef.current;
+    const isCurrent = () => runIdRef.current === runId;
     setTestingAll(true);
-    try {
-      for (const group of groups.data.groups) {
-        setTesting(group.tag);
-        await api.urlTest(group.tag);
+    setProgress({ done: 0, total: tags.length });
+
+    const queue = [...tags];
+    const failed: string[] = [];
+    let done = 0;
+
+    const worker = async () => {
+      for (;;) {
+        if (!isCurrent()) {
+          return;
+        }
+        const tag = queue.shift();
+        if (tag === undefined) {
+          return;
+        }
+        if (!isCurrent()) {
+          return;
+        }
+        setTagTesting(tag, true);
+        try {
+          await api.urlTest(tag);
+        } catch {
+          failed.push(tag);
+        } finally {
+          done += 1;
+          if (isCurrent()) {
+            setTagTesting(tag, false);
+            setProgress({ done, total: tags.length });
+          }
+        }
       }
-    } catch (error) {
-      showError(error);
+    };
+
+    try {
+      await Promise.all(
+        Array.from({ length: Math.min(TEST_CONCURRENCY, tags.length) }, () => worker()),
+      );
+      if (!isCurrent()) {
+        return;
+      }
+      if (failed.length > 0) {
+        showToast(t("URL test failed for {tags}", { tags: failed.join(", ") }), "danger");
+      } else {
+        showToast(t("URL test complete"), "good");
+      }
     } finally {
-      setTesting(null);
-      setTestingAll(false);
+      if (isCurrent()) {
+        setTestingAll(false);
+        setProgress(null);
+      }
     }
   };
 
@@ -61,7 +135,7 @@ export function SpeedTestView() {
         actions={
           <Button variant="primary" onClick={() => void runAll()} disabled={!started || testingAll}>
             {testingAll ? <Spinner /> : <Icon name="speed" />}
-            全部测速
+            {progress !== null ? t("Testing {done} of {total}", progress) : "全部测速"}
           </Button>
         }
       />
@@ -93,8 +167,8 @@ export function SpeedTestView() {
           <GroupTestCard
             key={group.tag}
             group={group}
-            testing={testing === group.tag || testingAll}
-            disabled={!started || testingAll}
+            testing={testing.has(group.tag)}
+            disabled={!started}
             onTest={() => void runOne(group.tag)}
           />
         ))}
@@ -175,6 +249,7 @@ function GroupTestCard(props: {
               className={cx(styles.item, item.tag === selected && styles.selected)}
               onClick={() => select(item.tag)}
               title={group.selectable ? "切换到该节点" : undefined}
+              aria-pressed={item.tag === selected}
             >
               <span className={styles.itemName}>{item.tag}</span>
               {item.tag === selected && <Badge tone="accent">当前</Badge>}

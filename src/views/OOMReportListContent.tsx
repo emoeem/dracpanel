@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { formatDateTime } from "../api/format";
 import { useStream } from "../api/stream";
@@ -29,6 +29,8 @@ export function OOMReportListContent({ host }: { host: DesktopHost }) {
   const [reports, setReports] = useState<DesktopOOMReport[] | null>(null);
   const [settings, setSettings] = useState<DesktopSettingsState | null>(null);
 
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const reload = useCallback(() => {
     host.reports.oom
       .list()
@@ -42,6 +44,12 @@ export function OOMReportListContent({ host }: { host: DesktopHost }) {
   useEffect(() => {
     reload();
     host.settings.get().then(setSettings).catch(showError);
+    return () => {
+      if (reloadTimer.current !== null) {
+        clearTimeout(reloadTimer.current);
+        reloadTimer.current = null;
+      }
+    };
   }, [host, reload]);
 
   const deleteAll = () => {
@@ -56,7 +64,13 @@ export function OOMReportListContent({ host }: { host: DesktopHost }) {
     host.reports
       .triggerOOMReport()
       .then(() => {
-        setTimeout(reload, 1000);
+        if (reloadTimer.current !== null) {
+          clearTimeout(reloadTimer.current);
+        }
+        reloadTimer.current = setTimeout(() => {
+          reloadTimer.current = null;
+          reload();
+        }, 1000);
       })
       .catch(showError);
   };

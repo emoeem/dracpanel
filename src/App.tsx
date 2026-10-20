@@ -1,4 +1,13 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
 import {
   loadServersState,
@@ -22,6 +31,7 @@ import {
   saveAccentPreference,
   saveThemePreference,
   useApi,
+  useIsMobile,
   useNow,
   watchSystemTheme,
   type AccentPreference,
@@ -51,32 +61,21 @@ import {
   DesktopServiceControls,
   DesktopToolbar,
 } from "./components/DesktopToolbar";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Icon, type IconName } from "./components/Icon";
+import { CommandPalette, type Command } from "./components/CommandPalette";
 import { WebTopbar } from "./components/WebTopbar";
 import { ToolbarSlotsProvider } from "./components/PageHeader";
+import { ToastProvider } from "./components/Toast";
 import { Brand, Button, Dialog, IconButton, Spinner, StateDot } from "./components/ui";
+import { notify } from "./lib/notifier";
 import { SSH_DEFAULT_TERMINAL_TYPE, SSH_DEFAULT_USERNAME } from "./lib/tailscaleSSH";
+import { useDrawerGestures } from "./app/useDrawerGestures";
+import { useHealthMonitor } from "./app/useHealthMonitor";
 import { loadStoredString, saveStoredString } from "./lib/storage";
+import { PanelGate } from "./panel/PanelGate";
 import { ConnectionErrorView } from "./views/ConnectionErrorView";
-import { ConnectionsView } from "./views/ConnectionsView";
 import { DesktopSetupView } from "./views/DesktopSetupView";
-import {
-  CrashReportDetailView,
-  CrashReportFileView,
-  CrashReportListView,
-} from "./views/CrashReportsView";
-import { GroupsView } from "./views/GroupsView";
-import { LogsView } from "./views/LogsView";
-import {
-  OOMReportDetailView,
-  OOMReportFileView,
-  OOMReportListView,
-} from "./views/OOMReportsView";
-import {
-  PowerReportDetailView,
-  PowerReportFileView,
-  PowerReportListView,
-} from "./views/PowerReportsView";
 import {
   crashReportFileDisplayName,
   crashReportTitle,
@@ -85,39 +84,107 @@ import {
   powerReportFileDisplayName,
   powerReportTitle,
 } from "./views/reportFormat";
-import { OverviewView } from "./views/OverviewView";
 import {
   ImportProfileFileDialog,
   ImportRemoteProfileDialog,
   ProfileContentWindow,
 } from "./views/ProfileViews";
-import {
-  AppSettingsView,
-  CoreView,
-  PreferencesView,
-  ServersView,
-  SettingsView,
-  TerminalConfigurationView,
-  TerminalThemeEditorView,
-  TerminalThemePickerView,
-} from "./views/SettingsView";
 import { SetupView } from "./views/SetupView";
 import { UpdatesGate } from "./views/UpdateViews";
-import { NetworkQualityView, STUNTestView, ToolsView } from "./views/ToolsView";
-import { DnsToolsView } from "./views/DnsToolsView";
-import { ConnectivityTestView } from "./views/ConnectivityTestView";
 import { TaildropNavBadge, TaildropSendRequestDialog, TaildropView } from "./views/TaildropView";
-import { TailscaleEndpointView } from "./views/TailscaleView";
 import { TailscaleSSHView } from "./views/TerminalView";
-import { UsbipView } from "./views/UsbipView";
-import { OpenConnectView } from "./views/OpenConnectView";
-import { OpenVPNView } from "./views/OpenVPNView";
-import { RulesView } from "./views/RulesView";
-import { SpeedTestView } from "./views/SpeedTestView";
-import { ManageView } from "./views/ManageView";
-import { PanelGate } from "./panel/PanelGate";
 import styles from "./App.module.css";
 import { cx } from "./lib/cx";
+
+// Route views are code-split: a session that only watches the dashboard should
+// not have to download the settings editors, terminal theme picker or report
+// readers. TaildropView stays static because TaildropNavBadge lives in the same
+// module and is rendered in the sidebar.
+const OverviewView = lazy(() =>
+  import("./views/OverviewView").then((m) => ({ default: m.OverviewView })),
+);
+const GroupsView = lazy(() => import("./views/GroupsView").then((m) => ({ default: m.GroupsView })));
+const ConnectionsView = lazy(() =>
+  import("./views/ConnectionsView").then((m) => ({ default: m.ConnectionsView })),
+);
+const LogsView = lazy(() => import("./views/LogsView").then((m) => ({ default: m.LogsView })));
+const RulesView = lazy(() => import("./views/RulesView").then((m) => ({ default: m.RulesView })));
+const SpeedTestView = lazy(() =>
+  import("./views/SpeedTestView").then((m) => ({ default: m.SpeedTestView })),
+);
+const ManageView = lazy(() => import("./views/ManageView").then((m) => ({ default: m.ManageView })));
+const ToolsView = lazy(() => import("./views/ToolsView").then((m) => ({ default: m.ToolsView })));
+const NetworkQualityView = lazy(() =>
+  import("./views/ToolsView").then((m) => ({ default: m.NetworkQualityView })),
+);
+const STUNTestView = lazy(() =>
+  import("./views/ToolsView").then((m) => ({ default: m.STUNTestView })),
+);
+const DnsToolsView = lazy(() =>
+  import("./views/DnsToolsView").then((m) => ({ default: m.DnsToolsView })),
+);
+const ConnectivityTestView = lazy(() =>
+  import("./views/ConnectivityTestView").then((m) => ({ default: m.ConnectivityTestView })),
+);
+const TailscaleEndpointView = lazy(() =>
+  import("./views/TailscaleView").then((m) => ({ default: m.TailscaleEndpointView })),
+);
+const UsbipView = lazy(() => import("./views/UsbipView").then((m) => ({ default: m.UsbipView })));
+const OpenConnectView = lazy(() =>
+  import("./views/OpenConnectView").then((m) => ({ default: m.OpenConnectView })),
+);
+const OpenVPNView = lazy(() =>
+  import("./views/OpenVPNView").then((m) => ({ default: m.OpenVPNView })),
+);
+const CrashReportListView = lazy(() =>
+  import("./views/CrashReportsView").then((m) => ({ default: m.CrashReportListView })),
+);
+const CrashReportDetailView = lazy(() =>
+  import("./views/CrashReportsView").then((m) => ({ default: m.CrashReportDetailView })),
+);
+const CrashReportFileView = lazy(() =>
+  import("./views/CrashReportsView").then((m) => ({ default: m.CrashReportFileView })),
+);
+const OOMReportListView = lazy(() =>
+  import("./views/OOMReportsView").then((m) => ({ default: m.OOMReportListView })),
+);
+const OOMReportDetailView = lazy(() =>
+  import("./views/OOMReportsView").then((m) => ({ default: m.OOMReportDetailView })),
+);
+const OOMReportFileView = lazy(() =>
+  import("./views/OOMReportsView").then((m) => ({ default: m.OOMReportFileView })),
+);
+const PowerReportListView = lazy(() =>
+  import("./views/PowerReportsView").then((m) => ({ default: m.PowerReportListView })),
+);
+const PowerReportDetailView = lazy(() =>
+  import("./views/PowerReportsView").then((m) => ({ default: m.PowerReportDetailView })),
+);
+const PowerReportFileView = lazy(() =>
+  import("./views/PowerReportsView").then((m) => ({ default: m.PowerReportFileView })),
+);
+const SettingsView = lazy(() =>
+  import("./views/SettingsView").then((m) => ({ default: m.SettingsView })),
+);
+const AppSettingsView = lazy(() =>
+  import("./views/SettingsView").then((m) => ({ default: m.AppSettingsView })),
+);
+const CoreView = lazy(() => import("./views/SettingsView").then((m) => ({ default: m.CoreView })));
+const PreferencesView = lazy(() =>
+  import("./views/SettingsView").then((m) => ({ default: m.PreferencesView })),
+);
+const ServersView = lazy(() =>
+  import("./views/SettingsView").then((m) => ({ default: m.ServersView })),
+);
+const TerminalConfigurationView = lazy(() =>
+  import("./views/SettingsView").then((m) => ({ default: m.TerminalConfigurationView })),
+);
+const TerminalThemePickerView = lazy(() =>
+  import("./views/SettingsView").then((m) => ({ default: m.TerminalThemePickerView })),
+);
+const TerminalThemeEditorView = lazy(() =>
+  import("./views/SettingsView").then((m) => ({ default: m.TerminalThemeEditorView })),
+);
 
 export type Route =
   | { page: "overview" }
@@ -424,10 +491,12 @@ export function App(props: { desktop?: DesktopHost } = {}) {
   const desktop = props.desktop ?? null;
   return (
     <I18nProvider>
-      <DesktopHostContext.Provider value={desktop}>
-        {desktop !== null ? <DesktopApp host={desktop} /> : <PanelGate><WebApp /></PanelGate>}
-        <GlobalErrorDialog />
-      </DesktopHostContext.Provider>
+      <ToastProvider>
+        <DesktopHostContext.Provider value={desktop}>
+          {desktop !== null ? <DesktopApp host={desktop} /> : <PanelGate><WebApp /></PanelGate>}
+          <GlobalErrorDialog />
+        </DesktopHostContext.Provider>
+      </ToastProvider>
     </I18nProvider>
   );
 }
@@ -746,18 +815,23 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
   const route = props.route;
   const serviceStatus = useStream(api.serviceStatus);
   const groups = useStream(api.groups);
-  const groupsRef = useRef(groups.data.groups);
   const [autoTestInterval, setAutoTestInterval] = useState<AutoTestInterval>(() =>
     loadAutoTestInterval(api.config.id),
   );
   const [menuOpen, setMenuOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [leadSlot, setLeadSlot] = useState<HTMLElement | null>(null);
   const [endSlot, setEndSlot] = useState<HTMLElement | null>(null);
   const reportedFatalError = useRef<string | null>(null);
-
-  useEffect(() => {
-    groupsRef.current = groups.data.groups;
-  }, [groups.data.groups]);
+  const sidebarRef = useRef<HTMLElement | null>(null);
+  const isMobile = useIsMobile();
+  const isDrawerLayout = host === null && isMobile;
+  const drawerGestures = useDrawerGestures({
+    open: menuOpen,
+    enabled: isDrawerLayout,
+    drawerRef: sidebarRef,
+    onOpenChange: setMenuOpen,
+  });
 
   useEffect(() => {
     const refresh = () => setAutoTestInterval(loadAutoTestInterval(api.config.id));
@@ -778,6 +852,7 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
     if (reportedFatalError.current !== fatalError) {
       reportedFatalError.current = fatalError;
       showError(fatalError);
+      notify("service", "sing-box 核心致命错误", fatalError);
     }
   }, [fatalError]);
 
@@ -831,46 +906,14 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
   const started = serviceStatusType === ServiceStatus_Type.STARTED;
   const hasGroups = started && groups.data.loaded && groups.data.groups.length > 0;
 
-  useEffect(() => {
-    if (!started || autoTestInterval === "off") {
-      return;
-    }
-    let cancelled = false;
-    let running = false;
-    const run = async () => {
-      if (running) {
-        return;
-      }
-      running = true;
-      let firstError: unknown = null;
-      try {
-        for (const group of groupsRef.current) {
-          if (cancelled) {
-            return;
-          }
-          try {
-            await api.urlTest(group.tag);
-          } catch (error) {
-            firstError ??= error;
-          }
-        }
-      } finally {
-        running = false;
-      }
-      if (!cancelled && firstError !== null) {
-        showError(firstError);
-      }
-    };
-    void run();
-    const timer = window.setInterval(
-      () => void run(),
-      Number(autoTestInterval) * 60_000,
-    );
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [api, started, autoTestInterval]);
+  const health = useHealthMonitor({
+    api,
+    serverId: api.config.id,
+    intervalMs: autoTestInterval === "off" ? 0 : Number(autoTestInterval) * 60_000,
+    active: started,
+    groups: groups.data.groups,
+    histories: groups.data.latencyHistory,
+  });
   const known = serviceStatus.phase !== "connecting" || serviceStatus.data.status !== null;
 
   const groupsKnown = groups.data.loaded || groups.phase === "error";
@@ -933,6 +976,66 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
+
+  // ⌘K / Ctrl+K toggles the command palette from anywhere, including text fields,
+  // where the Ctrl+1…8 page shortcuts deliberately do not fire.
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (event.key !== "k" && event.key !== "K") {
+        return;
+      }
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) {
+        return;
+      }
+      event.preventDefault();
+      setPaletteOpen((open) => !open);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // Declared before the early returns below so the hook order stays stable.
+  const commands = useMemo<Command[]>(() => {
+    const go = (id: string, label: string, page: string, icon: IconName, hint?: string) => ({
+      id,
+      label,
+      group: t("Navigate"),
+      icon,
+      hint,
+      keywords: page,
+      run: () => {
+        setMenuOpen(false);
+        navigate(page);
+      },
+    });
+    const items: Command[] = [
+      go("nav-overview", t("Overview"), "overview", "dashboard", "Ctrl+1"),
+      go("nav-groups", t("Groups"), "groups", "folder", "Ctrl+2"),
+      go("nav-connections", t("Connections"), "connections", "swap_vert", "Ctrl+3"),
+      go("nav-logs", t("Logs"), "logs", "text_snippet", "Ctrl+4"),
+      go("nav-rules", t("Rules"), "rules", "filter_list", "Ctrl+5"),
+      go("nav-speedtest", t("Speed Test"), "speedtest", "speed", "Ctrl+6"),
+      go("nav-settings", t("Settings"), "settings", "settings", "Ctrl+7"),
+      go("nav-manage", t("Manage"), "manage", "tune", "Ctrl+8"),
+      go("nav-tools", t("Tools"), "tools", "terminal"),
+      go("nav-tools-network-quality", t("Network Quality"), "tools/network-quality", "network_check"),
+      go("nav-tools-stun", t("STUN Test"), "tools/stun", "hub"),
+      go("nav-tools-dns", t("DNS"), "tools/dns", "dns"),
+      go("nav-tools-connectivity", t("Connectivity Test"), "tools/connectivity", "cable"),
+    ];
+    if (started) {
+      items.push({
+        id: "action-clear-logs",
+        label: t("Clear Logs"),
+        group: t("Actions"),
+        icon: "delete",
+        run: () => {
+          void api.clearLogs().catch(showError);
+        },
+      });
+    }
+    return items;
+  }, [api, started, t]);
 
   if (lostError !== null && host === null && route.page !== "manage") {
     return (
@@ -1016,78 +1119,94 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
 
   const mainContent = (
     <main className={styles.content}>
-      {route.page === "overview" && <OverviewView />}
-      {route.page === "groups" && <GroupsView />}
-      {route.page === "connections" && <ConnectionsView />}
-      {route.page === "logs" && <LogsView />}
-      {route.page === "rules" && <RulesView />}
-      {route.page === "speedtest" && <SpeedTestView />}
-      {route.page === "manage" && <ManageView />}
-      {route.page === "tools" && <ToolsView />}
-      {route.page === "tools/network-quality" && <NetworkQualityView />}
-      {route.page === "tools/stun" && <STUNTestView />}
-      {route.page === "tools/dns" && <DnsToolsView />}
-      {route.page === "tools/connectivity" && <ConnectivityTestView />}
-      {route.page === "tools/tailscale" && <TailscaleEndpointView tag={route.tag} />}
-      {route.page === "tools/tailscale/taildrop" && <TaildropView tag={route.tag} />}
-      {route.page === "tools/usbip" && <UsbipView tag={route.tag} />}
-      {route.page === "tools/openconnect" && <OpenConnectView tag={route.tag} />}
-      {route.page === "tools/openvpn" && <OpenVPNView tag={route.tag} />}
-      {route.page === "tools/crash-reports" && <CrashReportListView />}
-      {route.page === "tools/crash-reports/detail" && (
-        <CrashReportDetailView name={route.name} crashedAt={route.crashedAt} />
-      )}
-      {route.page === "tools/crash-reports/file" && (
-        <CrashReportFileView name={route.name} file={route.file} crashedAt={route.crashedAt} />
-      )}
-      {route.page === "tools/oom-reports" && <OOMReportListView />}
-      {route.page === "tools/oom-reports/detail" && (
-        <OOMReportDetailView name={route.name} recordedAt={route.recordedAt} />
-      )}
-      {route.page === "tools/oom-reports/file" && (
-        <OOMReportFileView name={route.name} file={route.file} recordedAt={route.recordedAt} />
-      )}
-      {route.page === "tools/power-reports" && <PowerReportListView />}
-      {route.page === "tools/power-reports/detail" && (
-        <PowerReportDetailView name={route.name} recordedAt={route.recordedAt} />
-      )}
-      {route.page === "tools/power-reports/file" && (
-        <PowerReportFileView name={route.name} file={route.file} recordedAt={route.recordedAt} />
-      )}
-      {route.page === "settings" && <SettingsView />}
-      {route.page === "settings/app" && (
-        <AppSettingsView
-          theme={props.theme}
-          onThemeChange={props.onThemeChange}
-          accent={props.accent}
-          onAccentChange={props.onAccentChange}
-        />
-      )}
-      {route.page === "settings/core" && <CoreView />}
-      {route.page === "settings/preferences" && (
-        <PreferencesView
-          theme={props.theme}
-          onThemeChange={props.onThemeChange}
-          accent={props.accent}
-          onAccentChange={props.onAccentChange}
-        />
-      )}
-      {route.page === "settings/preferences/terminal" && <TerminalConfigurationView />}
-      {route.page === "settings/preferences/terminal/theme" && (
-        <TerminalThemePickerView scheme={route.scheme} />
-      )}
-      {route.page === "settings/preferences/terminal/custom" && (
-        <TerminalThemeEditorView scheme={route.scheme} />
-      )}
-      {route.page === "settings/servers" && (
-        <ServersView serversState={props.serversState} onServersChange={props.onServersChange} />
-      )}
+      <ErrorBoundary key={route.page}>
+        <Suspense
+          fallback={
+            <div className={styles.viewLoading}>
+              <Spinner />
+            </div>
+          }
+        >
+          {route.page === "overview" && <OverviewView />}
+          {route.page === "groups" && <GroupsView />}
+          {route.page === "connections" && <ConnectionsView />}
+          {route.page === "logs" && <LogsView />}
+          {route.page === "rules" && <RulesView />}
+          {route.page === "speedtest" && <SpeedTestView />}
+          {route.page === "manage" && <ManageView />}
+          {route.page === "tools" && <ToolsView />}
+          {route.page === "tools/network-quality" && <NetworkQualityView />}
+          {route.page === "tools/stun" && <STUNTestView />}
+          {route.page === "tools/dns" && <DnsToolsView />}
+          {route.page === "tools/connectivity" && <ConnectivityTestView />}
+          {route.page === "tools/tailscale" && <TailscaleEndpointView tag={route.tag} />}
+          {route.page === "tools/tailscale/taildrop" && <TaildropView tag={route.tag} />}
+          {route.page === "tools/usbip" && <UsbipView tag={route.tag} />}
+          {route.page === "tools/openconnect" && <OpenConnectView tag={route.tag} />}
+          {route.page === "tools/openvpn" && <OpenVPNView tag={route.tag} />}
+          {route.page === "tools/crash-reports" && <CrashReportListView />}
+          {route.page === "tools/crash-reports/detail" && (
+            <CrashReportDetailView name={route.name} crashedAt={route.crashedAt} />
+          )}
+          {route.page === "tools/crash-reports/file" && (
+            <CrashReportFileView name={route.name} file={route.file} crashedAt={route.crashedAt} />
+          )}
+          {route.page === "tools/oom-reports" && <OOMReportListView />}
+          {route.page === "tools/oom-reports/detail" && (
+            <OOMReportDetailView name={route.name} recordedAt={route.recordedAt} />
+          )}
+          {route.page === "tools/oom-reports/file" && (
+            <OOMReportFileView name={route.name} file={route.file} recordedAt={route.recordedAt} />
+          )}
+          {route.page === "tools/power-reports" && <PowerReportListView />}
+          {route.page === "tools/power-reports/detail" && (
+            <PowerReportDetailView name={route.name} recordedAt={route.recordedAt} />
+          )}
+          {route.page === "tools/power-reports/file" && (
+            <PowerReportFileView name={route.name} file={route.file} recordedAt={route.recordedAt} />
+          )}
+          {route.page === "settings" && <SettingsView />}
+          {route.page === "settings/app" && (
+            <AppSettingsView
+              theme={props.theme}
+              onThemeChange={props.onThemeChange}
+              accent={props.accent}
+              onAccentChange={props.onAccentChange}
+            />
+          )}
+          {route.page === "settings/core" && <CoreView />}
+          {route.page === "settings/preferences" && (
+            <PreferencesView
+              theme={props.theme}
+              onThemeChange={props.onThemeChange}
+              accent={props.accent}
+              onAccentChange={props.onAccentChange}
+            />
+          )}
+          {route.page === "settings/preferences/terminal" && <TerminalConfigurationView />}
+          {route.page === "settings/preferences/terminal/theme" && (
+            <TerminalThemePickerView scheme={route.scheme} />
+          )}
+          {route.page === "settings/preferences/terminal/custom" && (
+            <TerminalThemeEditorView scheme={route.scheme} />
+          )}
+          {route.page === "settings/servers" && (
+            <ServersView serversState={props.serversState} onServersChange={props.onServersChange} />
+          )}
+        </Suspense>
+      </ErrorBoundary>
     </main>
   );
 
   return (
     <CapabilitiesContext.Provider value={capabilities}>
-      <div className={cx(styles.app, host === null && styles.webApp)}>
+      <div
+        className={cx(styles.app, host === null && styles.webApp)}
+        {...(isDrawerLayout ? drawerGestures : {})}
+      >
+        {paletteOpen && (
+          <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />
+        )}
         {host === null && (
           <header className={styles.mobileTopbar}>
             <IconButton
@@ -1127,7 +1246,7 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
             {mainPages}
           </nav>
         ) : (
-          <nav className={cx(styles.sidebar, menuOpen && styles.open)}>
+          <nav ref={sidebarRef} className={cx(styles.sidebar, menuOpen && styles.open)}>
             <div className={styles.sidebarBrand}>
               DracPanel
               {serverInfo && <span className={styles.sidebarBrandVersion}>{serverInfo.version}</span>}
@@ -1136,6 +1255,12 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
             {hasGroups && navItem("groups", t("Groups"), "folder", route.page === "groups")}
             {started && navItem("connections", t("Connections"), "swap_vert", route.page === "connections")}
             {mainPages}
+            {health.summary.down > 0 && (
+              <div className={styles.healthAlert} role="status">
+                <Icon name="warning_amber" size={14} />
+                {health.summary.down} 个节点不可用
+              </div>
+            )}
             <ServerPicker
               serversState={props.serversState}
               onServersChange={props.onServersChange}

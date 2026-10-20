@@ -917,6 +917,7 @@ export function Sparkline(props: { data: number[]; height?: number; color?: stri
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
   const color = props.color ?? "var(--accent)";
+  const gradientId = useId();
   return (
     <svg
       width="100%"
@@ -927,10 +928,15 @@ export function Sparkline(props: { data: number[]; height?: number; color?: stri
     >
       {points.length > 1 && (
         <>
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity="0.26" />
+              <stop offset="100%" stopColor={color} stopOpacity="0" />
+            </linearGradient>
+          </defs>
           <polygon
             points={`${points[0].split(",")[0]},${height} ${points.join(" ")} ${points[points.length - 1].split(",")[0]},${height}`}
-            fill={color}
-            opacity="0.1"
+            fill={`url(#${gradientId})`}
           />
           <polyline
             points={points.join(" ")}

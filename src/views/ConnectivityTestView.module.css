@@ -85,7 +85,7 @@
   color: var(--text-faint);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .result {
     grid-template-columns: 1fr;
   }

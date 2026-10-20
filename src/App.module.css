@@ -33,6 +33,7 @@
 }
 
 .nav-item {
+  position: relative;
   display: flex;
   gap: var(--space-10);
   align-items: center;
@@ -49,6 +50,18 @@
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
+.health-alert {
+  display: flex;
+  gap: var(--space-8);
+  align-items: center;
+  padding: var(--space-8) var(--space-10);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-radius: var(--radius-md);
+}
+
 .nav-item:hover {
   color: var(--text);
   background: var(--hover);
@@ -58,6 +71,19 @@
   font-weight: var(--weight-semibold);
   color: var(--accent-strong);
   background: var(--accent-soft);
+}
+
+/* Active-route indicator bar on the inline-start edge, like modern dashboards. */
+.nav-item.active::before {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  content: "";
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  transform: translateY(-50%);
 }
 
 .nav-item :global(.icon) {
@@ -159,6 +185,13 @@
   overscroll-behavior: none;
 }
 
+/* Suspense fallback while a lazily loaded route view is being fetched. */
+.view-loading {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-48) 0;
+}
+
 .nav-item:active {
   background: var(--accent-soft);
 }
@@ -254,7 +287,7 @@
   unicode-bidi: isolate;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .app {
       flex-direction: column;
     }
@@ -288,6 +321,9 @@
       width: min(78vw, 300px);
       padding-top: calc(var(--space-20) + env(safe-area-inset-top));
       padding-bottom: calc(var(--space-14) + env(safe-area-inset-bottom));
+
+      /* Horizontal swipes drive the drawer; vertical scrolling still works. */
+      touch-action: pan-y;
       transform: translateX(-100%);
       transition: transform 0.2s ease;
     }

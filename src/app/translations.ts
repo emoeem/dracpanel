@@ -670,6 +670,51 @@ export const TRANSLATIONS = {
     "ru": "Не удалось закрыть подключения: {failed} из {total}",
   },
   "Clear": { "zh-Hans": "清空", "zh-Hant": "清空", "fa": "پاک کردن", "ru": "Очистить" },
+  "Something went wrong": {
+    "zh-Hans": "出错了",
+    "zh-Hant": "出錯了",
+    "fa": "خطایی رخ داد",
+    "ru": "Что-то пошло не так",
+  },
+  "Try again": { "zh-Hans": "重试", "zh-Hant": "重試", "fa": "تلاش دوباره", "ru": "Попробовать снова" },
+  "Command palette": {
+    "zh-Hans": "命令面板",
+    "zh-Hant": "命令面板",
+    "fa": "پالت فرمان",
+    "ru": "Палитра команд",
+  },
+  "Type a command or search": {
+    "zh-Hans": "输入命令或搜索",
+    "zh-Hant": "輸入命令或搜尋",
+    "fa": "یک فرمان بنویسید یا جستجو کنید",
+    "ru": "Введите команду или запрос",
+  },
+  "Navigate": { "zh-Hans": "导航", "zh-Hant": "導覽", "fa": "پیمایش", "ru": "Навигация" },
+  "Actions": { "zh-Hans": "操作", "zh-Hant": "操作", "fa": "عملیات", "ru": "Действия" },
+  "Go to Overview": {
+    "zh-Hans": "返回概览",
+    "zh-Hant": "返回概覽",
+    "fa": "رفتن به نمای کلی",
+    "ru": "Перейти к обзору",
+  },
+  "URL test complete": {
+    "zh-Hans": "测速完成",
+    "zh-Hant": "測速完成",
+    "fa": "تست سرعت انجام شد",
+    "ru": "Тест скорости завершён",
+  },
+  "URL test failed for {tags}": {
+    "zh-Hans": "测速失败：{tags}",
+    "zh-Hant": "測速失敗：{tags}",
+    "fa": "تست سرعت ناموفق: {tags}",
+    "ru": "Тест скорости не удался: {tags}",
+  },
+  "Testing {done} of {total}": {
+    "zh-Hans": "正在测速 {done}/{total}",
+    "zh-Hant": "正在測速 {done}/{total}",
+    "fa": "در حال تست {done} از {total}",
+    "ru": "Тестирование {done} из {total}",
+  },
 } as const satisfies Record<string, Record<TranslatedLanguage, string | PluralForms>>;
 
 export type MessageKey = keyof typeof TRANSLATIONS;

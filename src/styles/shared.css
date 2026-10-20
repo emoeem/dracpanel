@@ -211,7 +211,7 @@ a.menu-item {
 
 .page {
   padding: var(--space-32) var(--space-36) var(--space-56);
-  animation: page-in 0.25s ease-out;
+  animation: page-in 0.25s var(--ease-out-soft);
 }
 
 .page-full {
@@ -265,7 +265,14 @@ a.menu-item {
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
-  transition: border-color var(--transition-medium);
+  transition: border-color var(--transition-medium), box-shadow var(--transition-medium), transform var(--transition-medium) var(--ease-out-soft);
+}
+
+/* Gentle hover lift, matching modern proxy dashboards (zashboard et al). */
+.card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-1px);
 }
 
 .card-header {
@@ -279,8 +286,25 @@ a.menu-item {
   margin-bottom: 0;
 }
 
+/* Soft-tinted icon chip in front of the card title (zashboard-style); it
+   tints toward the accent while the card is hovered to keep resting states
+   calm. */
 .card-header > .icon {
-  color: var(--text-faint);
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--text-secondary);
+  background: var(--neutral-soft);
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-medium), background var(--transition-medium);
+}
+
+.card:hover > .card-header > .icon {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
 }
 
 .card-header .actions {
@@ -352,6 +376,10 @@ a.menu-item {
 
 .nav-row:hover:not(.static) {
   background: var(--hover);
+}
+
+.nav-row:hover:not(.static) > .icon:first-child {
+  color: var(--text-secondary);
 }
 
 .nav-row > .icon:first-child {
@@ -465,7 +493,7 @@ a.nav-line {
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   box-shadow: var(--shadow-control);
-  transition: background var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast), transform var(--transition-fast);
 }
 
 .button:hover {
@@ -479,7 +507,9 @@ a.nav-line {
 
 .button.primary {
   color: var(--on-accent);
-  background: var(--accent);
+
+  /* Subtle vertical sheen so the accent reads as a raised control. */
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent), var(--bright) 7%), var(--accent));
   border-color: transparent;
 }
 
@@ -500,15 +530,16 @@ a.nav-line {
   background: var(--accent-soft);
 }
 
-.button:active {
+.button:active:not(:disabled) {
   background: var(--inset);
+  transform: scale(0.98);
 }
 
-.button.primary:active {
+.button.primary:active:not(:disabled) {
   background: var(--accent-strong);
 }
 
-.button.danger:active {
+.button.danger:active:not(:disabled) {
   background: var(--danger-soft);
 }
 
@@ -699,6 +730,10 @@ a.nav-line {
 
 .input:focus, .select:focus {
   outline: none;
+}
+
+.input:hover, .select:hover {
+  border-color: var(--border-strong);
 }
 
 .input:focus-visible, .select:focus-visible {
@@ -1062,7 +1097,7 @@ button.settings-row:focus-visible {
   border: 0;
   border-inline-start: 1px solid var(--border);
   box-shadow: var(--shadow-overlay);
-  animation: slide-in 0.18s ease;
+  animation: slide-in var(--transition-slow);
 }
 
 .drawer::backdrop {
@@ -1198,6 +1233,32 @@ button.settings-row:focus-visible {
   color: var(--danger);
 }
 
+.banner-retry {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--space-6);
+  align-items: center;
+  padding: 0;
+  margin-inline-start: auto;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--danger);
+  white-space: nowrap;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.banner-retry:hover {
+  opacity: 0.75;
+}
+
+.banner-retry .icon {
+  margin-top: 0;
+  color: inherit;
+}
+
 .hint {
   font-size: var(--text-sm);
   color: var(--text-faint);
@@ -1274,7 +1335,18 @@ button.settings-row:focus-visible {
   background: transparent;
 }
 
-@media (max-width: 720px) {
+/* Tablet: between the roomy desktop padding and the phone padding. */
+@media (min-width: 901px) and (max-width: 1180px) {
+  .page {
+    padding: var(--space-24) var(--space-24) var(--space-40);
+  }
+
+  .card {
+    padding: var(--space-16);
+  }
+}
+
+@media (max-width: 900px) {
   .page {
       padding: var(--space-20) var(--space-16) calc(var(--space-40) + env(safe-area-inset-bottom));
     }

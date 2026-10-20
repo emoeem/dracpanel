@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
-  createServerId,
-  normalizeServerUrl,
   removeServer,
   serverDisplayName,
   upsertServer,
@@ -23,7 +21,6 @@ import { ServiceStatus_Type } from "../gen/daemon/started_service_pb";
 import { LanguageSelect, useI18n } from "../app/i18n";
 import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/PageHeader";
-import { ReachabilityIndicator, useServerReachability } from "../components/ReachabilityIndicator";
 import { Button, Dialog, Field, IconButton, MenuItem, MenuLink, NavRow, SecretInput, Select, Spinner, ThemeMenu, ThemeSelect, useContextMenu } from "../components/ui";
 import {
   DEFAULT_DARK_THEME_NAME,
@@ -34,6 +31,7 @@ import {
 } from "../lib/tailscaleSSH";
 import { parseCustomTheme, type Scheme, type TerminalThemeEntry } from "../lib/terminalTheme";
 import { openUpdateDialog, useUpdatesState } from "./UpdateViews";
+import { ServerDialog } from "./ServerDialog";
 import styles from "./SettingsView.module.css";
 import { cx } from "../lib/cx";
 
@@ -1127,77 +1125,5 @@ export function ServersView(props: {
   );
 }
 
-export function ServerDialog(props: {
-  server: Server | null;
-  canDelete: boolean;
-  onSave: (server: Server) => void;
-  onDelete: (id: string) => void;
-  onClose: () => void;
-}) {
-  const { t } = useI18n();
-  const [name, setName] = useState(props.server?.name ?? "");
-  const [url, setUrl] = useState(props.server?.url ?? "");
-  const [secret, setSecret] = useState(props.server?.secret ?? "");
-  const reachability = useServerReachability(url, secret);
-
-  const normalizedUrl = normalizeServerUrl(url);
-  const valid = normalizedUrl !== "";
-
-  return (
-    <Dialog onClose={props.onClose}>
-      <h3>{props.server ? t("Edit Server") : t("New Server")}</h3>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!valid) {
-            return;
-          }
-          props.onSave({
-            id: props.server?.id ?? createServerId(),
-            name: name.trim(),
-            url: normalizedUrl,
-            secret,
-          });
-        }}
-      >
-        <Field label={t("Name")}>
-          <input
-            className="input"
-            value={name}
-            placeholder={t("Optional")}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </Field>
-        <Field label={t("URL")}>
-          <input
-            className="input"
-            value={url}
-            placeholder={t("Required")}
-            onChange={(event) => setUrl(event.target.value)}
-          />
-        </Field>
-        <Field label={t("Secret")}>
-          <SecretInput value={secret} placeholder={t("Optional")} onChange={setSecret} />
-        </Field>
-        <ReachabilityIndicator reachability={reachability} url={url} />
-        <div className="row-actions dialog-actions">
-          {props.server && props.canDelete && (
-            <Button
-              variant="danger"
-              style={{ marginInlineEnd: "auto" }}
-              onClick={() => props.onDelete(props.server!.id)}
-            >
-              {t("Delete")}
-            </Button>
-          )}
-          <Button onClick={props.onClose}>
-            {t("Cancel")}
-          </Button>
-          <Button variant="primary" type="submit" disabled={!valid}>
-            {t("Save")}
-          </Button>
-        </div>
-      </form>
-    </Dialog>
-  );
-}
+// `ServerDialog` lives in ./ServerDialog so that views needing only the dialog
+// do not pull in this entire chunk.

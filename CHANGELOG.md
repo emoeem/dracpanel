@@ -1,42 +1,61 @@
 # Changelog
 
-## 0.1.0 — 2026-10-18
+All notable changes to DracPanel are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
 
 ### Added
-
-- **Proxies:** node search, name/latency sorting, hide-unavailable filter;
-  per-node latency history with optional automatic URLTest (off / 5 / 15 / 30 min).
-- **Rules:** keyword search, action/outbound filters and sorting across route,
-  DNS and rule-set tabs.
-- **Logs:** log-type filter, hide-regex, configurable retention, pause and
-  export.
-- **Connections:** pause, arbitrary-field sorting, grouping by host/process/
-  outbound/rule/source, source-IP/TCP/UDP/hide-chain filters, CSV/JSON export,
-  close-filtered batching, and destination GeoIP details.
-- **Overview:** traffic history (1m/5m/1h), connection-count history and a
-  connection-history aggregation card with clear action.
-- **Tools:** DNS query against the sing-box Clash API, DNS/FakeIP cache flush,
-  and per-node/multi-target connectivity tests.
-- **Validation:** regression coverage for connection filtering/sorting/grouping,
-  CSV escaping, latency-history deduplication, connection-history clearing and
-  auto-test preferences.
+- React `ErrorBoundary` (with i18n-aware fallback and a reset shortcut) wrapped around every route view, so a crashing view no longer white-screens the panel.
+- Route views are now code-split via `React.lazy`; the main bundle no longer pulls in the settings editors, terminal theme picker or report readers until they are opened.
+- New generic UI primitives under `src/components/`: `Skeleton`, `Tooltip`, `Breadcrumb`, `Tabs`, `Table`, `Toast` (+ `ToastProvider` / `useToast`).
+- `pnpm build` now auto-runs `pnpm generate` when the generated files are missing (fresh clones no longer fail the first build).
+- `.github/dependabot.yml` for weekly dependency updates.
+- `.github/workflows/upstream-check.yml` surfaces upstream Tailscale dashboard releases.
+- Rate limiting on the panel token gate: 5 wrong tokens in 5 minutes lock the gate for 15 minutes. Counts persist in preference storage so a reload does not reset the budget (`src/panel/loginThrottle.ts`, covered by unit tests).
+- Git hooks via husky: `pre-commit` runs lint-staged (eslint/stylelint `--fix`), `pre-push` runs `tsc --noEmit` and the test suite.
+- `SkeletonLines`, used for the shared stream loading state.
+- A `.sr-only` utility class for status text that should only reach screen readers.
+- `src/lib/errorReporting.ts`: a no-op error reporting seam (`reportError`) so a Sentry-style backend can be wired in through `VITE_ERROR_REPORTING_DSN` without touching call sites.
+- `src/app/useAsyncGeneration.ts`: a generation guard so an abandoned async load can no longer write over newer data.
+- ⌘K / Ctrl+K command palette (`src/lib/commandPalette.ts` + `src/components/CommandPalette.tsx`) over every route, with ranked matching that is unit tested.
+- Rule hit statistics: `src/lib/ruleHits.ts` diffs connection snapshots into per-rule hit/active/traffic counters, surfaced as a "本次会话命中" card and a per-rule badge in `RulesView`.
+- Visual rule editor (`src/lib/ruleEditor.ts` + `src/views/RuleEditorDialog.tsx`): edit route/DNS rules as action + target + matchers, reorder and delete them, review the diff, then validate and apply through the panel API.
+- Webhook notifications (`src/lib/notifier.ts`): posts panel errors, core fatal errors and config-applied events to a user-owned URL, since the browser cannot push to a closed tab. Configured from a new 通知 tab in 管理, with a test button.
+- `Retry` button on the stream error banner.
+- Component render tests (`@testing-library/react` + jsdom) covering `Tabs`, `Table`, `Toast`, `ErrorBoundary` and `SkeletonLines`.
+- `notifications` icon.
+- Config draft + undo for the config editor (`src/lib/configDraft.ts`): unsaved JSON is autosaved to browser storage and offered back after a reload, the last successfully applied config can be restored with one click, and edits are undoable (coalesced into ~0.7s steps). `RulesView` gets an in-memory undo stack for rule edits.
+- Log view virtualization (`src/lib/virtualWindow.ts` + `src/app/useVirtualList.ts`): only the rows intersecting the viewport are mounted, heights are measured after paint so wrapped lines still scroll correctly, and the max-entry cap now goes up to 10000.
+- Periodic health checks (`src/lib/healthCheck.ts` + `src/app/useHealthMonitor.ts`): the interval sweep pauses while the tab is hidden, probes groups with a bounded concurrency of 3, persists its schedule state per server, announces new outages once (toast + webhook `health` event), and can optionally fail a group over to its fastest usable node. A 健康巡检 card in `GroupsView` shows the summary, thresholds and a "立即巡检" button; the sidebar warns when nodes are down.
+- Drawer swipe gestures (`src/app/useDrawerGestures.ts`): edge swipe opens the navigation drawer, swipe back closes it, with a live drag and flick detection (RTL aware).
 
 ### Changed
-
-- Renamed the project from **Dracula Panel for sing-box** to **DracPanel**.
-- Repository renamed to `dracpanel`.
-- Source deployment path is now `/usr/local/share/dracpanel-ui`.
-- Arch package is now `dracpanel`; installed UI path is `/usr/share/dracpanel/ui`.
-- README, DEPLOYMENT, NOTICE, LICENSE and acceptance scripts use the new name.
-- Dracula/Alucard remain the names of the color themes; only the project name
-  changed.
+- Renamed package from `dracpanel` to `@emoeem/dracpanel` (scoped, matches the GitHub org).
+- Dropped the upstream `vite-plugin-pwa` / `@vite-pwa/assets-generator` devDependencies (PWA was disabled in `vite.config.ts`).
+- Dropped the unused `exports` field (`private: true` made it dead code anyway).
+- `pnpm generate:dev` now honours `$SINGBOX_PROTO`, so the proto path is no longer hard-coded.
+- "全部测速" now runs URL tests with a bounded concurrency of 6 instead of sequentially, shows live `{done}/{total}` progress, reports the outcome through a toast, and keeps per-group spinners independent.
+- `Tabs` supports roving tabindex plus `ArrowLeft`/`ArrowRight`/`Home`/`End` navigation, and emits `aria-controls` when given an `idPrefix`.
+- Log lines use `content-visibility: auto`, so the browser skips layout and paint for the thousands of off-screen lines.
+- The shared stream loading state renders a skeleton instead of the literal "Loading..." text (the text is still announced to screen readers).
+- `RulesView` tabs carry `role="tablist"` / `role="tab"` / `aria-selected`.
+- Node buttons in the speed test view carry `aria-pressed`; gate errors are announced via `role="alert"`.
+- `--transition-slow` token (0.18s ease); the drawer slide-in no longer hard-codes its duration.
+- `--text-faint` in both themes, to reach the WCAG AA 4.5:1 contrast minimum: dark `#6272a4` → `#8296c9` (3.08:1 → 4.99:1), light `#8d866e` → `#7a7358` (3.51:1 → 4.64:1). The token is used by ~80 hint/label rules.
+- `ManageView` polls the panel state only while the tab is visible, instead of every 5s regardless of `document.hidden`.
+- `RulesView` rule cards are memoised, so typing in the search box no longer re-renders every rule.
+- Responsive breakpoints: the drawer layout now kicks in at ≤900px (was 720px), so tablets in portrait get the drawer instead of a squeezed sidebar, and a 901–1180px tier narrows the sidebar to 208px with tighter page padding. `useIsMobile()` matches the same 900px query.
+- The auto URL-test timer was replaced by the health monitor: it no longer runs a long serial chain regardless of tab visibility, and it keeps its schedule and reported outages across reloads.
 
 ### Fixed
+- Dashboard URLs returned by the backend (`zashboard`, MetaCubeXD, official dashboard in `ManageView`, and the update dialog's release link) were rendered straight into `href` without validation; they are now gated on `isHttpUrl()`, matching what the deprecated-warning banner already did.
+- `ServerDialog` was extracted into its own module so `ConnectionErrorView` no longer drags in the whole settings chunk, but `ConnectionErrorView` still imported it from `SettingsView`, so the split never took effect.
+- Stale results could overwrite newer ones (or write into a detached component) when leaving the connectivity test or speed test mid-run; both now guard with a per-run id.
+- `OOMReportListContent` scheduled a 1s reload timer that was never cleared on unmount.
+- `ToastProvider` did not clear pending dismiss timers when it unmounted.
+- A malformed JSON schema from `generateSchema()` was swallowed by a trailing `.catch(() => {})`, leaving the editor silently schema-less; parsing is now reported separately.
+- `index.html` blocked pinch-zoom via `maximum-scale=1.0, user-scalable=no`, which fails WCAG 1.4.4.
 
-- Log types are parsed from sing-box's real `tag: message` observable format,
-  including `[id duration]` prefixes and namespaced tags such as
-  `inbound/tun[tun-in]`.
-- Connection-history clear now removes closed rows from the daemon-side stream,
-  not just the card aggregation.
-- Status traffic history is reset when the core enters `STARTING`.
-- Filtered batch close uses bounded concurrency and reports aggregate failures.
+## [0.1.0] - 2026-10-18
+
+Initial self-hosted release. Forked from upstream Tailscale dashboard, rebranded for sing-box, and trimmed of the desktop-only parts (Electron, tray) so it builds as a pure static site.

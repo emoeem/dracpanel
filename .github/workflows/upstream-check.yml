@@ -1,0 +1,41 @@
+name: Upstream check
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch upstream and summarize distance
+        env:
+          UPSTREAM_REPO: tailscale/dashboard
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git" 2>/dev/null \
+            || git remote set-url upstream "https://github.com/${UPSTREAM_REPO}.git"
+          if ! git fetch upstream --quiet; then
+            echo "::warning::Could not fetch upstream; check network or the repo visibility."
+            exit 0
+          fi
+          upstream_ref="upstream/HEAD"
+          if ! git rev-parse --verify "$upstream_ref" >/dev/null 2>&1; then
+            upstream_ref="upstream/main"
+          fi
+          {
+            echo "### Upstream HEAD"
+            echo '```'
+            git rev-parse --short "$upstream_ref" 2>/dev/null || echo "(no upstream ref)"
+            echo '```'
+            echo "### Local HEAD"
+            echo '```'
+            git rev-parse --short HEAD
+            echo '```'
+            echo "### Distance (origin/main \u2194 upstream)"
+            echo "- behind: $(git rev-list --count HEAD.."$upstream_ref" 2>/dev/null || echo '?')"
+            echo "- ahead: $(git rev-list --count "$upstream_ref"..HEAD 2>/dev/null || echo '?')"
+          } >> "$GITHUB_STEP_SUMMARY"

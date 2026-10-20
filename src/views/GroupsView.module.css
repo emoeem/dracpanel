@@ -23,6 +23,41 @@
   color: var(--text-secondary);
 }
 
+.health-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-10);
+  align-items: center;
+  margin-bottom: var(--space-10);
+}
+
+.health-row:last-child {
+  margin-bottom: 0;
+}
+
+.health-meta {
+  flex: 1;
+  font-size: var(--text-sm);
+  color: var(--text-faint);
+}
+
+.health-field {
+  display: flex;
+  gap: var(--space-6);
+  align-items: center;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.health-field .input {
+  width: 88px;
+}
+
+.health-note {
+  font-size: var(--text-sm);
+  color: var(--text-faint);
+}
+
 .summary {
   margin-bottom: var(--space-10);
   font-size: var(--text-xs);
@@ -169,7 +204,7 @@
   border-radius: 50%;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .group-items {
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     }

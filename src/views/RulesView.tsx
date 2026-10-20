@@ -1,24 +1,53 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
-import { getPanelConfig, PanelAuthError } from "../api/panel";
-import { navigate } from "../app/context";
+import type { ReactNode } from "react";
+
+import { formatBytes } from "../api/format";
+import {
+  applyPanelConfig,
+  getPanelConfig,
+  PanelAuthError,
+  resyncAfterConfigChange,
+  validatePanelConfig,
+} from "../api/panel";
+import { useApi, navigate } from "../app/context";
+import { showError } from "../app/errorStore";
 import { useI18n } from "../app/i18n";
+import { useRuleHits } from "../app/useRuleHits";
 import { PageHeader } from "../components/PageHeader";
-import { Badge, Button, Card, EmptyState, SearchInput, Select, Spinner } from "../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Dialog,
+  EmptyState,
+  SearchInput,
+  Select,
+  Spinner,
+} from "../components/ui";
+import { diffConfig, formatDiffValue, type ConfigChange } from "../lib/configDiff";
 import { cx } from "../lib/cx";
+import { parseRuleKey, totalHitBytes, type RuleHitStats } from "../lib/ruleHits";
+import { notify } from "../lib/notifier";
+import {
+  emptyDraft,
+  ruleToDraft,
+  ruleValueToText,
+  type RuleDraft,
+  type RuleObject,
+} from "../lib/ruleEditor";
+import { RuleEditorDialog } from "./RuleEditorDialog";
 import styles from "./RulesView.module.css";
-
-type JsonObject = Record<string, unknown>;
 
 interface ConfigShape {
   route?: {
-    rules?: JsonObject[];
-    rule_set?: JsonObject[];
+    rules?: RuleObject[];
+    rule_set?: RuleObject[];
     final?: string;
     default_domain_resolver?: string;
   };
   dns?: {
-    rules?: JsonObject[];
+    rules?: RuleObject[];
     final?: string;
     default_domain_resolver?: string;
   };
@@ -28,6 +57,10 @@ interface ConfigShape {
 }
 
 type Tab = "route" | "dns" | "rule_set";
+/** The two sections that hold editable rules. */
+type RuleSection = "route" | "dns";
+
+const RULES_UNDO_LIMIT = 30;
 type RuleSort = "config" | "action" | "outbound";
 
 const ACTION_LABELS: Record<string, string> = {
@@ -69,17 +102,7 @@ const CHIP_KEYS = [
   "invert",
 ];
 
-function asString(value: unknown): string {
-  if (Array.isArray(value)) {
-    return value.map((item) => String(item)).join(", ");
-  }
-  if (typeof value === "object" && value !== null) {
-    return JSON.stringify(value);
-  }
-  return String(value);
-}
-
-function actionOf(rule: JsonObject): string {
+function actionOf(rule: RuleObject): string {
   if (typeof rule.action === "string" && rule.action !== "") {
     return rule.action;
   }
@@ -92,24 +115,32 @@ function actionOf(rule: JsonObject): string {
   return "default";
 }
 
+/** Keeps the rule together with its position in the config, which is what the daemon reports as the matched rule. */
+interface IndexedRule {
+  rule: RuleObject;
+  index: number;
+}
+
 function applyRuleView(
-  rules: JsonObject[],
+  rules: RuleObject[],
   query: string,
   actionFilter: string,
   sort: RuleSort,
-): JsonObject[] {
-  const filtered = rules.filter((rule) => {
-    if (actionFilter !== "all" && actionOf(rule) !== actionFilter) {
-      return false;
-    }
-    return query === "" || JSON.stringify(rule).toLowerCase().includes(query);
-  });
+): IndexedRule[] {
+  const filtered = rules
+    .map((rule, index) => ({ rule, index }))
+    .filter(({ rule }) => {
+      if (actionFilter !== "all" && actionOf(rule) !== actionFilter) {
+        return false;
+      }
+      return query === "" || JSON.stringify(rule).toLowerCase().includes(query);
+    });
   if (sort === "action") {
-    filtered.sort((left, right) => actionOf(left).localeCompare(actionOf(right)));
+    filtered.sort((left, right) => actionOf(left.rule).localeCompare(actionOf(right.rule)));
   } else if (sort === "outbound") {
     filtered.sort((left, right) => {
-      const leftValue = String(left.outbound ?? left.server ?? "");
-      const rightValue = String(right.outbound ?? right.server ?? "");
+      const leftValue = String(left.rule.outbound ?? left.rule.server ?? "");
+      const rightValue = String(right.rule.outbound ?? right.rule.server ?? "");
       return leftValue.localeCompare(rightValue);
     });
   }
@@ -129,7 +160,7 @@ function actionTone(action: string): "accent" | "danger" | "info" | "good" {
   }
 }
 
-function RuleChips(props: { rule: JsonObject }) {
+function RuleChips(props: { rule: RuleObject }) {
   const chips = CHIP_KEYS.filter((key) => props.rule[key] !== undefined);
   if (chips.length === 0) {
     return <span className={styles.muted}>默认规则</span>;
@@ -137,19 +168,29 @@ function RuleChips(props: { rule: JsonObject }) {
   return (
     <span className={styles.chips}>
       {chips.map((key) => (
-        <span key={key} className={styles.chip} title={`${key}: ${asString(props.rule[key])}`}>
+        <span key={key} className={styles.chip} title={`${key}: ${ruleValueToText(props.rule[key])}`}>
           <span className={styles.chipKey}>{key}</span>
-          <span className={styles.chipValue}>{asString(props.rule[key])}</span>
+          <span className={styles.chipValue}>{ruleValueToText(props.rule[key])}</span>
         </span>
       ))}
     </span>
   );
 }
 
-function RuleItem(props: { rule: JsonObject; index: number; depth?: number }) {
+// Rules come from a locally cached config snapshot, so `rule` keeps a stable
+// identity across filter/sort passes: memoising keeps a keystroke in the search
+// box from re-rendering every rule card.
+const RuleItem = memo(function RuleItem(props: {
+  rule: RuleObject;
+  index: number;
+  depth?: number;
+  hits?: RuleHitStats;
+  /** Edit-mode buttons; absent while the view is read-only. */
+  controls?: ReactNode;
+}) {
   const rule = props.rule;
   const action = actionOf(rule);
-  const logical = Array.isArray(rule.rules) ? (rule.rules as JsonObject[]) : null;
+  const logical = Array.isArray(rule.rules) ? (rule.rules as RuleObject[]) : null;
   const outbound =
     typeof rule.outbound === "string" ? rule.outbound : typeof rule.server === "string" ? rule.server : null;
   return (
@@ -164,7 +205,17 @@ function RuleItem(props: { rule: JsonObject; index: number; depth?: number }) {
         )}
         {outbound !== null && <span className={styles.outbound}>→ {outbound}</span>}
         <span className={styles.ruleSpacer} />
+        {props.hits !== undefined && props.hits.hits > 0 && (
+          <span
+            className={styles.hits}
+            title={`本次会话命中 ${props.hits.hits} 次，累计 ${formatBytes(totalHitBytes(props.hits))}`}
+          >
+            {props.hits.active > 0 && <span className={styles.hitsActive}>{props.hits.active} 活跃</span>}
+            {props.hits.hits} 次 · {formatBytes(totalHitBytes(props.hits))}
+          </span>
+        )}
         {typeof rule.invert === "boolean" && rule.invert && <Badge tone="danger">invert</Badge>}
+        {props.controls}
       </div>
       <div className={styles.ruleBody}>
         {logical === null ? (
@@ -182,10 +233,12 @@ function RuleItem(props: { rule: JsonObject; index: number; depth?: number }) {
       </div>
     </div>
   );
-}
+});
 
 export function RulesView() {
   const { t } = useI18n();
+  const api = useApi();
+  const hits = useRuleHits(api);
   const [config, setConfig] = useState<ConfigShape | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -193,6 +246,14 @@ export function RulesView() {
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState("all");
   const [sort, setSort] = useState<RuleSort>("config");
+  /** Original config text, kept so an edit can be diffed before applying. */
+  const [configText, setConfigText] = useState<string | null>(null);
+  /** Working copy of both rule lists while editing; null means read-only. */
+  const [working, setWorking] = useState<{ route: RuleObject[]; dns: RuleObject[] } | null>(null);
+  const [history, setHistory] = useState<{ route: RuleObject[]; dns: RuleObject[] }[]>([]);
+  const [editor, setEditor] = useState<{ section: RuleSection; index: number | null } | null>(null);
+  const [pending, setPending] = useState<{ text: string; changes: ConfigChange[] } | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -201,6 +262,7 @@ export function RulesView() {
       const result = await getPanelConfig();
       const parsed = JSON.parse(result.text) as ConfigShape;
       setConfig(parsed);
+      setConfigText(result.text);
     } catch (cause) {
       if (cause instanceof PanelAuthError) {
         setError("面板令牌已失效，请重新登录。");
@@ -216,8 +278,10 @@ export function RulesView() {
     void load();
   }, [load]);
 
-  const routeRules = useMemo(() => config?.route?.rules ?? [], [config]);
-  const dnsRules = useMemo(() => config?.dns?.rules ?? [], [config]);
+  const savedRouteRules = useMemo(() => config?.route?.rules ?? [], [config]);
+  const savedDnsRules = useMemo(() => config?.dns?.rules ?? [], [config]);
+  const routeRules = working?.route ?? savedRouteRules;
+  const dnsRules = working?.dns ?? savedDnsRules;
   const ruleSets = useMemo(() => config?.route?.rule_set ?? [], [config]);
   const mode = config?.experimental?.clash_api?.default_mode;
 
@@ -239,12 +303,198 @@ export function RulesView() {
   );
   const filtersActive = query !== "" || actionFilter !== "all";
 
+  // Buckets also exist for live traffic alone, so only the ones that actually
+  // matched a connection are worth listing.
+  const topHits = useMemo(() => hits.stats.filter((stats) => stats.hits > 0).slice(0, 8), [hits]);
+
+  // The daemon labels a matched connection with a string we may not be able to
+  // map back onto a config position; unmapped labels stay in the summary card
+  // and the rule cards simply go without a badge.
+  const hitsByPosition = useMemo(() => {
+    const map = new Map<string, RuleHitStats>();
+    for (const stats of hits.stats) {
+      const parsed = parseRuleKey(stats.rule);
+      if (parsed === null) {
+        continue;
+      }
+      const key = `${parsed.section}:${parsed.index}`;
+      if (!map.has(key)) {
+        map.set(key, stats);
+      }
+    }
+    return map;
+  }, [hits]);
+
+  const editing = working !== null;
+  const dirty =
+    working !== null &&
+    (JSON.stringify(working.route) !== JSON.stringify(savedRouteRules) ||
+      JSON.stringify(working.dns) !== JSON.stringify(savedDnsRules));
+
+  const rulesOf = (section: RuleSection): RuleObject[] => (section === "route" ? routeRules : dnsRules);
+
+  const replaceRules = (section: RuleSection, next: RuleObject[]) => {
+    const base = working ?? { route: [...savedRouteRules], dns: [...savedDnsRules] };
+    setHistory((stack) => [...stack, base].slice(-RULES_UNDO_LIMIT));
+    setWorking(section === "route" ? { ...base, route: next } : { ...base, dns: next });
+  };
+
+  const undoRules = () => {
+    const previous = history[history.length - 1];
+    if (previous === undefined) {
+      return;
+    }
+    setHistory((stack) => stack.slice(0, -1));
+    setWorking(previous);
+  };
+
+  const discardRules = () => {
+    setWorking(null);
+    setHistory([]);
+  };
+
+  const startEditing = () => {
+    setWorking({ route: [...savedRouteRules], dns: [...savedDnsRules] });
+    setHistory([]);
+    setSearch("");
+    setActionFilter("all");
+    setSort("config");
+  };
+
+  const moveRule = (section: RuleSection, index: number, delta: number) => {
+    const list = [...rulesOf(section)];
+    const target = index + delta;
+    if (target < 0 || target >= list.length) {
+      return;
+    }
+    const moved = list[index];
+    list[index] = list[target];
+    list[target] = moved;
+    replaceRules(section, list);
+  };
+
+  const openEditor = (section: RuleSection, index: number) => {
+    const rule = rulesOf(section)[index];
+    if (rule !== undefined && Array.isArray(rule.rules)) {
+      showError("组合规则（rules/mode）暂不支持可视化编辑，请在「管理 → 配置」中用 JSON 修改。");
+      return;
+    }
+    setEditor({ section, index });
+  };
+
+  const submitEditor = (rule: RuleObject) => {
+    if (editor === null) {
+      return;
+    }
+    const list = [...rulesOf(editor.section)];
+    if (editor.index === null) {
+      list.push(rule);
+    } else {
+      list[editor.index] = rule;
+    }
+    replaceRules(editor.section, list);
+    setEditor(null);
+  };
+
+  const requestSave = () => {
+    if (working === null || config === null || configText === null) {
+      return;
+    }
+    const next: ConfigShape = {
+      ...config,
+      route: { ...config.route, rules: working.route },
+      dns: { ...config.dns, rules: working.dns },
+    };
+    const text = JSON.stringify(next, null, 2);
+    setPending({ text, changes: diffConfig(configText, text).changes });
+  };
+
+  const applyPending = async () => {
+    if (pending === null || working === null) {
+      return;
+    }
+    setSaving(true);
+    try {
+      const validated = await validatePanelConfig(pending.text);
+      if (!validated.ok) {
+        showError(validated.message !== "" ? validated.message : "配置校验失败");
+        return;
+      }
+      const result = await applyPanelConfig(pending.text);
+      if (!result.ok) {
+        showError(result.message !== "" ? result.message : "应用失败");
+        return;
+      }
+      const resync = await resyncAfterConfigChange();
+      if (resync.serverChanged) {
+        window.location.reload();
+        return;
+      }
+      api.reconnectNow();
+      setWorking(null);
+      setHistory([]);
+      notify("config", "配置已应用", `路由规则 ${working.route.length} 条，DNS 规则 ${working.dns.length} 条`);
+      await load();
+    } catch (cause) {
+      showError(cause);
+    } finally {
+      setSaving(false);
+      setPending(null);
+    }
+  };
+
+  const editorSection: RuleSection = tab === "dns" ? "dns" : "route";
+  const editorDraft: RuleDraft | null =
+    editor === null
+      ? null
+      : editor.index === null
+        ? emptyDraft()
+        : ruleToDraft(rulesOf(editor.section)[editor.index] ?? {});
+
+  const ruleControls = (section: RuleSection, index: number) => (
+    <span className={styles.ruleControls}>
+      <Button size="small" onClick={() => openEditor(section, index)}>
+        编辑
+      </Button>
+      <Button size="small" aria-label="上移" disabled={index === 0} onClick={() => moveRule(section, index, -1)}>
+        ↑
+      </Button>
+      <Button
+        size="small"
+        aria-label="下移"
+        disabled={index >= rulesOf(section).length - 1}
+        onClick={() => moveRule(section, index, 1)}
+      >
+        ↓
+      </Button>
+      <Button size="small" onClick={() => replaceRules(section, rulesOf(section).filter((_, i) => i !== index))}>
+        删除
+      </Button>
+    </span>
+  );
+
   const actions = (
     <>
       <Button onClick={() => void load()} disabled={loading}>
         {loading ? <Spinner /> : "刷新"}
       </Button>
-      <Button variant="primary" onClick={() => navigate("manage")}>
+      {editing ? (
+        <>
+          <Button onClick={() => setEditor({ section: editorSection, index: null })}>新增规则</Button>
+          <Button onClick={undoRules} disabled={history.length === 0} title="撤销上一次规则改动">
+            撤销
+          </Button>
+          <Button onClick={discardRules}>放弃更改</Button>
+          <Button variant="primary" disabled={!dirty || saving} onClick={requestSave}>
+            {saving ? <Spinner /> : "保存并应用"}
+          </Button>
+        </>
+      ) : (
+        <Button disabled={config === null} onClick={startEditing}>
+          编辑规则
+        </Button>
+      )}
+      <Button variant={editing ? undefined : "primary"} onClick={() => navigate("manage")}>
         编辑配置
       </Button>
     </>
@@ -293,9 +543,39 @@ export function RulesView() {
             </Card>
           </div>
 
-          <div className={styles.tabs}>
+          <Card title="本次会话命中">
+            {topHits.length === 0 ? (
+              <div className={styles.muted}>
+                {hits.observed ? "本次会话还没有连接命中规则。" : "正在等待连接快照…"}
+              </div>
+            ) : (
+              <div className={styles.hitSummary}>
+                {topHits.map((stats) => (
+                  <div key={stats.rule} className={styles.hitRow}>
+                    <span className={styles.hitLabel} title={stats.rule}>
+                      {stats.rule}
+                    </span>
+                    <span className={styles.hitBar}>
+                      <span
+                        className={styles.hitBarFill}
+                        style={{ width: `${Math.round((stats.hits / topHits[0].hits) * 100)}%` }}
+                      />
+                    </span>
+                    <span className={styles.hitValue}>
+                      {stats.hits} 次 · {formatBytes(totalHitBytes(stats))}
+                      {stats.active > 0 && ` · ${stats.active} 活跃`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          <div className={styles.tabs} role="tablist">
             <button
               type="button"
+              role="tab"
+              aria-selected={tab === "route"}
               className={cx(styles.tab, tab === "route" && styles.active)}
               onClick={() => setTab("route")}
             >
@@ -303,6 +583,8 @@ export function RulesView() {
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={tab === "dns"}
               className={cx(styles.tab, tab === "dns" && styles.active)}
               onClick={() => setTab("dns")}
             >
@@ -310,6 +592,8 @@ export function RulesView() {
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={tab === "rule_set"}
               className={cx(styles.tab, tab === "rule_set" && styles.active)}
               onClick={() => setTab("rule_set")}
             >
@@ -334,15 +618,18 @@ export function RulesView() {
                   value={actionFilter}
                   onChange={setActionFilter}
                 />
-                <Select
-                  options={[
-                    { value: "config", label: t("Configuration order") },
-                    { value: "action", label: t("Action") },
-                    { value: "outbound", label: t("Outbound") },
-                  ]}
-                  value={sort}
-                  onChange={(value) => setSort(value as RuleSort)}
-                />
+                {/* Reordering while editing only makes sense in config order. */}
+                {!editing && (
+                  <Select
+                    options={[
+                      { value: "config", label: t("Configuration order") },
+                      { value: "action", label: t("Action") },
+                      { value: "outbound", label: t("Outbound") },
+                    ]}
+                    value={sort}
+                    onChange={(value) => setSort(value as RuleSort)}
+                  />
+                )}
               </>
             )}
             {filtersActive && (
@@ -365,8 +652,14 @@ export function RulesView() {
               <EmptyState icon="search">{t("No results")}</EmptyState>
             ) : (
               <div className={styles.list}>
-                {visibleRouteRules.map((rule, index) => (
-                  <RuleItem key={index} rule={rule} index={index} />
+                {visibleRouteRules.map((entry, index) => (
+                  <RuleItem
+                    key={index}
+                    rule={entry.rule}
+                    index={entry.index}
+                    hits={hitsByPosition.get(`route:${entry.index}`)}
+                    controls={editing ? ruleControls("route", entry.index) : undefined}
+                  />
                 ))}
               </div>
             ))}
@@ -378,8 +671,14 @@ export function RulesView() {
               <EmptyState icon="search">{t("No results")}</EmptyState>
             ) : (
               <div className={styles.list}>
-                {visibleDnsRules.map((rule, index) => (
-                  <RuleItem key={index} rule={rule} index={index} />
+                {visibleDnsRules.map((entry, index) => (
+                  <RuleItem
+                    key={index}
+                    rule={entry.rule}
+                    index={entry.index}
+                    hits={hitsByPosition.get(`dns:${entry.index}`)}
+                    controls={editing ? ruleControls("dns", entry.index) : undefined}
+                  />
                 ))}
               </div>
             ))}
@@ -409,9 +708,53 @@ export function RulesView() {
               </div>
             ))}
           <p className={styles.footnote}>
-            规则来自实时 sing-box 配置（面板 API）。原生 gRPC API 不提供规则列表；修改请到「管理 → 配置」。
+            规则来自实时 sing-box 配置（面板 API）。原生 gRPC API 不提供规则列表；顺序即匹配顺序，越靠前优先级越高。
           </p>
         </>
+      )}
+
+      {editorDraft !== null && editor !== null && (
+        <RuleEditorDialog
+          title={editor.index === null ? "新增规则" : `编辑规则 #${(editor.index ?? 0) + 1}`}
+          targetLabel={editor.section === "dns" ? "DNS 服务器标签（server）" : "出站标签（outbound）"}
+          targetKey={editor.section === "dns" ? "server" : "outbound"}
+          initial={editorDraft}
+          onCancel={() => setEditor(null)}
+          onSubmit={submitEditor}
+        />
+      )}
+
+      {pending !== null && (
+        <Dialog onClose={() => setPending(null)}>
+          <h2>应用规则改动</h2>
+          <p className={styles.confirmNote}>
+            将写入配置并重启 sing-box 核心，期间代理连接会中断。共 {pending.changes.length} 处改动。
+          </p>
+          <div className={styles.confirmList}>
+            {pending.changes.slice(0, 20).map((change) => (
+              <div key={change.path} className={styles.confirmRow}>
+                <Badge tone={change.kind === "removed" ? "danger" : "accent"}>{change.kind}</Badge>
+                <span className={styles.confirmPath}>{change.path}</span>
+                <span className={styles.confirmValue}>
+                  {change.kind === "added"
+                    ? formatDiffValue(change.after)
+                    : change.kind === "removed"
+                      ? formatDiffValue(change.before)
+                      : `${formatDiffValue(change.before)} → ${formatDiffValue(change.after)}`}
+                </span>
+              </div>
+            ))}
+            {pending.changes.length > 20 && (
+              <div className={styles.muted}>…另有 {pending.changes.length - 20} 处改动</div>
+            )}
+          </div>
+          <div className={styles.confirmActions}>
+            <Button onClick={() => setPending(null)}>取消</Button>
+            <Button variant="primary" disabled={saving} onClick={() => void applyPending()}>
+              {saving ? <Spinner /> : "校验并应用"}
+            </Button>
+          </div>
+        </Dialog>
       )}
     </div>
   );

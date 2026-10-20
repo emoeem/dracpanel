@@ -60,7 +60,8 @@ export function useNavigationGuard(active: boolean, onBlock: NavigationGuard) {
   }, [active, handler]);
 }
 
-const MOBILE_QUERY = "(max-width: 720px)";
+/** Matches the CSS drawer breakpoint (tablets and phones get the drawer). */
+const MOBILE_QUERY = "(max-width: 900px)";
 
 export function useIsMobile(): boolean {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia(MOBILE_QUERY).matches);

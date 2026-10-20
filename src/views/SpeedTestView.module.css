@@ -120,7 +120,7 @@
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .summary {
     grid-template-columns: 1fr;
   }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ClashApiError, testProxyDelay } from "../api/clash";
 import { proxyDisplayType } from "../api/format";
@@ -41,6 +41,16 @@ export function ConnectivityTestView() {
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<Record<string, TargetResult | string>>({});
   const [error, setError] = useState("");
+  // Guard against stale results if the view unmounts mid-test or the user
+  // re-runs while a previous run is still resolving — without this the late
+  // `setResults` calls would write to a detached component or clobber the
+  // newer run.
+  const runIdRef = useRef(0);
+  useEffect(() => {
+    return () => {
+      runIdRef.current = -1;
+    };
+  }, []);
 
   const candidates = useMemo<Candidate[]>(() => {
     const result: Candidate[] = [];
@@ -98,6 +108,8 @@ export function ConnectivityTestView() {
     if (selectedCandidate === null || targets.length === 0) {
       return;
     }
+    const runId = ++runIdRef.current;
+    const isCurrent = () => runIdRef.current === runId;
     setRunning(true);
     setError("");
     const next: Record<string, TargetResult | string> = {};
@@ -124,6 +136,9 @@ export function ConnectivityTestView() {
             }
           }
         }
+        if (!isCurrent()) {
+          return;
+        }
         if (values.length > 0) {
           const total = values.reduce((sum, value) => sum + value, 0);
           next[target.url] = {
@@ -135,14 +150,21 @@ export function ConnectivityTestView() {
         }
         setResults({ ...next });
       }
+      if (!isCurrent()) {
+        return;
+      }
       if (fatalError !== null) {
         setResults({});
         setError(fatalError);
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (isCurrent()) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
     } finally {
-      setRunning(false);
+      if (isCurrent()) {
+        setRunning(false);
+      }
     }
   };
 

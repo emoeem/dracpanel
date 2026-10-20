@@ -2,9 +2,11 @@ import { isTerminalCode, type StreamSnapshot } from "../api/stream";
 import { useStreamOutage } from "../app/hooks";
 import { useI18n } from "../app/i18n";
 import { Icon, type IconName } from "./Icon";
+import { SkeletonLines } from "./Skeleton";
 import { EmptyState } from "./ui";
 
-export function StreamErrorBanner(props: { error: string | null }) {
+export function StreamErrorBanner(props: { error: string | null; onRetry?: () => void }) {
+  const { t } = useI18n();
   if (props.error === null) {
     return null;
   }
@@ -12,6 +14,12 @@ export function StreamErrorBanner(props: { error: string | null }) {
     <div className="banner error">
       <Icon name="warning_amber" />
       <div>{props.error}</div>
+      {props.onRetry && (
+        <button type="button" className="banner-retry" onClick={props.onRetry}>
+          <Icon name="sync" />
+          <span>{t("Retry")}</span>
+        </button>
+      )}
     </div>
   );
 }
@@ -27,13 +35,19 @@ export function StreamStates(props: {
   empty: boolean;
   emptyIcon?: IconName;
   emptyMessage: string;
+  onRetry?: () => void;
 }) {
   const { t } = useI18n();
   const outage = useStreamOutage(props.snapshot, isTerminalCode(props.snapshot.errorCode));
   return (
     <>
-      <StreamErrorBanner error={outage} />
-      {!props.loaded && outage === null && <EmptyState>{t("Loading...")}</EmptyState>}
+      <StreamErrorBanner error={outage} onRetry={props.onRetry} />
+      {!props.loaded && outage === null && (
+        <div role="status">
+          <SkeletonLines />
+          <span className="sr-only">{t("Loading...")}</span>
+        </div>
+      )}
       {props.loaded && props.empty && (
         <EmptyState icon={props.emptyIcon}>{props.emptyMessage}</EmptyState>
       )}

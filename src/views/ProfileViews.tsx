@@ -662,11 +662,19 @@ export function ProfileContentWindow(props: {
     host.configuration
       .generateSchema()
       .then((content) => {
-        if (!cancelled) {
+        if (cancelled) {
+          return;
+        }
+        // Parse separately from the fetch: a malformed schema used to be
+        // swallowed by the trailing `.catch(() => {})`, leaving the editor
+        // silently schema-less instead of reporting the real failure.
+        try {
           setSchema(JSON.parse(content) as JsonEditorSchema);
+        } catch (error) {
+          showError(error);
         }
       })
-      .catch(() => {});
+      .catch(showError);
     return () => {
       cancelled = true;
     };

@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-import { formatBytes } from "../api/format";
+import { formatBytes, isHttpUrl } from "../api/format";
 import type {
   DesktopHost,
   DesktopUpdateInfo,
@@ -245,9 +245,11 @@ function UpdateDialog(props: {
         </div>
       )}
       <div className="row-actions dialog-actions">
-        <Button href={info.releaseURL} target="_blank" rel="noreferrer">
-          {t("View Release")}
-        </Button>
+        {isHttpUrl(info.releaseURL) && (
+          <Button href={info.releaseURL} target="_blank" rel="noreferrer">
+            {t("View Release")}
+          </Button>
+        )}
         <span className={styles.actionsSpacer} />
         <Button disabled={busy} onClick={close}>
           {t("Cancel")}

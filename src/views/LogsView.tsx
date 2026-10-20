@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 
 import type { LogEntry } from "../api/daemon";
 import { pad2 } from "../api/format";
@@ -8,6 +8,7 @@ import { useDesktopHost } from "../app/desktop";
 import { showError } from "../app/errorStore";
 import { useStreamOutage } from "../app/hooks";
 import { useI18n } from "../app/i18n";
+import { useVirtualList } from "../app/useVirtualList";
 import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/PageHeader";
 import { StreamErrorBanner } from "../components/StreamBanner";
@@ -35,7 +36,14 @@ const MAX_VISIBLE_LOGS = 1000;
 const LOG_TYPE_KEY = "log-type-filter";
 const LOG_HIDE_REGEX_KEY = "log-hide-regex";
 const LOG_MAX_ENTRIES_KEY = "log-max-entries";
-const MAX_ENTRY_OPTIONS = [200, 500, 1000, 3000] as const;
+const MAX_ENTRY_OPTIONS = [200, 500, 1000, 3000, 10000] as const;
+
+/** Log lines wrap, so the estimate only has to be close, not exact. */
+const LOG_LINE_ESTIMATE = 27;
+
+function logKey(entry: LogEntry): string {
+  return String(entry.id);
+}
 
 function loadStringPreference(key: string, fallback: string): string {
   const value = loadStoredJson(key);
@@ -99,10 +107,13 @@ export function LogsView() {
   const [hideRegex, setHideRegex] = useState(() => loadStringPreference(LOG_HIDE_REGEX_KEY, ""));
   const [maxEntries, setMaxEntries] = useState(() => loadNumberPreference(LOG_MAX_ENTRIES_KEY, MAX_VISIBLE_LOGS));
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const viewRef = useRef<HTMLDivElement>(null);
   const background = useLogBackground();
 
   const effectiveLevel = level ?? logs.data.defaultLevel ?? LogLevel.INFO;
+
+  const reconnect = () => {
+    api.logs.reconnectNow();
+  };
 
   const togglePause = () => {
     if (paused) {
@@ -158,6 +169,14 @@ export function LogsView() {
     [filtered, maxEntries],
   );
 
+  const virtual = useVirtualList({
+    items: visible,
+    getKey: logKey,
+    estimate: LOG_LINE_ESTIMATE,
+    overscan: 12,
+    pinned: !paused,
+  });
+
   const logsText = () => filtered.map((entry) => stripAnsi(entry.message)).join("\n");
   const sharingAvailable = canShare(host);
 
@@ -175,30 +194,24 @@ export function LogsView() {
     void shareFile(host, logFileName(), text, "text/plain").catch(onShareError);
   };
 
-  useLayoutEffect(() => {
-    if (paused) {
-      return;
-    }
-    const view = viewRef.current;
-    if (view) {
-      view.scrollTop = view.scrollHeight;
-    }
-  }, [visible, paused]);
-
   let body: ReactNode;
   if (sourceEntries.length > 0 && outage === null && filtered.length === 0) {
     body = <EmptyState icon="search">{t("No results")}</EmptyState>;
   } else if (sourceEntries.length > 0 && outage === null) {
     body = (
-      <div className={styles.logView} ref={viewRef}>
-        {visible.map((entry) => (
-          <LogLine
-            key={entry.id}
-            message={entry.message}
-            highlight={search.trim()}
-            background={background}
-          />
-        ))}
+      <div className={styles.logView} ref={virtual.containerRef}>
+        <div className={styles.logCanvas} style={{ height: virtual.height }}>
+          {virtual.rows.map((row) => (
+            <LogLine
+              key={row.item.id}
+              rowKey={String(row.item.id)}
+              style={{ transform: `translateY(${row.top}px)` }}
+              message={row.item.message}
+              highlight={search.trim()}
+              background={background}
+            />
+          ))}
+        </div>
       </div>
     );
   } else if (outage !== null) {
@@ -277,7 +290,7 @@ export function LogsView() {
       <div className="field">
         <SearchInput value={search} onChange={setSearch} />
       </div>
-      <StreamErrorBanner error={outage} />
+      <StreamErrorBanner error={outage} onRetry={reconnect} />
       {body}
       {settingsOpen && (
         <Dialog onClose={() => setSettingsOpen(false)}>
@@ -346,6 +359,8 @@ const LogLine = memo(function LogLine(props: {
   message: string;
   highlight: string;
   background: Rgb;
+  rowKey: string;
+  style: CSSProperties;
 }) {
   const segments = parseAnsi(props.message);
   const query = props.highlight.toLowerCase();
@@ -419,5 +434,9 @@ const LogLine = memo(function LogLine(props: {
     }
   }
 
-  return <span className={styles.logLine}>{parts}</span>;
+  return (
+    <div className={styles.logLine} data-vkey={props.rowKey} style={props.style}>
+      {parts}
+    </div>
+  );
 });

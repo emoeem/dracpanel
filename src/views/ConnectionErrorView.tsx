@@ -6,7 +6,7 @@ import { navigate } from "../app/context";
 import { useI18n } from "../app/i18n";
 import { Icon } from "../components/Icon";
 import { Brand, Button, Spinner } from "../components/ui";
-import { ServerDialog } from "./SettingsView";
+import { ServerDialog } from "./ServerDialog";
 import styles from "./ConnectionErrorView.module.css";
 
 export function ConnectionErrorView(props: {

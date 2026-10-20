@@ -1,0 +1,112 @@
+.palette {
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  padding: var(--space-12);
+  overflow: hidden;
+}
+
+.input-row {
+  display: flex;
+  gap: var(--space-10);
+  align-items: center;
+  padding: 0 var(--space-10);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  transition: border-color var(--transition-fast);
+}
+
+.input-row:focus-within {
+  border-color: var(--accent);
+}
+
+.input-row .icon {
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+
+.input {
+  flex: 1;
+  height: var(--control-height);
+  font-size: var(--text-md);
+  color: var(--text);
+  background: none;
+  border: 0;
+}
+
+.input:focus {
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--text-faint);
+}
+
+.list {
+  max-height: 320px;
+  padding: var(--space-8) 0 0;
+  margin: var(--space-10) 0 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  border-top: 1px solid var(--border);
+}
+
+.item {
+  display: flex;
+  gap: var(--space-10);
+  align-items: center;
+  height: var(--control-height);
+  padding: 0 var(--space-10);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.item.active {
+  color: var(--text);
+  background: var(--accent-soft);
+}
+
+.item .icon {
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+
+.item.active .icon {
+  color: var(--accent);
+}
+
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group {
+  flex-shrink: 0;
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hint {
+  flex-shrink: 0;
+  padding: 0 var(--space-6);
+  margin-inline-start: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+  background: var(--inset);
+  border-radius: var(--radius-xs);
+}
+
+.empty {
+  padding: var(--space-20) 0 var(--space-12);
+  margin: var(--space-10) 0 0;
+  font-size: var(--text-base);
+  color: var(--text-faint);
+  text-align: center;
+  border-top: 1px solid var(--border);
+}

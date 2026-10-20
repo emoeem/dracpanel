@@ -1,0 +1,34 @@
+.stack {
+  position: fixed;
+  right: var(--space-16);
+  bottom: var(--space-16);
+  z-index: var(--z-topbar);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  align-items: flex-end;
+}
+
+.toast {
+  padding: var(--space-8) var(--space-12);
+  font-size: var(--text-sm);
+  color: var(--on-accent);
+  cursor: pointer;
+  background: var(--accent);
+  border: 0;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-overlay);
+}
+
+.info {
+  background: var(--accent);
+}
+
+.good {
+  background: var(--good);
+}
+
+.danger {
+  color: var(--bright);
+  background: var(--danger);
+}

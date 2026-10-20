@@ -1,8 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { proxyDisplayType, urlTestDelayTone } from "../api/format";
 import { useStream } from "../api/stream";
-import { useApi } from "../app/context";
+import { useApi, useNow } from "../app/context";
+import {
+  HEALTH_RUN_NOW_EVENT,
+  HEALTH_SETTINGS_EVENT,
+  loadHealthRun,
+  loadHealthSettings,
+  saveHealthSettings,
+  thresholdsOf,
+  type HealthSettings,
+} from "../app/healthPreferences";
 import { showError } from "../app/errorStore";
 import {
   loadAutoTestInterval,
@@ -21,6 +30,7 @@ import { PageHeader } from "../components/PageHeader";
 import { StreamStates } from "../components/StreamBanner";
 import {
   Badge,
+  Button,
   Card,
   IconButton,
   MenuItem,
@@ -32,6 +42,7 @@ import {
   useContextMenu,
 } from "../components/ui";
 import type { Group, GroupItem } from "../gen/daemon/started_service_pb";
+import { healthOf, summarizeHealth, type HealthStatus } from "../lib/healthCheck";
 import {
   LATENCY_HISTORY_LIMIT,
   latencyStats,
@@ -90,7 +101,36 @@ export function GroupsView() {
   const [autoTest, setAutoTest] = useState<AutoTestInterval>(() =>
     loadAutoTestInterval(api.config.id),
   );
+  const [healthSettings, setHealthSettings] = useState<HealthSettings>(loadHealthSettings);
+  const now = useNow(30_000);
   const histories = groups.data.latencyHistory;
+
+  useEffect(() => {
+    const refresh = () => setHealthSettings(loadHealthSettings());
+    window.addEventListener(HEALTH_SETTINGS_EVENT, refresh);
+    return () => window.removeEventListener(HEALTH_SETTINGS_EVENT, refresh);
+  }, []);
+
+  const thresholds = useMemo(() => thresholdsOf(healthSettings), [healthSettings]);
+
+  const statuses = useMemo(() => {
+    const result: Record<string, HealthStatus> = {};
+    for (const group of groups.data.groups) {
+      for (const item of group.items) {
+        result[item.tag] = healthOf(histories[item.tag] ?? [], thresholds, now).status;
+      }
+    }
+    return result;
+  }, [groups.data.groups, histories, now, thresholds]);
+
+  const healthSummary = useMemo(() => summarizeHealth(Object.values(statuses)), [statuses]);
+  const lastRunAt = loadHealthRun(api.config.id).lastRunAt;
+
+  const updateHealth = (patch: Partial<HealthSettings>) => {
+    const next = { ...healthSettings, ...patch };
+    setHealthSettings(next);
+    saveHealthSettings(next);
+  };
 
   const query = search.trim().toLowerCase();
   const filteredGroups = useMemo(() => {
@@ -153,6 +193,68 @@ export function GroupsView() {
           }}
         />
       </div>
+      {groups.data.groups.length > 0 && (
+        <Card title="健康巡检">
+          <div className={styles.healthRow}>
+            <Badge tone="good">健康 {healthSummary.healthy}</Badge>
+            <Badge tone="medium">缓慢 {healthSummary.degraded}</Badge>
+            <Badge tone="bad">不可用 {healthSummary.down}</Badge>
+            <Badge>未知 {healthSummary.unknown}</Badge>
+            <span className={styles.healthMeta}>
+              {lastRunAt === 0
+                ? "尚未巡检"
+                : `上次巡检 ${Math.max(1, Math.round((now - lastRunAt) / 60_000))} 分钟前`}
+            </span>
+            <Button
+              size="small"
+              onClick={() => window.dispatchEvent(new Event(HEALTH_RUN_NOW_EVENT))}
+            >
+              立即巡检
+            </Button>
+          </div>
+          <div className={styles.healthRow}>
+            <Toggle
+              label="异常通知"
+              value={healthSettings.notify}
+              onChange={(value) => updateHealth({ notify: value })}
+            />
+            <Toggle
+              label="自动切换到可用节点"
+              value={healthSettings.autoSwitch}
+              onChange={(value) => updateHealth({ autoSwitch: value })}
+            />
+          </div>
+          <div className={styles.healthRow}>
+            <label className={styles.healthField}>
+              缓慢阈值
+              <input
+                className="input"
+                type="number"
+                min={20}
+                max={60_000}
+                value={healthSettings.degradedMs}
+                onChange={(event) => updateHealth({ degradedMs: Number(event.target.value) })}
+              />
+              ms
+            </label>
+            <label className={styles.healthField}>
+              不可用阈值
+              <input
+                className="input"
+                type="number"
+                min={50}
+                max={600_000}
+                value={healthSettings.downMs}
+                onChange={(event) => updateHealth({ downMs: Number(event.target.value) })}
+              />
+              ms
+            </label>
+          </div>
+          <div className={styles.healthNote}>
+            巡检只在标签页可见时进行，间隔沿用上方「{t("Auto test")}」；结果保存在本机浏览器。
+          </div>
+        </Card>
+      )}
       <StreamStates
         snapshot={groups}
         loaded={groups.data.loaded}
@@ -172,6 +274,7 @@ export function GroupsView() {
           items={items}
           total={total}
           histories={histories}
+          statuses={statuses}
         />
       ))}
     </div>
@@ -183,6 +286,7 @@ function GroupCard(props: {
   items: GroupItem[];
   total: number;
   histories: Record<string, LatencySample[]>;
+  statuses: Record<string, HealthStatus>;
 }) {
   const api = useApi();
   const { t } = useI18n();
@@ -234,6 +338,8 @@ function GroupCard(props: {
                 ? props.items.length
                 : `${props.items.length}/${props.total}`}
             </Badge>
+            {props.statuses[selected] === "down" && <Badge tone="bad">当前节点不可用</Badge>}
+            {props.statuses[selected] === "degraded" && <Badge tone="medium">当前节点缓慢</Badge>}
             <IconButton title={t("URL test")} onClick={runURLTest} disabled={testing}>
               {testing ? <Spinner /> : <Icon name="speed" />}
             </IconButton>

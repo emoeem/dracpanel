@@ -156,6 +156,66 @@
   flex: 1;
 }
 
+.hits {
+  display: inline-flex;
+  gap: var(--space-6);
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.hits-active {
+  padding: 0 var(--space-4);
+  color: var(--good);
+  background: var(--inset);
+  border-radius: var(--radius-sm);
+}
+
+.hit-summary {
+  display: grid;
+  gap: var(--space-6);
+  margin-top: var(--space-4);
+}
+
+.hit-row {
+  display: flex;
+  gap: var(--space-8);
+  align-items: baseline;
+  font-size: var(--text-xs);
+}
+
+.hit-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.hit-bar {
+  flex: 1;
+  min-width: var(--space-40);
+  height: var(--space-6);
+  background: var(--inset);
+  border-radius: var(--radius-sm);
+}
+
+.hit-bar-fill {
+  display: block;
+  min-width: 2px;
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-sm);
+}
+
+.hit-value {
+  font-family: var(--font-mono);
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
 .rule-body {
   margin-top: var(--space-8);
 }
@@ -206,6 +266,55 @@
   border-inline-start: 1px solid var(--border-strong);
 }
 
+.rule-controls {
+  display: inline-flex;
+  gap: var(--space-4);
+  align-items: center;
+  white-space: nowrap;
+}
+
+.confirm-note {
+  margin: var(--space-8) 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.confirm-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-height: 320px;
+  overflow: auto;
+}
+
+.confirm-row {
+  display: flex;
+  gap: var(--space-8);
+  align-items: baseline;
+  font-size: var(--text-xs);
+}
+
+.confirm-path {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.confirm-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: var(--space-8);
+  justify-content: flex-end;
+  margin-top: var(--space-16);
+}
+
 .rule-sets {
   display: flex;
   flex-direction: column;
@@ -243,7 +352,7 @@
   color: var(--text-faint);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .summary {
     grid-template-columns: 1fr;
   }
