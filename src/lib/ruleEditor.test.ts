@@ -130,7 +130,7 @@ describe("textToRuleValue", () => {
 
 describe("draftIssue", () => {
   it("requires a target for the route action", () => {
-    expect(draftIssue(draft({ action: "route", target: "  " }))).toBe("route 动作需要填写出站标签");
+    expect(draftIssue(draft({ action: "route", target: "  " }))).toBe("The route action needs an outbound tag");
   });
 
   it("accepts a route rule with a target", () => {

@@ -23,12 +23,16 @@ import {
   readLoginThrottle,
   throttleLockRemaining,
 } from "./loginThrottle";
+import { useI18n, type Translate } from "../app/i18n";
+import { useLatestRef } from "../app/useLatest";
 import styles from "./PanelGate.module.css";
 
 type Phase = "checking" | "gate" | "error" | "recovery" | "ready";
 
-function lockMessage(remaining: number): string {
-  return `尝试过于频繁，请在 ${Math.ceil(remaining / 1000)} 秒后重试。`;
+function lockMessage(t: Translate, remaining: number): string {
+  return t("Too many attempts, retry in {seconds} seconds.", {
+    seconds: Math.ceil(remaining / 1000),
+  });
 }
 
 function DraculaMark() {
@@ -47,6 +51,8 @@ function sleep(ms: number) {
 }
 
 export function PanelGate(props: { children: ReactNode }) {
+  const { t } = useI18n();
+  const translateRef = useLatestRef(t);
   const [phase, setPhase] = useState<Phase>(() => (getPanelToken() ? "checking" : "gate"));
   const [message, setMessage] = useState("");
   const [tokenInput, setTokenInput] = useState("");
@@ -123,7 +129,11 @@ export function PanelGate(props: { children: ReactNode }) {
         const remaining = throttleLockRemaining(noteLoginFailure(), Date.now());
         setPhase("gate");
         setLockRemaining(remaining);
-        setMessage(remaining > 0 ? lockMessage(remaining) : "令牌无效或已失效，请重新输入。");
+        setMessage(
+          remaining > 0
+            ? lockMessage(translateRef.current, remaining)
+            : translateRef.current("The token is invalid or expired. Please enter it again."),
+        );
       } else {
         setPhase("error");
         setMessage(error instanceof Error ? error.message : String(error));
@@ -133,7 +143,7 @@ export function PanelGate(props: { children: ReactNode }) {
         setBusy(false);
       }
     }
-  }, []);
+  }, [translateRef]);
 
   useEffect(() => {
     if (getPanelToken()) {
@@ -145,11 +155,11 @@ export function PanelGate(props: { children: ReactNode }) {
     const onAuthError = () => {
       lockPanel();
       setPhase("gate");
-      setMessage("面板令牌已失效，请重新登录。");
+      setMessage(t("The panel token expired. Please sign in again."));
     };
     window.addEventListener("panel-auth-error", onAuthError);
     return () => window.removeEventListener("panel-auth-error", onAuthError);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     // Locking in one tab removes panel_token; reload every other tab so no
@@ -168,12 +178,12 @@ export function PanelGate(props: { children: ReactNode }) {
     const remaining = throttleLockRemaining(readLoginThrottle(), Date.now());
     if (remaining > 0) {
       setLockRemaining(remaining);
-      setMessage(lockMessage(remaining));
+      setMessage(lockMessage(t, remaining));
       return;
     }
     const token = tokenInput.trim();
     if (token === "") {
-      setMessage("请输入访问令牌。");
+      setMessage(t("Enter the access token."));
       return;
     }
     setPanelToken(token);
@@ -187,7 +197,7 @@ export function PanelGate(props: { children: ReactNode }) {
     try {
       const result = await serviceAction(action);
       if (!result.ok) {
-        setMessage(result.message ?? "服务操作失败");
+        setMessage(result.message ?? t("Service action failed"));
         return;
       }
       for (let attempt = 0; attempt < 45; attempt += 1) {
@@ -203,7 +213,9 @@ export function PanelGate(props: { children: ReactNode }) {
           return;
         }
       }
-      setMessage("服务启动超时，请查看系统日志：journalctl -u sing-box。");
+      setMessage(
+        t("The service did not start in time; check the system log: journalctl -u sing-box."),
+      );
     } catch (error) {
       if (error instanceof PanelAuthError) {
         return;
@@ -242,30 +254,40 @@ export function PanelGate(props: { children: ReactNode }) {
         {phase === "checking" && (
           <div className={styles.center}>
             <span className={styles.spinner} aria-hidden="true" />
-            <p className={styles.muted}>正在校验面板令牌并同步原生 API…</p>
+            <p className={styles.muted}>
+              {t("Verifying the panel token and syncing the native API…")}
+            </p>
           </div>
         )}
 
         {phase === "gate" && (
           <form onSubmit={submit} className={styles.form}>
             <label className={styles.field}>
-              <span>访问令牌</span>
+              <span>{t("Access token")}</span>
               <input
                 type="password"
                 autoFocus
                 value={tokenInput}
                 onChange={(event) => setTokenInput(event.target.value)}
-                placeholder="粘贴 sing-box-panel 访问令牌"
+                placeholder={t("Paste the sing-box-panel access token")}
                 autoComplete="current-password"
                 spellCheck={false}
                 disabled={locked}
               />
             </label>
             <button type="submit" className={styles.primary} disabled={busy || locked}>
-              {busy ? "正在登录…" : locked ? "已锁定" : "进入面板"}
+              {busy
+                ? t("Signing in…")
+                : locked
+                  ? t("Locked, retry in {seconds}s", {
+                      seconds: Math.ceil(lockRemaining / 1000),
+                    })
+                  : t("Open panel")}
             </button>
             <p className={styles.hint}>
-              令牌位于 <code>/var/lib/sing-box-panel/token</code>，可用 <code>sudo cat</code> 查看。
+              {t("The token is stored at {path}; read it with sudo cat.", {
+                path: "/var/lib/sing-box-panel/token",
+              })}
             </p>
             {message !== "" && (
               <p className={styles.error} role="alert" aria-live="assertive">
@@ -280,7 +302,7 @@ export function PanelGate(props: { children: ReactNode }) {
             <p className={styles.error}>{message}</p>
             <div className={styles.actions}>
               <button type="button" className={styles.primary} onClick={() => void bootstrap()} disabled={busy}>
-                重试
+                {t("Retry")}
               </button>
               <button
                 type="button"
@@ -290,7 +312,7 @@ export function PanelGate(props: { children: ReactNode }) {
                   setPhase("gate");
                 }}
               >
-                重新登录
+                {t("Sign in again")}
               </button>
             </div>
           </div>
@@ -301,23 +323,33 @@ export function PanelGate(props: { children: ReactNode }) {
             <div className={styles.recoveryStatus}>
               <span className={styles.dotOffline} aria-hidden="true" />
               <div>
-                <strong>sing-box 核心未运行</strong>
+                <strong>{t("The sing-box core is not running")}</strong>
                 <p className={styles.muted}>
-                  {state?.service?.active === false ? "服务已停止，启动后即可进入控制台。" : "正在等待核心就绪…"}
+                  {state?.service?.active === false
+                    ? t("The service is stopped; start it to open the dashboard.")
+                    : t("Waiting for the core to be ready…")}
                 </p>
               </div>
             </div>
-            {state?.version && <p className={styles.hint}>内核版本：{state.version}</p>}
-            {state?.config_path && <p className={styles.hint}>配置：{state.config_path}</p>}
+            {state?.version && (
+              <p className={styles.hint}>
+                {t("Core version: {version}", { version: state.version })}
+              </p>
+            )}
+            {state?.config_path && (
+              <p className={styles.hint}>{t("Config: {path}", { path: state.config_path })}</p>
+            )}
             {state?.config_error ? (
-              <p className={styles.error}>配置读取失败：{state.config_error}</p>
+              <p className={styles.error}>
+                {t("Failed to read the configuration: {error}", { error: state.config_error })}
+              </p>
             ) : null}
             <div className={styles.actions}>
               <button type="button" className={styles.primary} onClick={() => void runServiceAction("start")} disabled={busy}>
-                启动核心
+                {t("Start core")}
               </button>
               <button type="button" className={styles.secondary} onClick={() => void runServiceAction("restart")} disabled={busy}>
-                重启核心
+                {t("Restart core")}
               </button>
             </div>
             {message !== "" && <p className={styles.error}>{message}</p>}
@@ -329,7 +361,7 @@ export function PanelGate(props: { children: ReactNode }) {
             {showFallback ? (
               <>
                 <a href={fallbackUrl} target="_blank" rel="noreferrer">
-                  回退面板
+                  {t("Fallback panel")}
                 </a>
                 <span aria-hidden="true"> · </span>
               </>
@@ -342,7 +374,7 @@ export function PanelGate(props: { children: ReactNode }) {
                 setPhase("gate");
               }}
             >
-              切换令牌
+              {t("Switch token")}
             </button>
           </p>
         )}

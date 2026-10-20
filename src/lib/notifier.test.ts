@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { TRANSLATIONS } from "../app/translations";
 import {
   EMPTY_NOTIFIER,
+  NOTIFY_EVENTS,
   isNotifyEnabled,
   loadNotifierConfig,
   normalizeNotifierConfig,
@@ -122,5 +124,45 @@ describe("storage round trip", () => {
 
   it("notify does not throw when nothing is configured", () => {
     expect(() => notify("service", "core stopped")).not.toThrow();
+  });
+});
+
+describe("isNotifyEnabled", () => {
+  it("needs both a url and the subscribed event", () => {
+    expect(isNotifyEnabled({ url: "https://example.com/hook", events: ["error"] }, "error")).toBe(true);
+    expect(isNotifyEnabled({ url: "https://example.com/hook", events: ["error"] }, "health")).toBe(false);
+    expect(isNotifyEnabled({ url: "", events: ["error"] }, "error")).toBe(false);
+    expect(isNotifyEnabled(EMPTY_NOTIFIER, "error")).toBe(false);
+  });
+});
+
+describe("normalizeNotifierConfig tolerance", () => {
+  it("treats anything unreadable as switched off", () => {
+    expect(normalizeNotifierConfig(undefined)).toEqual(EMPTY_NOTIFIER);
+    expect(normalizeNotifierConfig(42)).toEqual(EMPTY_NOTIFIER);
+    expect(normalizeNotifierConfig([])).toEqual(EMPTY_NOTIFIER);
+    expect(normalizeNotifierConfig({})).toEqual(EMPTY_NOTIFIER);
+    expect(normalizeNotifierConfig({ url: 42, events: "error" })).toEqual(EMPTY_NOTIFIER);
+  });
+
+  it("trims the url and keeps only known, deduplicated events", () => {
+    const result = normalizeNotifierConfig({
+      url: "  https://example.com/hook  ",
+      events: ["health", "health", 7, null],
+    });
+    expect(result).toEqual({ url: "https://example.com/hook", events: ["health"] });
+  });
+});
+
+describe("NOTIFY_EVENTS", () => {
+  it("only uses i18n keys that are registered in TRANSLATIONS", () => {
+    const missing = NOTIFY_EVENTS.flatMap((event) => [event.label, event.hint]).filter(
+      (key) => !(key in TRANSLATIONS),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("lists every event exactly once", () => {
+    expect(NOTIFY_EVENTS.map((event) => event.id).sort()).toEqual(["config", "error", "health", "service"]);
   });
 });

@@ -54,7 +54,7 @@ import {
   type AutoTestInterval,
 } from "./app/groupPreferences";
 import { useDismiss, useStreamOutage, useUnaryOnce } from "./app/hooks";
-import { I18nProvider, useI18n, type Translate } from "./app/i18n";
+import { I18nProvider, useI18n, type MessageKey, type Translate } from "./app/i18n";
 import {
   DesktopRemoteControls,
   DesktopServerPicker,
@@ -72,6 +72,7 @@ import { notify } from "./lib/notifier";
 import { SSH_DEFAULT_TERMINAL_TYPE, SSH_DEFAULT_USERNAME } from "./lib/tailscaleSSH";
 import { useDrawerGestures } from "./app/useDrawerGestures";
 import { useHealthMonitor } from "./app/useHealthMonitor";
+import { useLatestRef } from "./app/useLatest";
 import { loadStoredString, saveStoredString } from "./lib/storage";
 import { PanelGate } from "./panel/PanelGate";
 import { ConnectionErrorView } from "./views/ConnectionErrorView";
@@ -755,7 +756,9 @@ function GlobalErrorDialog() {
   return (
     <Dialog onClose={dismissError}>
       <h3>{t("Error")}</h3>
-      <p className="dialog-message">{message}</p>
+      {/* Error strings are raised as English text; translate the ones we know
+          about and pass anything else (backend messages) through unchanged. */}
+      <p className="dialog-message">{t(message as MessageKey)}</p>
       <div className="row-actions dialog-actions">
         <Button
           onClick={() => {
@@ -812,6 +815,7 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
   const host = useDesktopHost();
   const localHost = useLocalDesktopHost();
   const { t, language } = useI18n();
+  const translateRef = useLatestRef(t);
   const route = props.route;
   const serviceStatus = useStream(api.serviceStatus);
   const groups = useStream(api.groups);
@@ -852,9 +856,9 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
     if (reportedFatalError.current !== fatalError) {
       reportedFatalError.current = fatalError;
       showError(fatalError);
-      notify("service", "sing-box 核心致命错误", fatalError);
+      notify("service", translateRef.current("Fatal sing-box core error"), fatalError);
     }
-  }, [fatalError]);
+  }, [fatalError, translateRef]);
 
   const lostError = useStreamOutage(
     serviceStatus,
@@ -1258,7 +1262,7 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
             {health.summary.down > 0 && (
               <div className={styles.healthAlert} role="status">
                 <Icon name="warning_amber" size={14} />
-                {health.summary.down} 个节点不可用
+                {t("{count} nodes unavailable", { count: health.summary.down })}
               </div>
             )}
             <ServerPicker

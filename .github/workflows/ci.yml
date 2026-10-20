@@ -18,11 +18,24 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Advisory-only: audit failures usually need a dependency bump in its own PR
+      # (or are known/forward-looking advisories with no fixed version yet), so
+      # blocking every unrelated branch would stall the pipeline. Read the step
+      # log in failed runs and fix high findings separately.
+      - name: Dependency audit (advisory)
+        continue-on-error: true
+        run: pnpm audit --audit-level=high
       - run: pnpm generate
       - run: pnpm lint
       - run: pnpm lint:css
       - run: pnpm test
       - run: pnpm build
+      # Serve dist/ locally and check index.html references assets that exist.
+      - name: Smoke test build output
+        run: node scripts/smoke-dist.mjs
+      # Thresholds live in scripts/check-bundle-size.mjs.
+      - name: Bundle size budget
+        run: node scripts/check-bundle-size.mjs
       - name: Shellcheck deployment scripts
         run: |
           sudo apt-get update

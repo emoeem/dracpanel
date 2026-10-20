@@ -110,17 +110,30 @@ export function undoTop(stack: readonly string[]): { text: string | null; stack:
   return { text: stack[stack.length - 1], stack: stack.slice(0, -1) };
 }
 
+/**
+ * Returns an i18n key with a `{count}` placeholder, or "just now". Callers run
+ * the result through `t()` so the age reads in the active language.
+ */
 export function formatAge(ms: number): string {
   const minutes = Math.max(0, Math.round(ms / 60_000));
   if (minutes < 1) {
-    return "刚刚";
+    return "just now";
   }
   if (minutes < 60) {
-    return `${minutes} 分钟前`;
+    return "{count} minutes ago";
   }
   const hours = Math.round(minutes / 60);
   if (hours < 24) {
-    return `${hours} 小时前`;
+    return "{count} hours ago";
   }
-  return `${Math.round(hours / 24)} 天前`;
+  return "{count} days ago";
+}
+
+export function ageParams(ms: number): { count: number } {
+  const minutes = Math.max(0, Math.round(ms / 60_000));
+  if (minutes < 60) {
+    return { count: minutes };
+  }
+  const hours = Math.round(minutes / 60);
+  return { count: hours < 24 ? hours : Math.round(hours / 24) };
 }

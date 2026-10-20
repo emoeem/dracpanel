@@ -10,6 +10,7 @@ import {
 import { usePanelCapabilities } from "../api/panelCapabilities";
 import { useStream } from "../api/stream";
 import { useApi } from "../app/context";
+import { useI18n } from "../app/i18n";
 import { isGeoIpUnavailable, lookupGeoIp } from "../lib/geoipCache";
 import type { FeatureCollection, Topology, TopoFeature } from "topojson-client";
 import { Card } from "./ui";
@@ -169,6 +170,7 @@ class TrafficMapRenderer {
   private readonly clusters = new Map<string, Cluster>();
   private readonly tracked = new Map<string, string>();
   private colors = readColors();
+  private label = "This Computer";
   private visible = true;
   private reducedMotion = false;
   private running = false;
@@ -220,6 +222,14 @@ class TrafficMapRenderer {
   refreshColors(): void {
     this.colors = readColors();
     this.renderBase();
+    this.requestDraw();
+  }
+
+  setLabel(value: string): void {
+    if (this.label === value) {
+      return;
+    }
+    this.label = value;
     this.requestDraw();
   }
 
@@ -579,11 +589,12 @@ class TrafficMapRenderer {
     ctx.textBaseline = "middle";
     const labelRight = originX + 44 < this.width;
     ctx.textAlign = labelRight ? "left" : "right";
-    ctx.fillText("本机", labelRight ? originX + 11 : originX - 11, originY + 1);
+    ctx.fillText(this.label, labelRight ? originX + 11 : originX - 11, originY + 1);
   }
 }
 
 export function TrafficMap() {
+  const { t } = useI18n();
   const api = useApi();
   const capabilities = usePanelCapabilities();
   const geoipUnsupported =
@@ -719,6 +730,10 @@ export function TrafficMap() {
   }, []);
 
   useEffect(() => {
+    engineRef.current?.setLabel(t("This Computer"));
+  }, [t]);
+
+  useEffect(() => {
     if (geoipUnsupported) {
       return;
     }
@@ -834,19 +849,23 @@ export function TrafficMap() {
     geoipUnsupported
       ? ""
       : !connections.data.loaded
-      ? connections.phase === "error"
-        ? "连接流不可用"
-        : "正在加载连接…"
-      : activeCount === 0
-        ? "暂无活跃连接"
-        : "";
+        ? connections.phase === "error"
+          ? t("Connection stream unavailable")
+          : t("Loading connections…")
+        : activeCount === 0
+          ? t("No active connections")
+          : "";
 
   return (
     <Card
       wide
       icon="language"
-      title="全球连接"
-      actions={<span className={styles.legend}>{activeCount} 条活跃</span>}
+      title={t("Global connections")}
+      actions={
+        <span className={styles.legend}>
+          {t("{count} active", { count: activeCount })}
+        </span>
+      }
     >
       {databaseMissing && (
         <div className={styles.dbWarning}>
@@ -855,7 +874,9 @@ export function TrafficMap() {
       )}
       {geoipUnsupported && (
         <div className={styles.dbWarning}>
-          当前 sing-box-panel 不支持 GeoIP 查询；升级到 0.1.0-8 后显示全球连接。
+          {t(
+            "This sing-box-panel build does not support GeoIP lookups; upgrade to 0.1.0-8 to show global connections.",
+          )}
         </div>
       )}
       <div className={styles.wrap} ref={wrapRef}>
@@ -863,7 +884,7 @@ export function TrafficMap() {
           ref={canvasRef}
           className={styles.canvas}
           role="img"
-          aria-label="全球连接实时流量地图"
+          aria-label={t("Live traffic map of global connections")}
         />
         {emptyLabel !== "" && (
           <div className={styles.overlay}>

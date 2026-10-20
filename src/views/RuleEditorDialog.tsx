@@ -10,6 +10,7 @@ import {
   type RuleDraft,
   type RuleObject,
 } from "../lib/ruleEditor";
+import { useI18n } from "../app/i18n";
 import styles from "./RuleEditorDialog.module.css";
 
 /**
@@ -29,6 +30,7 @@ export function RuleEditorDialog(props: {
 }) {
   const [draft, setDraft] = useState<RuleDraft>(props.initial);
   const [error, setError] = useState("");
+  const { t } = useI18n();
 
   // Keep keys that are not in the known list selectable so opening a rule that
   // uses a newer matcher never silently drops it.
@@ -66,7 +68,7 @@ export function RuleEditorDialog(props: {
     <Dialog onClose={props.onCancel} className={styles.dialog}>
       <h2 className={styles.title}>{props.title}</h2>
       <div className={styles.form}>
-        <Field label="动作">
+        <Field label={t("Action")}>
           <Select
             options={RULE_ACTIONS.map((action) => ({ value: action, label: action }))}
             value={draft.action}
@@ -85,16 +87,16 @@ export function RuleEditorDialog(props: {
         )}
         <div className={styles.invert}>
           <Switch
-            label="反转匹配结果（invert）"
+            label={t("Invert match result (invert)")}
             value={draft.invert}
             onChange={(invert) => setDraft((current) => ({ ...current, invert }))}
           />
-          <span>反转匹配结果（invert）</span>
+          <span>{t("Invert match result (invert)")}</span>
         </div>
 
         <div className={styles.matchers}>
           <div className={styles.matchersHead}>
-            <span>匹配条件</span>
+            <span>{t("Match conditions")}</span>
             <Button
               size="small"
               onClick={() =>
@@ -104,7 +106,7 @@ export function RuleEditorDialog(props: {
                 }))
               }
             >
-              添加条件
+              {t("Add condition")}
             </Button>
           </div>
           {draft.matchers.map((matcher, index) => {
@@ -126,13 +128,15 @@ export function RuleEditorDialog(props: {
                   <input
                     className="input"
                     value={matcher.value}
-                    placeholder={field?.multiple === true ? "多个值用逗号分隔" : "值"}
+                    placeholder={
+                      field?.multiple === true ? t("Separate multiple values with commas") : t("Value")
+                    }
                     onChange={(event) => patchMatcher(index, { value: event.target.value })}
                   />
                 )}
                 <Button
                   size="small"
-                  aria-label="删除条件"
+                  aria-label={t("Delete condition")}
                   disabled={draft.matchers.length === 1}
                   onClick={() =>
                     setDraft((current) => ({
@@ -141,7 +145,7 @@ export function RuleEditorDialog(props: {
                     }))
                   }
                 >
-                  删除
+                  {t("Delete")}
                 </Button>
               </div>
             );
@@ -149,15 +153,15 @@ export function RuleEditorDialog(props: {
         </div>
 
         <div className={styles.preview}>
-          <span className={styles.previewLabel}>预览</span>
+          <span className={styles.previewLabel}>{t("Preview")}</span>
           <pre className={styles.previewCode}>{preview}</pre>
         </div>
         {error !== "" && <div className={styles.error}>{error}</div>}
       </div>
       <div className={styles.actions}>
-        <Button onClick={props.onCancel}>取消</Button>
+        <Button onClick={props.onCancel}>{t("Cancel")}</Button>
         <Button variant="primary" onClick={submit}>
-          保存规则
+          {t("Save rule")}
         </Button>
       </div>
     </Dialog>

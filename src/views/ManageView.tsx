@@ -49,13 +49,19 @@ import {
 import { useStream } from "../api/stream";
 import type { JsonEditorSchema } from "../components/JsonEditor";
 import { useApi, useNow } from "../app/context";
-import { useI18n } from "../app/i18n";
+import { useI18n, type MessageKey, type Translate } from "../app/i18n";
 import { useAsyncGeneration } from "../app/useAsyncGeneration";
 import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/PageHeader";
-import { Button, Card, Dialog, SearchInput, Spinner } from "../components/ui";
+import { Badge, Button, Card, Dialog, SearchInput, Spinner } from "../components/ui";
 import { diffConfig, diffLines, formatDiffValue } from "../lib/configDiff";
 import {
+  detectInboundMode,
+  inboundModeHintKey,
+  INBOUND_MODE_KEYS,
+} from "../lib/inboundMode";
+import {
+  ageParams,
   clearConfigDraft,
   draftIsMeaningful,
   formatAge,
@@ -88,14 +94,14 @@ const JsonEditor = lazy(() =>
 type Tab = "status" | "subscriptions" | "ebpf" | "config" | "notify";
 const TAB_KEY = "panel_manage_tab";
 
-const PANEL_FEATURE_LABELS: Partial<Record<PanelFeature, string>> = {
-  "subscriptions.schedule": "订阅自动更新",
-  "subscriptions.managed": "订阅托管节点查询",
-  "subscriptions.userinfo": "订阅流量/到期信息",
-  "config.backup.download": "配置备份下载",
-  logs: "系统日志",
-  "clash.version": "Clash 版本检查",
-  geoip: "全球连接地图（GeoIP）",
+const PANEL_FEATURE_LABELS: Partial<Record<PanelFeature, MessageKey>> = {
+  "subscriptions.schedule": "Subscription auto-update",
+  "subscriptions.managed": "Managed subscription node lookup",
+  "subscriptions.userinfo": "Subscription traffic and expiry info",
+  "config.backup.download": "Configuration backup download",
+  logs: "System logs",
+  "clash.version": "Clash version check",
+  geoip: "Global connection map (GeoIP)",
 };
 
 function sleep(ms: number) {
@@ -113,17 +119,17 @@ function formatTime(seconds: number | null | undefined, language: string): strin
   return formatDateTime(seconds * 1000, language);
 }
 
-function formatInterval(seconds: number): string {
+function formatInterval(seconds: number, t: Translate): string {
   if (seconds >= 86400 && seconds % 86400 === 0) {
-    return `每 ${seconds / 86400} 天`;
+    return t("Every {count} days", { count: seconds / 86400 });
   }
   if (seconds >= 3600 && seconds % 3600 === 0) {
-    return `每 ${seconds / 3600} 小时`;
+    return t("Every {count} hours", { count: seconds / 3600 });
   }
   if (seconds >= 60 && seconds % 60 === 0) {
-    return `每 ${seconds / 60} 分钟`;
+    return t("Every {count} minutes", { count: seconds / 60 });
   }
-  return `每 ${seconds} 秒`;
+  return t("Every {count} seconds", { count: seconds });
 }
 
 function ConfirmDialog(props: {
@@ -135,13 +141,14 @@ function ConfirmDialog(props: {
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Dialog onClose={() => (props.busy ? undefined : props.onClose())}>
       <h3>{props.title}</h3>
       <p className="dialog-message">{props.message}</p>
       <div className="row-actions dialog-actions">
         <Button onClick={props.onClose} disabled={props.busy}>
-          取消
+          {t("Cancel")}
         </Button>
         <Button
           variant={props.danger ? "danger" : "primary"}
@@ -162,6 +169,7 @@ function ConfigDiffDialog(props: {
   onApply: () => void;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const result = useMemo(() => {
     try {
       return {
@@ -183,31 +191,39 @@ function ConfigDiffDialog(props: {
       className={styles.diffDialog}
       onClose={() => (props.busy ? undefined : props.onClose())}
     >
-      <h3>应用配置前的变更</h3>
+      <h3>{t("Changes before applying the configuration")}</h3>
       {!result.ok ? (
         <div className={styles.errorBox}>
-          配置暂时无法解析：{result.message}。请先修复语法，再查看差异。
+          {t("The configuration cannot be parsed yet: {message}. Fix the syntax, then view the diff.", {
+            message: result.message,
+          })}
         </div>
       ) : result.diff.changes.length === 0 ? (
-        <p className="dialog-message">配置没有变化，无需应用。</p>
+        <p className="dialog-message">
+          {t("The configuration has not changed, so there is nothing to apply.")}
+        </p>
       ) : (
         <>
           <p className="dialog-message">
             {result.diff.truncated
-              ? `已显示前 ${result.diff.changes.length} 处变更（还有更多）`
-              : `共 ${result.diff.changes.length} 处变更`}
+              ? t("Showing the first {count} changes, with more to follow", {
+                  count: result.diff.changes.length,
+                })
+              : t("{count} changes in total", { count: result.diff.changes.length })}
             {sensitiveCount > 0
-              ? `，其中 ${sensitiveCount} 处涉及监听、DNS、路由、出站或密钥。`
-              : "。"}
+              ? t(" {count} of them touch listeners, DNS, routing, outbounds or secrets.", {
+                  count: sensitiveCount,
+                })
+              : "."}
           </p>
 
-          <div className={styles.diffSummary} aria-label="字段级变更摘要">
+          <div className={styles.diffSummary} aria-label={t("Field-level change summary")}>
             {result.diff.changes.map((change) => {
               const before = change.sensitive
-                ? "（已隐藏）"
+                ? t("(hidden)")
                 : formatDiffValue(change.before);
               const after = change.sensitive
-                ? "（已隐藏）"
+                ? t("(hidden)")
                 : formatDiffValue(change.after);
               const kindClass =
                 change.kind === "added"
@@ -225,10 +241,10 @@ function ConfigDiffDialog(props: {
                 >
                   <span className={cx(styles.diffKind, kindClass)}>
                     {change.kind === "added"
-                      ? "新增"
+                      ? t("Added")
                       : change.kind === "removed"
-                        ? "删除"
-                        : "修改"}
+                        ? t("Delete")
+                        : t("Modified")}
                   </span>
                   <code>{change.path || "$"}</code>
                   <span>
@@ -246,7 +262,7 @@ function ConfigDiffDialog(props: {
           <div
             className={styles.diffLines}
             role="region"
-            aria-label="配置行级差异"
+            aria-label={t("Line-level configuration diff")}
           >
             {result.lines.map((line, index) => (
               <div
@@ -270,14 +286,14 @@ function ConfigDiffDialog(props: {
       )}
       <div className="row-actions dialog-actions">
         <Button onClick={props.onClose} disabled={props.busy}>
-          取消
+          {t("Cancel")}
         </Button>
         <Button
           variant="primary"
           onClick={props.onApply}
           disabled={props.busy || !result.ok || result.diff.changes.length === 0}
         >
-          {props.busy ? <Spinner /> : "应用并重启"}
+          {props.busy ? <Spinner /> : t("Apply and restart")}
         </Button>
       </div>
     </Dialog>
@@ -318,6 +334,11 @@ export function ManageView() {
     localStorage.setItem(TAB_KEY, next);
   };
 
+  const missingLabels = missingFeatures
+    .map((feature) => PANEL_FEATURE_LABELS[feature])
+    .filter((label): label is MessageKey => label !== undefined)
+    .map((label) => t(label));
+
   return (
     <div className="page">
       <PageHeader
@@ -329,36 +350,37 @@ export function ManageView() {
               window.location.reload();
             }}
           >
-            锁定面板
+            {t("Lock panel")}
           </Button>
         }
       />
       {missingFeatures.length > 0 && (
         <div className={styles.warnBox}>
-          当前 sing-box-panel 缺少以下接口：
-          {missingFeatures.map((feature) => PANEL_FEATURE_LABELS[feature]).join("、")}。
-          升级到 0.1.0-8 后可用；其余管理功能不受影响。
+          {t(
+            "This sing-box-panel is missing the following endpoints: {features}. They become available after upgrading to 0.1.0-8; the other management features are unaffected.",
+            { features: missingLabels.join(", ") },
+          )}
         </div>
       )}
       <div className={styles.tabs}>
         <button type="button" className={cx(styles.tab, tab === "status" && styles.active)} onClick={() => selectTab("status")}>
-          <Icon name="power_settings_new" /> 运行状态
+          <Icon name="power_settings_new" /> {t("Service status")}
         </button>
         <button
           type="button"
           className={cx(styles.tab, tab === "subscriptions" && styles.active)}
           onClick={() => selectTab("subscriptions")}
         >
-          <Icon name="cloud_off" /> 订阅
+          <Icon name="cloud_off" /> {t("Subscriptions")}
         </button>
         <button type="button" className={cx(styles.tab, tab === "ebpf" && styles.active)} onClick={() => selectTab("ebpf")}>
           <Icon name="filter_list" /> eBPF
         </button>
         <button type="button" className={cx(styles.tab, tab === "config" && styles.active)} onClick={() => selectTab("config")}>
-          <Icon name="description" /> 配置
+          <Icon name="description" /> {t("Configuration")}
         </button>
         <button type="button" className={cx(styles.tab, tab === "notify" && styles.active)} onClick={() => selectTab("notify")}>
-          <Icon name="notifications" /> 通知
+          <Icon name="notifications" /> {t("Notifications")}
         </button>
       </div>
 
@@ -390,6 +412,7 @@ export function ManageView() {
 /* ── 通知 ─────────────────────────────────────────────────── */
 
 function NotificationsTab() {
+  const { t } = useI18n();
   const [config, setConfig] = useState<NotifierConfig>(() => loadNotifierConfig());
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState("");
@@ -406,30 +429,37 @@ function NotificationsTab() {
 
   const test = async () => {
     if (!isNotifyEnabled(config, "error")) {
-      setResult("请先填写 Webhook 地址并勾选至少一个事件。");
+      setResult(t("Enter a webhook URL and select at least one event first."));
       return;
     }
     setTesting(true);
     setResult("");
     const delivered = await sendNotification(
-      { event: "error", title: "DracPanel 测试通知", detail: "收到即表示 Webhook 配置正确。", at: Date.now() },
+      {
+        event: "error",
+        title: t("DracPanel test notification"),
+        detail: t("Receiving it means the webhook is configured correctly."),
+        at: Date.now(),
+      },
       config,
     );
-    setResult(delivered ? "已送达。" : "发送失败，请检查地址与网络。");
+    setResult(
+      delivered ? t("Delivered.") : t("Failed to send; check the address and your network."),
+    );
     setTesting(false);
   };
 
   return (
     <div className={styles.section}>
-      <Card title="Webhook 通知">
+      <Card title={t("Webhook notifications")}>
         <p className={styles.note}>
-          面板只在这个标签页打开时运行，浏览器不允许后台推送；若希望关闭页面后仍能收到告警，
-          唯一可行的办法是把事件 POST 给你自己的 Webhook（Slack、钉钉、ntfy、自建服务等）。
-          地址只保存在本机浏览器，不会上传。
+          {t(
+            "The panel only runs while this tab is open, and browsers do not allow background push. To keep receiving alerts after closing the page, the only workable option is POSTing events to your own webhook (Slack, DingTalk, ntfy, a self-hosted service, and so on). The address is stored in this browser only and is never uploaded.",
+          )}
         </p>
         <div className={styles.formRow}>
           <label className={cx(styles.label, styles.grow)}>
-            Webhook 地址
+            {t("Webhook URL")}
             <input
               placeholder="https://ntfy.sh/dracpanel"
               value={config.url}
@@ -438,7 +468,7 @@ function NotificationsTab() {
           </label>
         </div>
         {config.url !== "" && !isHttpUrl(config.url) && (
-          <div className={styles.errorText}>只接受 http(s) 地址。</div>
+          <div className={styles.errorText}>{t("Only http(s) addresses are accepted.")}</div>
         )}
         <div className={styles.eventList}>
           {NOTIFY_EVENTS.map((event) => (
@@ -448,14 +478,14 @@ function NotificationsTab() {
                 checked={config.events.includes(event.id)}
                 onChange={(change) => toggleEvent(event.id, change.target.checked)}
               />
-              <span>{event.label}</span>
-              <span className={styles.muted}>{event.hint}</span>
+              <span>{t(event.label)}</span>
+              <span className={styles.muted}>{t(event.hint)}</span>
             </label>
           ))}
         </div>
         <div className={styles.actions}>
           <Button disabled={testing || config.url === ""} onClick={() => void test()}>
-            {testing ? <Spinner /> : "发送测试"}
+            {testing ? <Spinner /> : t("Send test")}
           </Button>
           {result !== "" && <span className={styles.muted}>{result}</span>}
         </div>
@@ -474,12 +504,16 @@ content-type: application/json
 
 function StatusTab() {
   const api = useApi();
+  const { t } = useI18n();
   const capabilities = usePanelCapabilities();
   const logsSupported = !capabilities.detected || capabilities.supports("logs");
   const clashSupported =
     !capabilities.detected || capabilities.supports("clash.version");
   const native = useStream(api.status);
   const [state, setState] = useState<PanelState | null>(null);
+  // Read-only: the panel HTTP API exposes no endpoint to switch capture modes.
+  const inbound = useMemo(() => detectInboundMode(state?.inbounds), [state?.inbounds]);
+  const inboundHint = inboundModeHintKey(inbound.mode);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [message, setMessage] = useState("");
@@ -514,7 +548,7 @@ function StatusTab() {
   const loadLogs = useCallback(async () => {
     if (!logsSupported) {
       setLogs("");
-      setLogsError("当前 panel 不支持 /api/logs；升级到 0.1.0-8 后可查看系统日志。");
+      setLogsError(t("This panel does not support /api/logs; upgrade to 0.1.0-8 to view system logs."));
       setLogsLoading(false);
       return;
     }
@@ -528,7 +562,7 @@ function StatusTab() {
     } finally {
       setLogsLoading(false);
     }
-  }, [logsSupported]);
+  }, [logsSupported, t]);
 
   const loadClash = useCallback(async () => {
     if (!clashSupported) {
@@ -572,12 +606,12 @@ function StatusTab() {
       return;
     }
     if (!navigator.clipboard) {
-      setActionError("当前浏览器不支持剪贴板");
+      setActionError(t("This browser does not support the clipboard"));
       return;
     }
     try {
       await navigator.clipboard.writeText(state.clash_secret);
-      setMessage("已复制 Clash API 密钥");
+      setMessage(t("Clash API secret copied"));
     } catch (cause) {
       setActionError(errorText(cause));
     }
@@ -592,7 +626,7 @@ function StatusTab() {
       const result = await serviceAction(action);
       if (!result.ok) {
         await load();
-        setActionError(result.message ?? "服务操作失败");
+        setActionError(result.message ?? t("Service action failed"));
         return;
       }
       setMessage(result.message ?? "");
@@ -629,11 +663,13 @@ function StatusTab() {
         api.reconnectNow();
         void loadClash();
       } else if (cancelWait.current) {
-        setMessage("已停止等待；核心可能仍在启动，请稍后刷新。");
+        setMessage(t("Stopped waiting; the core may still be starting, refresh later."));
       } else {
         setMessage("");
         setActionError(
-          "核心在 15 秒内未确认启动；请查看下方系统日志，或执行 journalctl -u sing-box。",
+          t(
+            "The core did not confirm startup within 15 seconds; check the system log below, or run journalctl -u sing-box.",
+          ),
         );
         void loadLogs();
       }
@@ -661,17 +697,21 @@ function StatusTab() {
       {error !== "" && <div className={styles.errorBox}>{error}</div>}
       {message !== "" && <div className={styles.successBox}>{message}</div>}
       {state?.config_error ? (
-        <div className={styles.warnBox}>配置读取失败：{state.config_error}</div>
+        <div className={styles.warnBox}>
+          {t("Failed to read the configuration: {reason}", { reason: state.config_error })}
+        </div>
       ) : null}
       {nativeSecretEmpty && (
         <div className={styles.warnBox}>
-          原生 API 的 secret 为空：本机其他进程可以直接控制 sing-box。请在 services.api 中设置非空 secret。
+          {t(
+            "The native API secret is empty: other local processes can control sing-box directly. Set a non-empty secret under services.api.",
+          )}
         </div>
       )}
       {waiting && (
         <div className={styles.toolbar}>
           <span className={styles.muted}>
-            正在等待核心启动… {waitAttempt}/30
+            {t("Waiting for the core to start… {attempt}/30", { attempt: waitAttempt })}
           </span>
           <Button
             size="small"
@@ -679,87 +719,92 @@ function StatusTab() {
               cancelWait.current = true;
             }}
           >
-            停止等待
+            {t("Stop waiting")}
           </Button>
         </div>
       )}
 
       <div className={styles.cards}>
-        <Card title="服务">
+        <Card title={t("Services")}>
           <div className={styles.statusLine}>
             <span className={cx(styles.dot, active ? styles.online : styles.offline)} />
-            <strong>{active ? "运行中" : "已停止"}</strong>
-            {state?.service?.enabled && <span className={styles.muted}>开机自启</span>}
+            <strong>{active ? t("Running") : t("Stopped")}</strong>
+            {state?.service?.enabled && <span className={styles.muted}>{t("Start at boot")}</span>}
           </div>
           <dl className={styles.facts}>
             <dt>PID</dt>
             <dd>{state?.service?.pid || "—"}</dd>
-            <dt>启动时间</dt>
+            <dt>{t("Started at")}</dt>
             <dd>{state?.service?.since || "—"}</dd>
-            <dt>内核版本</dt>
+            <dt>{t("Core version")}</dt>
             <dd>{state?.version || "—"}</dd>
           </dl>
           <div className={styles.actions}>
             <Button variant="primary" onClick={() => void run("start")} disabled={busy || active}>
-              启动
+              {t("Start service")}
             </Button>
             <Button onClick={() => setConfirm("restart")} disabled={busy}>
-              重启
+              {t("Restart")}
             </Button>
             <Button onClick={() => void run("reload")} disabled={busy || !active}>
-              重载
+              {t("Reload")}
             </Button>
             <Button variant="danger" onClick={() => setConfirm("stop")} disabled={busy || !active}>
-              停止
+              {t("Stop")}
             </Button>
           </div>
         </Card>
 
-        <Card title="实时流量">
+        <Card title={t("Live traffic")}>
           <dl className={styles.facts}>
-            <dt>上行</dt>
+            <dt>{t("Uplink")}</dt>
             <dd>{current?.trafficAvailable ? `${formatBytes(current.uplink)}/s` : "—"}</dd>
-            <dt>下行</dt>
+            <dt>{t("Downlink")}</dt>
             <dd>{current?.trafficAvailable ? `${formatBytes(current.downlink)}/s` : "—"}</dd>
-            <dt>累计上行</dt>
+            <dt>{t("Total uplink")}</dt>
             <dd>{current?.trafficAvailable ? formatBytes(current.uplinkTotal) : "—"}</dd>
-            <dt>累计下行</dt>
+            <dt>{t("Total downlink")}</dt>
             <dd>{current?.trafficAvailable ? formatBytes(current.downlinkTotal) : "—"}</dd>
-            <dt>连接</dt>
+            <dt>{t("Connections")}</dt>
             <dd>
-              {current ? `${current.connectionsIn} 入 / ${current.connectionsOut} 出` : "—"}
+              {current
+                ? t("{inbound} in / {outbound} out", {
+                    inbound: current.connectionsIn,
+                    outbound: current.connectionsOut,
+                  })
+                : "—"}
             </dd>
           </dl>
         </Card>
 
-        <Card title="配置文件">
+        <Card title={t("Configuration file")}>
           <dl className={styles.facts}>
-            <dt>路径</dt>
+            <dt>{t("Path")}</dt>
             <dd className={styles.mono}>{state?.config_path || "—"}</dd>
-            <dt>大小</dt>
+            <dt>{t("Size")}</dt>
             <dd>{state?.config_bytes !== undefined ? formatBytes(state.config_bytes) : "—"}</dd>
-            <dt>修改时间</dt>
+            <dt>{t("Modified")}</dt>
             <dd>
               {state?.config_mtime
                 ? new Date(state.config_mtime * 1000).toLocaleString()
                 : "—"}
             </dd>
-            <dt>运行模式</dt>
+            <dt>{t("Run mode")}</dt>
             <dd>{state?.mode || "—"}</dd>
           </dl>
         </Card>
       </div>
 
-      <Card title="集成与备用入口">
+      <Card title={t("Integrations and alternate dashboards")}>
         <dl className={styles.facts}>
           <dt>Clash API</dt>
           <dd className={styles.mono}>{state?.clash_api || "—"}</dd>
-          <dt>状态</dt>
+          <dt>{t("Status")}</dt>
           <dd>
             {!clashSupported ? (
-              <span className={styles.muted}>当前 panel 不支持，需要 0.1.0-8</span>
+              <span className={styles.muted}>{t("Not supported by this panel, requires 0.1.0-8")}</span>
             ) : clashStatus === "checking" ? (
-              <span className={styles.muted}>检查中…</span>
+              <span className={styles.muted}>{t("Checking…")}</span>
             ) : (
               <>
                 <span
@@ -769,7 +814,7 @@ function StatusTab() {
                   )}
                 />{" "}
                 <span>
-                  {clashStatus === "online" ? "在线" : "不可用"}
+                  {clashStatus === "online" ? t("Online") : t("Unavailable")}
                   {clashVersion ? ` · ${clashVersion}` : ""}
                 </span>
               </>
@@ -779,15 +824,15 @@ function StatusTab() {
               onClick={() => void loadClash()}
               disabled={busy || !clashSupported}
             >
-              检查
+              {t("Check")}
             </Button>
           </dd>
-          <dt>Clash 密钥</dt>
+          <dt>{t("Clash secret")}</dt>
           <dd>
-            <span className={styles.mono}>{state?.clash_secret || "（未设置）"}</span>
+            <span className={styles.mono}>{state?.clash_secret || t("(not set)")}</span>
             {state?.clash_secret ? (
               <Button size="small" onClick={() => void copyClashSecret()}>
-                复制
+                {t("Copy")}
               </Button>
             ) : null}
           </dd>
@@ -796,15 +841,31 @@ function StatusTab() {
             {state?.panel_version || "—"}
             {state?.dry_run ? <span className={styles.muted}> · dry-run</span> : null}
           </dd>
-          <dt>令牌文件</dt>
+          <dt>{t("Token file")}</dt>
           <dd className={styles.mono}>{state?.token_file || "—"}</dd>
-          <dt>入站</dt>
-          <dd>{state?.inbounds?.length ? state.inbounds.join(" / ") : "—"}</dd>
+          <dt>{t("Inbound")}</dt>
+          <dd>
+            {inbound.mode === "unknown" ? (
+              "—"
+            ) : (
+              <>
+                <Badge tone={inbound.tun || inbound.ebpf ? "accent" : "neutral"}>
+                  {t(INBOUND_MODE_KEYS[inbound.mode] as MessageKey)}
+                </Badge>
+                {inbound.types.length > 0 ? (
+                  <span className={styles.muted}> · {inbound.types.join(" / ")}</span>
+                ) : null}
+              </>
+            )}
+            {inboundHint !== null && (
+              <div className="hint">{t(inboundHint as MessageKey)}</div>
+            )}
+          </dd>
         </dl>
         <div className={styles.actions}>
           {state?.zash_setup_url && state?.zashboard_available !== false && isHttpUrl(state.zash_setup_url) ? (
             <a href={state.zash_setup_url} target="_blank" rel="noreferrer">
-              zashboard（自动填密钥）
+              {t("zashboard (secret filled in automatically)")}
             </a>
           ) : null}
           {state?.metacubexd_url && isHttpUrl(state.metacubexd_url) ? (
@@ -814,36 +875,38 @@ function StatusTab() {
           ) : null}
           {state?.official_dashboard_available === true && state.official_dashboard_url && isHttpUrl(state.official_dashboard_url) ? (
             <a href={state.official_dashboard_url} target="_blank" rel="noreferrer">
-              官方 dashboard
+              {t("Official dashboard")}
             </a>
           ) : null}
         </div>
       </Card>
 
-      <Card title="系统日志">
+      <Card title={t("System logs")}>
         <div className={styles.toolbar}>
-          <span className={styles.muted}>journalctl -u sing-box · 最近 200 行</span>
+          <span className={styles.muted}>{t("journalctl -u sing-box · last 200 lines")}</span>
           <Button
             size="small"
             onClick={() => void loadLogs()}
             disabled={logsLoading || !logsSupported}
           >
-            {logsLoading ? <Spinner /> : "刷新"}
+            {logsLoading ? <Spinner /> : t("Refresh")}
           </Button>
         </div>
         {logsError !== "" && <div className={styles.errorBox}>{logsError}</div>}
-        <pre className={styles.probeResult}>{logs || "(空)"}</pre>
+        <pre className={styles.probeResult}>{logs || t("(empty)")}</pre>
       </Card>
 
       {confirm !== null && (
         <ConfirmDialog
-          title={confirm === "stop" ? "停止 sing-box" : "重启 sing-box"}
+          title={confirm === "stop" ? t("Stop sing-box") : t("Restart sing-box")}
           message={
             confirm === "stop"
-              ? "停止后所有代理连接会中断，面板仍可通过管理页重新启动核心。"
-              : "重启会短暂中断所有连接，数据流会自动重连。"
+              ? t(
+                  "After stopping, every proxy connection drops; the panel can still restart the core from the Manage page.",
+                )
+              : t("Restarting interrupts all connections briefly; traffic reconnects automatically.")
           }
-          confirmLabel={confirm === "stop" ? "停止" : "重启"}
+          confirmLabel={confirm === "stop" ? t("Stop") : t("Restart")}
           danger={confirm === "stop"}
           busy={busy}
           onConfirm={() => void run(confirm)}
@@ -858,7 +921,7 @@ function StatusTab() {
 
 function SubscriptionsTab() {
   const api = useApi();
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const capabilities = usePanelCapabilities();
   const managedSupported =
     !capabilities.detected || capabilities.supports("subscriptions.managed");
@@ -916,7 +979,7 @@ function SubscriptionsTab() {
 
   const add = async () => {
     if (url.trim() === "") {
-      setError("请填写订阅 URL");
+      setError(t("Enter a subscription URL"));
       return;
     }
     setBusy(true);
@@ -927,13 +990,17 @@ function SubscriptionsTab() {
       if (result.ok) {
         const skipped = result.skipped ?? [];
         setMessage(
-          `${result.message ?? ""}${skipped.length ? `；不支持：${skipped.join("、")}` : ""}`,
+          `${result.message ?? ""}${
+            skipped.length
+              ? t("; unsupported: {items}", { items: skipped.join(", ") })
+              : ""
+          }`,
         );
         setName("");
         setUrl("");
         await load();
       } else {
-        setError(result.message ?? "添加失败");
+        setError(result.message ?? t("Failed to add"));
       }
     } catch (cause) {
       setError(errorText(cause));
@@ -951,21 +1018,35 @@ function SubscriptionsTab() {
       const results = result.results ?? [];
       const failed = results.filter((item) => !item.ok);
       const skipped = [...new Set(results.flatMap((item) => item.skipped ?? []))];
-      const skippedText = skipped.length ? `；不支持 ${skipped.join("、")}` : "";
+      const skippedText = skipped.length
+        ? t("; unsupported: {items}", { items: skipped.join(", ") })
+        : "";
       await load();
       if (!result.ok) {
-        setError(result.message ?? "全量更新失败");
+        setError(result.message ?? t("Failed to update all subscriptions"));
       } else if (failed.length > 0) {
-        setMessage(`更新完成：${results.length - failed.length}/${results.length} 成功${skippedText}`);
+        setMessage(
+          `${t("Update complete: {ok} of {total} succeeded", {
+            ok: results.length - failed.length,
+            total: results.length,
+          })}${skippedText}`,
+        );
         setError(
-          `${failed.length} 个订阅更新失败：${failed
-            .map((item) => item.name ?? "未命名")
-            .join("、")}（${failed[0].message ?? "未知错误"}）`,
+          t("{count} subscriptions failed to update: {names} ({reason})", {
+            count: failed.length,
+            names: failed.map((item) => item.name ?? t("Unnamed")).join(", "),
+            reason: failed[0].message ?? t("Unknown error"),
+          }),
         );
       } else if (results.length === 0) {
-        setMessage(result.message ?? "没有需要更新的订阅");
+        setMessage(result.message ?? t("No subscriptions need updating"));
       } else {
-        setMessage(`更新完成：${results.length}/${results.length} 成功${skippedText}`);
+        setMessage(
+          `${t("Update complete: {ok} of {total} succeeded", {
+            ok: results.length,
+            total: results.length,
+          })}${skippedText}`,
+        );
       }
     } catch (cause) {
       setError(errorText(cause));
@@ -985,7 +1066,7 @@ function SubscriptionsTab() {
         setMessage(result.message ?? "");
         await afterConfigChange(api);
       } else {
-        setError(result.message ?? "写入失败");
+        setError(result.message ?? t("Failed to write"));
       }
     } catch (cause) {
       setError(errorText(cause));
@@ -1007,10 +1088,14 @@ function SubscriptionsTab() {
       await load();
       if (result.ok) {
         setMessage(
-          `${result.message ?? ""}${skipped.length ? `；不支持：${skipped.join("、")}` : ""}`,
+          `${result.message ?? ""}${
+            skipped.length
+              ? t("; unsupported: {items}", { items: skipped.join(", ") })
+              : ""
+          }`,
         );
       } else {
-        setError(result.message ?? (action === "update" ? "更新失败" : "删除失败"));
+        setError(result.message ?? (action === "update" ? t("Failed to update") : t("Failed to delete")));
       }
     } catch (cause) {
       setError(errorText(cause));
@@ -1022,7 +1107,7 @@ function SubscriptionsTab() {
 
   const setSchedule = async (item: PanelSubscription, interval: number) => {
     if (!scheduleSupported) {
-      setError("当前 panel 不支持自动更新设置；升级到 0.1.0-8 后可用。");
+      setError(t("This panel does not support auto-update settings; available after upgrading to 0.1.0-8."));
       return;
     }
     setBusy(true);
@@ -1032,9 +1117,9 @@ function SubscriptionsTab() {
       const result = await setSubscriptionSchedule(item.id, interval);
       await load();
       if (result.ok) {
-        setMessage(result.message ?? "自动更新设置已保存");
+        setMessage(result.message ?? t("Auto-update settings saved"));
       } else {
-        setError(result.message ?? "自动更新设置失败");
+        setError(result.message ?? t("Failed to save auto-update settings"));
       }
     } catch (cause) {
       setError(errorText(cause));
@@ -1048,10 +1133,18 @@ function SubscriptionsTab() {
   );
   const managedCount = managed?.outbound_tags.length ?? 0;
   const applyMessage = managed
-    ? `将写入订阅节点并重建当前 ${managedCount} 个托管节点${
-        managedGroups.length > 0 ? `（组 ${managedGroups.join(" / ")}）` : ""
-      }，然后重启 sing-box；失败会自动回滚。`
-    : "将把订阅节点写入 sing-box 配置并重启核心，失败会自动回滚。";
+    ? t(
+        "This writes the subscription nodes, rebuilds the current {count} managed nodes{groups}, then restarts sing-box; failures roll back automatically.",
+        {
+          count: managedCount,
+          groups: managedGroups.length > 0
+            ? t(" (groups {names})", { names: managedGroups.join(" / ") })
+            : "",
+        },
+      )
+    : t(
+        "This writes the subscription nodes into the sing-box configuration and restarts the core; failures roll back automatically.",
+      );
   const deleteManagedCount = deleteTarget
     ? (managed?.by_subscription?.[deleteTarget.id]?.length ?? 0)
     : 0;
@@ -1061,14 +1154,18 @@ function SubscriptionsTab() {
       {error !== "" && <div className={styles.errorBox}>{error}</div>}
       {message !== "" && <div className={styles.successBox}>{message}</div>}
 
-      <Card title="添加订阅">
+      <Card title={t("Add subscription")}>
         <div className={styles.formRow}>
           <label className={styles.label}>
-            名称
-            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="可选" />
+            {t("Name")}
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder={t("Optional")}
+            />
           </label>
           <label className={cx(styles.label, styles.grow)}>
-            URL
+            {t("URL")}
             <input
               value={url}
               onChange={(event) => setUrl(event.target.value)}
@@ -1077,33 +1174,37 @@ function SubscriptionsTab() {
             />
           </label>
           <Button variant="primary" onClick={() => void add()} disabled={busy}>
-            添加
+            {t("Add")}
           </Button>
         </div>
       </Card>
 
       <div className={styles.toolbar}>
         <span className={styles.muted}>
-          {items.length} 个订阅
-          {managedCount > 0 ? ` · 托管 ${managedCount} 节点` : ""}
-          {managedGroups.length > 0 ? ` · 组 ${managedGroups.join(" / ")}` : ""}
-          {managed?.updated ? ` · 上次写入 ${formatTime(managed.updated, language)}` : ""}
+          {t("{count} subscriptions", { count: items.length })}
+          {managedCount > 0 ? t(" · {count} managed nodes", { count: managedCount }) : ""}
+          {managedGroups.length > 0
+            ? t(" · groups {names}", { names: managedGroups.join(" / ") })
+            : ""}
+          {managed?.updated
+            ? t(" · last written {time}", { time: formatTime(managed.updated, language) })
+            : ""}
         </span>
         <div className={styles.actions}>
           <Button onClick={() => void updateAll()} disabled={busy || items.length === 0}>
-            全量更新
+            {t("Update all")}
           </Button>
           <Button variant="primary" onClick={() => setConfirmApply(true)} disabled={busy || items.length === 0}>
-            写入配置
+            {t("Write configuration")}
           </Button>
           <Button onClick={() => void load()} disabled={loading}>
-            {loading ? <Spinner /> : "刷新"}
+            {loading ? <Spinner /> : t("Refresh")}
           </Button>
         </div>
       </div>
 
       {items.length === 0 && !loading ? (
-        <div className={styles.empty}>还没有订阅</div>
+        <div className={styles.empty}>{t("No subscriptions yet")}</div>
       ) : (
         <div className={styles.rows}>
           {items.map((item) => {
@@ -1121,61 +1222,73 @@ function SubscriptionsTab() {
             return (
               <div key={item.id} className={styles.row}>
                 <div className={styles.rowMain}>
-                  <strong>{item.name || "未命名订阅"}</strong>
+                  <strong>{item.name || t("Unnamed subscription")}</strong>
                   <span className={styles.mono}>{item.url}</span>
                 </div>
                 <div className={styles.rowMeta}>
-                  <span>{item.node_count ?? 0} 节点</span>
-                  {managedTags > 0 ? <span>托管 {managedTags} 节点</span> : null}
-                  <span>更新于 {formatTime(item.last_update, language)}</span>
+                  <span>{t("{count} nodes", { count: item.node_count ?? 0 })}</span>
+                  {managedTags > 0 ? (
+                    <span>{t("{count} managed nodes", { count: managedTags })}</span>
+                  ) : null}
+                  <span>{t("Updated {time}", { time: formatTime(item.last_update, language) })}</span>
                   {hasTraffic && (
                     <span>
-                      已用 {formatBytes(usedBytes)}
+                      {t("Used {size}", { size: formatBytes(usedBytes) })}
                       {typeof userinfo.total === "number" && userinfo.total > 0
                         ? ` / ${formatBytes(userinfo.total)}`
                         : ""}
                       {typeof expire === "number" && expire > 0
-                        ? ` · 到期 ${formatDateTime(expire * 1000, language)}`
+                        ? t(" · expires {time}", {
+                            time: formatDateTime(expire * 1000, language),
+                          })
                         : ""}
                     </span>
                   )}
                   {!hasTraffic && typeof expire === "number" && expire > 0 && (
-                    <span>到期 {formatDateTime(expire * 1000, language)}</span>
+                    <span>{t("Expires {time}", { time: formatDateTime(expire * 1000, language) })}</span>
                   )}
                   <span>
-                    自动更新{" "}
+                    {t("Auto Update")}{" "}
                     {!scheduleSupported ? (
-                      <span className={styles.muted}>需要 0.1.0-8</span>
+                      <span className={styles.muted}>{t("Requires 0.1.0-8")}</span>
                     ) : (
                       <select
                         value={String(interval)}
                         onChange={(event) => void setSchedule(item, Number(event.target.value))}
                         disabled={busy}
-                        aria-label={`${item.name || item.url} 自动更新间隔`}
+                        aria-label={t("{name} auto-update interval", {
+                          name: item.name || item.url,
+                        })}
                       >
-                        <option value="0">关闭</option>
+                        <option value="0">{t("Close")}</option>
                         {interval > 0 && ![21600, 43200, 86400].includes(interval) && (
-                          <option value={String(interval)}>{formatInterval(interval)}</option>
+                          <option value={String(interval)}>{formatInterval(interval, t)}</option>
                         )}
-                        <option value="21600">每 6 小时</option>
-                        <option value="43200">每 12 小时</option>
-                        <option value="86400">每天</option>
+                        <option value="21600">{t("Every 6 hours")}</option>
+                        <option value="43200">{t("Every 12 hours")}</option>
+                        <option value="86400">{t("Every day")}</option>
                       </select>
                     )}
                   </span>
                   {interval > 0 && (
                     <span>
-                      {due ? "等待自动更新" : `下次 ${formatTime(nextUpdate, language)}`}
+                      {due
+                        ? t("Waiting for auto-update")
+                        : t("Next {time}", { time: formatTime(nextUpdate, language) })}
                     </span>
                   )}
-                  {item.last_error ? <span className={styles.errorText}>失败：{item.last_error}</span> : null}
+                  {item.last_error ? (
+                    <span className={styles.errorText}>
+                      {t("Failed: {reason}", { reason: item.last_error })}
+                    </span>
+                  ) : null}
                 </div>
                 <div className={styles.actions}>
                   <Button size="small" onClick={() => void runItem(item, "update")} disabled={busy}>
-                    更新
+                    {t("Update")}
                   </Button>
                   <Button size="small" variant="danger" onClick={() => setDeleteTarget(item)} disabled={busy}>
-                    删除
+                    {t("Delete")}
                   </Button>
                 </div>
               </div>
@@ -1186,9 +1299,9 @@ function SubscriptionsTab() {
 
       {confirmApply && (
         <ConfirmDialog
-          title="写入订阅节点"
+          title={t("Write subscription nodes")}
           message={applyMessage}
-          confirmLabel="写入并重启"
+          confirmLabel={t("Write and restart")}
           busy={busy}
           onConfirm={() => void apply()}
           onClose={() => setConfirmApply(false)}
@@ -1196,13 +1309,17 @@ function SubscriptionsTab() {
       )}
       {deleteTarget !== null && (
         <ConfirmDialog
-          title="删除订阅"
-          message={`确定删除「${deleteTarget.name || deleteTarget.url}」？这不会立即改动当前配置${
-            deleteManagedCount > 0
-              ? `；它当前托管 ${deleteManagedCount} 个节点，下次“写入配置”时会把它们移除`
-              : ""
-          }。`}
-          confirmLabel="删除"
+          title={t("Delete subscription")}
+          message={t("Delete “{name}”? This does not change the current configuration right now{managed}.", {
+            name: deleteTarget.name || deleteTarget.url,
+            managed:
+              deleteManagedCount > 0
+                ? t("; it currently manages {count} nodes, which the next “Write configuration” removes", {
+                    count: deleteManagedCount,
+                  })
+                : "",
+          })}
+          confirmLabel={t("Delete")}
           danger
           busy={busy}
           onConfirm={() => void runItem(deleteTarget, "delete")}
@@ -1217,6 +1334,7 @@ function SubscriptionsTab() {
 
 function EbpfTab() {
   const api = useApi();
+  const { t } = useI18n();
   const [policy, setPolicy] = useState<PanelEbpfPolicy | null>(null);
   const [apps, setApps] = useState<PanelApp[]>([]);
   const [mode, setMode] = useState<"off" | "blacklist" | "whitelist">("off");
@@ -1264,7 +1382,7 @@ function EbpfTab() {
         await afterConfigChange(api);
         await load();
       } else {
-        setError(result.message ?? "应用失败");
+        setError(result.message ?? t("Failed to apply"));
       }
     } catch (cause) {
       setError(errorText(cause));
@@ -1280,7 +1398,7 @@ function EbpfTab() {
     try {
       const result = await probeEbpf(probeIface.trim());
       setProbeResult(result.data ?? null);
-      setError(result.ok && result.data?.ok !== false ? "" : "探测返回错误");
+      setError(result.ok && result.data?.ok !== false ? "" : t("Probe returned an error"));
     } catch (cause) {
       setError(errorText(cause));
     } finally {
@@ -1307,10 +1425,12 @@ function EbpfTab() {
       {error !== "" && <div className={styles.errorBox}>{error}</div>}
       {message !== "" && <div className={styles.successBox}>{message}</div>}
       {policy !== null && !present && (
-        <div className={styles.warnBox}>当前配置没有 eBPF 入站，分应用策略不可用。</div>
+        <div className={styles.warnBox}>
+          {t("The current configuration has no eBPF inbound, so per-app policies are unavailable.")}
+        </div>
       )}
 
-      <Card title="分应用策略">
+      <Card title={t("Per-app policy")}>
         <div className={styles.modeRow}>
           {(["off", "blacklist", "whitelist"] as const).map((value) => (
             <button
@@ -1320,23 +1440,27 @@ function EbpfTab() {
               onClick={() => setMode(value)}
               disabled={!present}
             >
-              {value === "off" ? "关闭" : value === "blacklist" ? "黑名单" : "白名单"}
+              {value === "off" ? t("Close") : value === "blacklist" ? t("Blacklist") : t("Whitelist")}
             </button>
           ))}
           <span className={styles.muted}>
-            {mode === "blacklist" ? "选中的应用绕过代理" : mode === "whitelist" ? "仅选中的应用走代理" : "不限制应用"}
+            {mode === "blacklist"
+              ? t("Selected apps bypass the proxy")
+              : mode === "whitelist"
+                ? t("Only selected apps use the proxy")
+                : t("No app restrictions")}
           </span>
         </div>
         <div className={styles.actions}>
           <Button variant="primary" onClick={() => setConfirmApply(true)} disabled={!present || busy}>
-            应用策略
+            {t("Apply policy")}
           </Button>
-          <span className={styles.muted}>已选择 {selected.size} 个 UID</span>
+          <span className={styles.muted}>{t("{count} UIDs selected", { count: selected.size })}</span>
         </div>
       </Card>
 
       <div className={styles.cardSplit}>
-        <Card title={`应用（${filtered.length}）`}>
+        <Card title={t("Apps ({count})", { count: filtered.length })}>
           <SearchInput value={search} onChange={setSearch} />
           <div className={styles.appList}>
             {visible.map((app) => (
@@ -1360,42 +1484,50 @@ function EbpfTab() {
                 <span className={styles.appMeta}>
                   UID {app.uid}
                   {app.execs.length > 0 ? ` · ${app.execs.slice(0, 2).join(", ")}` : ""}
-                  {app.pids.length > 0 ? ` · ${app.pids.length} 进程` : ""}
+                  {app.pids.length > 0 ? t(" · {count} processes", { count: app.pids.length }) : ""}
                 </span>
               </label>
             ))}
-            {visible.length === 0 && <div className={styles.empty}>没有匹配的应用</div>}
+            {visible.length === 0 && <div className={styles.empty}>{t("No matching apps")}</div>}
           </div>
           {filtered.length > visible.length && (
-            <p className={styles.muted}>仅显示前 {visible.length} 个应用，请用搜索缩小范围。</p>
+            <p className={styles.muted}>
+              {t("Showing only the first {count} apps; use search to narrow the list.", {
+                count: visible.length,
+              })}
+            </p>
           )}
         </Card>
 
-        <Card title="能力预检">
+        <Card title={t("Capability probe")}>
           <div className={styles.formRow}>
             <label className={cx(styles.label, styles.grow)}>
-              下游接口（可选）
+              {t("Downstream interface (optional)")}
               <input
                 value={probeIface}
                 onChange={(event) => setProbeIface(event.target.value)}
-                placeholder="例如 virbr0"
+                placeholder={t("for example virbr0")}
                 spellCheck={false}
               />
             </label>
             <Button onClick={() => void probe()} disabled={busy}>
-              {busy ? <Spinner /> : "运行预检"}
+              {busy ? <Spinner /> : t("Run probe")}
             </Button>
           </div>
           {probeResult !== null && (
             <div>
               {probeResult.summary ? (
                 <p className={styles.muted}>
-                  {probeResult.result ? `结果：${probeResult.result} · ` : ""}
+                  {probeResult.result
+                    ? `${t("Result: {result}", { result: probeResult.result })} · `
+                    : ""}
                   PASS {probeResult.summary.pass ?? 0} / FAIL{" "}
                   {probeResult.summary.fail ?? 0} / UNKNOWN{" "}
                   {probeResult.summary.unknown ?? 0}
                   {(probeResult.summary.required_issues ?? 0) > 0
-                    ? ` · 必需项问题 ${probeResult.summary.required_issues}`
+                    ? t(" · {count} required issues", {
+                        count: probeResult.summary.required_issues ?? 0,
+                      })
                     : ""}
                 </p>
               ) : null}
@@ -1423,10 +1555,10 @@ function EbpfTab() {
                   ))}
                 </div>
               ) : (
-                <p className={styles.muted}>没有结构化检查条目。</p>
+                <p className={styles.muted}>{t("No structured checks.")}</p>
               )}
               <details>
-                <summary className={styles.muted}>原始 JSON</summary>
+                <summary className={styles.muted}>{t("Raw JSON")}</summary>
                 <pre className={styles.probeResult}>{JSON.stringify(probeResult, null, 2)}</pre>
               </details>
             </div>
@@ -1436,9 +1568,11 @@ function EbpfTab() {
 
       {confirmApply && (
         <ConfirmDialog
-          title="应用 eBPF 策略"
-          message="将写入配置并重启 sing-box 以应用分应用策略，失败会自动回滚。"
-          confirmLabel="应用并重启"
+          title={t("Apply eBPF policy")}
+          message={t(
+            "This writes the configuration and restarts sing-box to apply the per-app policy; failures roll back automatically.",
+          )}
+          confirmLabel={t("Apply and restart")}
           busy={busy}
           onConfirm={() => void apply()}
           onClose={() => setConfirmApply(false)}
@@ -1453,7 +1587,7 @@ function EbpfTab() {
 function ConfigTab() {
   const api = useApi();
   const now = useNow(30_000);
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const capabilities = usePanelCapabilities();
   const canDownload =
     !capabilities.detected || capabilities.supports("config.backup.download");
@@ -1601,9 +1735,9 @@ function ConfigTab() {
     setError("");
     try {
       const result = await validatePanelConfig(text);
-      setMessage(result.message ?? (result.ok ? "校验通过" : "校验失败"));
+      setMessage(result.message ?? (result.ok ? t("Validation passed") : t("Validation failed")));
       if (!result.ok) {
-        setError(result.message ?? "校验失败");
+        setError(result.message ?? t("Validation failed"));
       }
     } catch (cause) {
       setError(errorText(cause));
@@ -1629,7 +1763,7 @@ function ConfigTab() {
         await load();
         await afterConfigChange(api);
       } else {
-        setError(result.message ?? "应用失败");
+        setError(result.message ?? t("Failed to apply"));
       }
     } catch (cause) {
       setError(errorText(cause));
@@ -1665,7 +1799,7 @@ function ConfigTab() {
         await load();
         await afterConfigChange(api);
       } else {
-        setError(result.message ?? "恢复失败");
+        setError(result.message ?? t("Failed to restore"));
       }
     } catch (cause) {
       setError(errorText(cause));
@@ -1677,7 +1811,7 @@ function ConfigTab() {
 
   const download = async (name: string) => {
     if (!canDownload) {
-      setError("当前 panel 不支持备份下载；升级到 0.1.0-8 后可用。");
+      setError(t("This panel does not support backup downloads; available after upgrading to 0.1.0-8."));
       return;
     }
     setBusy(true);
@@ -1685,7 +1819,7 @@ function ConfigTab() {
     setError("");
     try {
       await downloadPanelBackup(name);
-      setMessage(`已下载 ${name}`);
+      setMessage(t("Downloaded {name}", { name }));
     } catch (cause) {
       setError(errorText(cause));
     } finally {
@@ -1702,12 +1836,20 @@ function ConfigTab() {
       {draft !== null && (
         <div className={styles.noticeBox}>
           <div>
-            发现 {formatAge(now - draft.savedAt)}未应用的本地草稿
-            {draft.base !== original ? "（服务器配置此后已变化）" : ""}。
+            {t("Found an unapplied local draft from {age}{changed}.", {
+              age: t(
+                formatAge(now - draft.savedAt) as MessageKey,
+                ageParams(now - draft.savedAt),
+              ),
+              changed:
+                draft.base !== original
+                  ? t("; the server configuration has changed since")
+                  : "",
+            })}
           </div>
           <div className={styles.noticeActions}>
             <Button size="small" onClick={restoreDraft}>
-              恢复草稿
+              {t("Restore draft")}
             </Button>
             <Button
               size="small"
@@ -1716,7 +1858,7 @@ function ConfigTab() {
                 setDraft(null);
               }}
             >
-              丢弃
+              {t("Discard")}
             </Button>
           </div>
         </div>
@@ -1725,41 +1867,45 @@ function ConfigTab() {
       <div className={styles.toolbar}>
         <span
           className={styles.muted}
-          title="Schema 随 UI 一起提供，不会在编辑时请求外部站点"
+          title={t("The schema ships with the UI and is never fetched from an external site while editing")}
         >
-          {loading ? "正在读取配置…" : dirty ? "有未应用的修改" : "配置已同步"}
-          {schema !== null ? " · Schema 补全" : ""}
+          {loading
+            ? t("Reading configuration…")
+            : dirty
+              ? t("Unapplied changes")
+              : t("Configuration in sync")}
+          {schema !== null ? t(" · Schema completion") : ""}
         </span>
         <div className={styles.actions}>
           <Button
             onClick={undo}
             disabled={undoStack.length === 0 || busy}
-            title="撤销上一次编辑"
+            title={t("Undo the last edit")}
           >
-            撤销
+            {t("Undo")}
           </Button>
           <Button
             onClick={restoreApplied}
             disabled={busy || applied === null}
-            title="回到最近一次成功应用的配置"
+            title={t("Back to the last successfully applied configuration")}
           >
-            上次应用
+            {t("Last applied")}
           </Button>
           <Button onClick={() => void validate()} disabled={busy || loading}>
-            校验
+            {t("Validate")}
           </Button>
           <Button
             variant="primary"
             onClick={() => setShowDiff(true)}
             disabled={busy || loading || !dirty}
           >
-            应用并重启
+            {t("Apply and restart")}
           </Button>
           <Button onClick={() => void backup()} disabled={busy || loading}>
-            备份
+            {t("Backup")}
           </Button>
           <Button onClick={() => void load()} disabled={loading}>
-            {loading ? <Spinner /> : "刷新"}
+            {loading ? <Spinner /> : t("Refresh")}
           </Button>
         </div>
       </div>
@@ -1789,9 +1935,9 @@ function ConfigTab() {
         )}
       </div>
 
-      <Card title={`备份（${backups.length}）`}>
+      <Card title={t("Backups ({count})", { count: backups.length })}>
         {backups.length === 0 ? (
-          <div className={styles.empty}>还没有备份</div>
+          <div className={styles.empty}>{t("No backups yet")}</div>
         ) : (
           <div className={styles.rows}>
             {backups.map((item) => (
@@ -1809,15 +1955,15 @@ function ConfigTab() {
                     onClick={() => setPending({ kind: "restore", name: item.name })}
                     disabled={busy}
                   >
-                    恢复
+                    {t("Restore")}
                   </Button>
                   <Button
                     size="small"
                     onClick={() => void download(item.name)}
                     disabled={busy || !canDownload}
-                    title={!canDownload ? "需要 sing-box-panel 0.1.0-8" : undefined}
+                    title={!canDownload ? t("Requires sing-box-panel 0.1.0-8") : undefined}
                   >
-                    下载
+                    {t("Download")}
                   </Button>
                 </div>
               </div>
@@ -1838,9 +1984,12 @@ function ConfigTab() {
 
       {pending !== null && (
         <ConfirmDialog
-          title="恢复备份"
-          message={`将恢复备份「${pending.name}」并重启 sing-box，当前配置会被面板自动备份。`}
-          confirmLabel="恢复并重启"
+          title={t("Restore backup")}
+          message={t(
+            "This restores backup “{name}” and restarts sing-box; the panel backs up the current configuration automatically.",
+            { name: pending.name },
+          )}
+          confirmLabel={t("Restore and restart")}
           busy={busy}
           onConfirm={() => void restore(pending.name)}
           onClose={() => setPending(null)}

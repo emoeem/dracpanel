@@ -12,7 +12,7 @@ import {
 } from "../api/panel";
 import { useApi, navigate } from "../app/context";
 import { showError } from "../app/errorStore";
-import { useI18n } from "../app/i18n";
+import { useI18n, type MessageKey } from "../app/i18n";
 import { useRuleHits } from "../app/useRuleHits";
 import { PageHeader } from "../components/PageHeader";
 import {
@@ -63,15 +63,15 @@ type RuleSection = "route" | "dns";
 const RULES_UNDO_LIMIT = 30;
 type RuleSort = "config" | "action" | "outbound";
 
-const ACTION_LABELS: Record<string, string> = {
-  route: "路由",
-  reject: "拒绝",
-  sniff: "嗅探",
-  "hijack-dns": "劫持 DNS",
-  resolve: "解析",
-  predefined: "预定义响应",
-  evaluate: "评估",
-  respond: "响应",
+const ACTION_LABELS: Record<string, MessageKey> = {
+  route: "Route",
+  reject: "Reject",
+  sniff: "Sniff",
+  "hijack-dns": "Hijack DNS",
+  resolve: "Resolve",
+  predefined: "Predefined response",
+  evaluate: "Evaluate",
+  respond: "Response",
 };
 
 const CHIP_KEYS = [
@@ -161,9 +161,10 @@ function actionTone(action: string): "accent" | "danger" | "info" | "good" {
 }
 
 function RuleChips(props: { rule: RuleObject }) {
+  const { t } = useI18n();
   const chips = CHIP_KEYS.filter((key) => props.rule[key] !== undefined);
   if (chips.length === 0) {
-    return <span className={styles.muted}>默认规则</span>;
+    return <span className={styles.muted}>{t("Default rule")}</span>;
   }
   return (
     <span className={styles.chips}>
@@ -188,8 +189,10 @@ const RuleItem = memo(function RuleItem(props: {
   /** Edit-mode buttons; absent while the view is read-only. */
   controls?: ReactNode;
 }) {
+  const { t } = useI18n();
   const rule = props.rule;
   const action = actionOf(rule);
+  const actionLabel = ACTION_LABELS[action];
   const logical = Array.isArray(rule.rules) ? (rule.rules as RuleObject[]) : null;
   const outbound =
     typeof rule.outbound === "string" ? rule.outbound : typeof rule.server === "string" ? rule.server : null;
@@ -197,7 +200,9 @@ const RuleItem = memo(function RuleItem(props: {
     <div className={cx(styles.rule, props.depth !== undefined && props.depth > 0 && styles.nested)}>
       <div className={styles.ruleHead}>
         <span className={styles.ruleIndex}>#{props.index + 1}</span>
-        <Badge tone={actionTone(action)}>{ACTION_LABELS[action] ?? action}</Badge>
+        <Badge tone={actionTone(action)}>
+          {actionLabel !== undefined ? t(actionLabel) : action}
+        </Badge>
         {logical !== null && (
           <Badge tone="info">
             {String(rule.mode ?? "and").toUpperCase()} · {logical.length}
@@ -208,10 +213,17 @@ const RuleItem = memo(function RuleItem(props: {
         {props.hits !== undefined && props.hits.hits > 0 && (
           <span
             className={styles.hits}
-            title={`本次会话命中 ${props.hits.hits} 次，累计 ${formatBytes(totalHitBytes(props.hits))}`}
+            title={t("{hits} hits this session, {bytes} in total", {
+              hits: props.hits.hits,
+              bytes: formatBytes(totalHitBytes(props.hits)),
+            })}
           >
-            {props.hits.active > 0 && <span className={styles.hitsActive}>{props.hits.active} 活跃</span>}
-            {props.hits.hits} 次 · {formatBytes(totalHitBytes(props.hits))}
+            {props.hits.active > 0 && (
+              <span className={styles.hitsActive}>
+                {t("{count} active", { count: props.hits.active })}
+              </span>
+            )}
+            {t("{count} hits", { count: props.hits.hits })} · {formatBytes(totalHitBytes(props.hits))}
           </span>
         )}
         {typeof rule.invert === "boolean" && rule.invert && <Badge tone="danger">invert</Badge>}
@@ -222,7 +234,7 @@ const RuleItem = memo(function RuleItem(props: {
           <RuleChips rule={rule} />
         ) : (
           <details className={styles.details}>
-            <summary>展开 {logical.length} 条子规则</summary>
+            <summary>{t("Expand {count} sub-rules", { count: logical.length })}</summary>
             <div className={styles.nestedList}>
               {logical.map((child, index) => (
                 <RuleItem key={index} rule={child} index={index} depth={1} />
@@ -265,14 +277,14 @@ export function RulesView() {
       setConfigText(result.text);
     } catch (cause) {
       if (cause instanceof PanelAuthError) {
-        setError("面板令牌已失效，请重新登录。");
+        setError(t("Panel token expired. Please sign in again."));
       } else {
         setError(cause instanceof Error ? cause.message : String(cause));
       }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -376,7 +388,11 @@ export function RulesView() {
   const openEditor = (section: RuleSection, index: number) => {
     const rule = rulesOf(section)[index];
     if (rule !== undefined && Array.isArray(rule.rules)) {
-      showError("组合规则（rules/mode）暂不支持可视化编辑，请在「管理 → 配置」中用 JSON 修改。");
+      showError(
+        t(
+          "Combined rules (rules/mode) cannot be edited here; change the JSON under Manage → Config instead.",
+        ),
+      );
       return;
     }
     setEditor({ section, index });
@@ -417,12 +433,13 @@ export function RulesView() {
     try {
       const validated = await validatePanelConfig(pending.text);
       if (!validated.ok) {
-        showError(validated.message !== "" ? validated.message : "配置校验失败");
+        const failure = validated.message !== "" ? validated.message : t("Configuration validation failed");
+        showError(failure);
         return;
       }
       const result = await applyPanelConfig(pending.text);
       if (!result.ok) {
-        showError(result.message !== "" ? result.message : "应用失败");
+        showError(result.message !== "" ? result.message : t("Apply failed"));
         return;
       }
       const resync = await resyncAfterConfigChange();
@@ -433,7 +450,14 @@ export function RulesView() {
       api.reconnectNow();
       setWorking(null);
       setHistory([]);
-      notify("config", "配置已应用", `路由规则 ${working.route.length} 条，DNS 规则 ${working.dns.length} 条`);
+      notify(
+        "config",
+        t("Configuration applied"),
+        t("{route} route rules, {dns} DNS rules", {
+          route: working.route.length,
+          dns: working.dns.length,
+        }),
+      );
       await load();
     } catch (cause) {
       showError(cause);
@@ -454,21 +478,26 @@ export function RulesView() {
   const ruleControls = (section: RuleSection, index: number) => (
     <span className={styles.ruleControls}>
       <Button size="small" onClick={() => openEditor(section, index)}>
-        编辑
+        {t("Edit")}
       </Button>
-      <Button size="small" aria-label="上移" disabled={index === 0} onClick={() => moveRule(section, index, -1)}>
+      <Button
+        size="small"
+        aria-label={t("Move up")}
+        disabled={index === 0}
+        onClick={() => moveRule(section, index, -1)}
+      >
         ↑
       </Button>
       <Button
         size="small"
-        aria-label="下移"
+        aria-label={t("Move down")}
         disabled={index >= rulesOf(section).length - 1}
         onClick={() => moveRule(section, index, 1)}
       >
         ↓
       </Button>
       <Button size="small" onClick={() => replaceRules(section, rulesOf(section).filter((_, i) => i !== index))}>
-        删除
+        {t("Delete")}
       </Button>
     </span>
   );
@@ -476,26 +505,32 @@ export function RulesView() {
   const actions = (
     <>
       <Button onClick={() => void load()} disabled={loading}>
-        {loading ? <Spinner /> : "刷新"}
+        {loading ? <Spinner /> : t("Refresh")}
       </Button>
       {editing ? (
         <>
-          <Button onClick={() => setEditor({ section: editorSection, index: null })}>新增规则</Button>
-          <Button onClick={undoRules} disabled={history.length === 0} title="撤销上一次规则改动">
-            撤销
+          <Button onClick={() => setEditor({ section: editorSection, index: null })}>
+            {t("Add rule")}
           </Button>
-          <Button onClick={discardRules}>放弃更改</Button>
+          <Button
+            onClick={undoRules}
+            disabled={history.length === 0}
+            title={t("Undo the last rule change")}
+          >
+            {t("Undo")}
+          </Button>
+          <Button onClick={discardRules}>{t("Discard changes")}</Button>
           <Button variant="primary" disabled={!dirty || saving} onClick={requestSave}>
-            {saving ? <Spinner /> : "保存并应用"}
+            {saving ? <Spinner /> : t("Save and apply")}
           </Button>
         </>
       ) : (
         <Button disabled={config === null} onClick={startEditing}>
-          编辑规则
+          {t("Edit rules")}
         </Button>
       )}
       <Button variant={editing ? undefined : "primary"} onClick={() => navigate("manage")}>
-        编辑配置
+        {t("Edit config")}
       </Button>
     </>
   );
@@ -507,46 +542,47 @@ export function RulesView() {
         <div className={styles.errorBox}>
           <span>{error}</span>
           <Button size="small" onClick={() => void load()}>
-            重试
+            {t("Retry")}
           </Button>
         </div>
       )}
       {loading && config === null && (
         <div className={styles.loading}>
           <Spinner />
-          <span>正在读取当前配置…</span>
+          <span>{t("Reading current configuration…")}</span>
         </div>
       )}
       {config !== null && (
         <>
           <div className={styles.summary}>
-            <Card title="路由">
+            <Card title={t("Route")}>
               <div className={styles.metric}>
-                {routeRules.length}
-                <small>条规则</small>
+                <small>{t("{count} rules", { count: routeRules.length })}</small>
               </div>
               <div className={styles.muted}>final → {config.route?.final ?? "—"}</div>
             </Card>
             <Card title="DNS">
               <div className={styles.metric}>
-                {dnsRules.length}
-                <small>条规则</small>
+                <small>{t("{count} rules", { count: dnsRules.length })}</small>
               </div>
               <div className={styles.muted}>final → {config.dns?.final ?? "—"}</div>
             </Card>
-            <Card title="规则集">
+            <Card title={t("Rule sets")}>
               <div className={styles.metric}>
-                {ruleSets.length}
-                <small>个集合</small>
+                <small>{t("{count} sets", { count: ruleSets.length })}</small>
               </div>
-              <div className={styles.muted}>Clash 默认模式 → {mode ?? "—"}</div>
+              <div className={styles.muted}>
+                {t("Clash default mode")} → {mode ?? "—"}
+              </div>
             </Card>
           </div>
 
-          <Card title="本次会话命中">
+          <Card title={t("Hits this session")}>
             {topHits.length === 0 ? (
               <div className={styles.muted}>
-                {hits.observed ? "本次会话还没有连接命中规则。" : "正在等待连接快照…"}
+                {hits.observed
+                  ? t("No connection has matched a rule yet during this session.")
+                  : t("Waiting for the connection snapshot…")}
               </div>
             ) : (
               <div className={styles.hitSummary}>
@@ -562,8 +598,8 @@ export function RulesView() {
                       />
                     </span>
                     <span className={styles.hitValue}>
-                      {stats.hits} 次 · {formatBytes(totalHitBytes(stats))}
-                      {stats.active > 0 && ` · ${stats.active} 活跃`}
+                      {t("{count} hits", { count: stats.hits })} · {formatBytes(totalHitBytes(stats))}
+                      {stats.active > 0 && ` · ${t("{count} active", { count: stats.active })}`}
                     </span>
                   </div>
                 ))}
@@ -579,7 +615,7 @@ export function RulesView() {
               className={cx(styles.tab, tab === "route" && styles.active)}
               onClick={() => setTab("route")}
             >
-              路由规则 <span className={styles.count}>{routeRules.length}</span>
+              {t("Route rules")} <span className={styles.count}>{routeRules.length}</span>
             </button>
             <button
               type="button"
@@ -588,7 +624,7 @@ export function RulesView() {
               className={cx(styles.tab, tab === "dns" && styles.active)}
               onClick={() => setTab("dns")}
             >
-              DNS 规则 <span className={styles.count}>{dnsRules.length}</span>
+              {t("DNS rules")} <span className={styles.count}>{dnsRules.length}</span>
             </button>
             <button
               type="button"
@@ -597,7 +633,7 @@ export function RulesView() {
               className={cx(styles.tab, tab === "rule_set" && styles.active)}
               onClick={() => setTab("rule_set")}
             >
-              规则集 <span className={styles.count}>{ruleSets.length}</span>
+              {t("Rule sets")} <span className={styles.count}>{ruleSets.length}</span>
             </button>
           </div>
 
@@ -610,10 +646,10 @@ export function RulesView() {
                 <Select
                   options={[
                     { value: "all", label: t("All actions") },
-                    ...actionOptions.map((action) => ({
-                      value: action,
-                      label: ACTION_LABELS[action] ?? action,
-                    })),
+                    ...actionOptions.map((action) => {
+                      const label = ACTION_LABELS[action];
+                      return { value: action, label: label !== undefined ? t(label) : action };
+                    }),
                   ]}
                   value={actionFilter}
                   onChange={setActionFilter}
@@ -647,7 +683,7 @@ export function RulesView() {
 
           {tab === "route" &&
             (routeRules.length === 0 ? (
-              <EmptyState icon="filter_list">当前配置没有路由规则</EmptyState>
+              <EmptyState icon="filter_list">{t("This configuration has no route rules")}</EmptyState>
             ) : visibleRouteRules.length === 0 ? (
               <EmptyState icon="search">{t("No results")}</EmptyState>
             ) : (
@@ -666,7 +702,7 @@ export function RulesView() {
 
           {tab === "dns" &&
             (dnsRules.length === 0 ? (
-              <EmptyState icon="dns">当前配置没有 DNS 规则</EmptyState>
+              <EmptyState icon="dns">{t("This configuration has no DNS rules")}</EmptyState>
             ) : visibleDnsRules.length === 0 ? (
               <EmptyState icon="search">{t("No results")}</EmptyState>
             ) : (
@@ -685,7 +721,7 @@ export function RulesView() {
 
           {tab === "rule_set" &&
             (ruleSets.length === 0 ? (
-              <EmptyState icon="folder">当前配置没有规则集</EmptyState>
+              <EmptyState icon="folder">{t("This configuration has no rule sets")}</EmptyState>
             ) : visibleRuleSets.length === 0 ? (
               <EmptyState icon="search">{t("No results")}</EmptyState>
             ) : (
@@ -707,16 +743,29 @@ export function RulesView() {
                 })}
               </div>
             ))}
+          {tab === "rule_set" && ruleSets.some((set) => set.type === "remote") && (
+            <p className="hint">
+              {t(
+                "Remote rule sets are downloaded by the sing-box core on its own schedule. This panel exposes no endpoint to force an update — restart the core or wait for the next refresh.",
+              )}
+            </p>
+          )}
           <p className={styles.footnote}>
-            规则来自实时 sing-box 配置（面板 API）。原生 gRPC API 不提供规则列表；顺序即匹配顺序，越靠前优先级越高。
+            {t(
+              "Rules come from the live sing-box configuration (panel API). The native gRPC API exposes no rule list; the order is the match order, so earlier entries win.",
+            )}
           </p>
         </>
       )}
 
       {editorDraft !== null && editor !== null && (
         <RuleEditorDialog
-          title={editor.index === null ? "新增规则" : `编辑规则 #${(editor.index ?? 0) + 1}`}
-          targetLabel={editor.section === "dns" ? "DNS 服务器标签（server）" : "出站标签（outbound）"}
+          title={editor.index === null ? t("Add rule") : t("Edit rule #{index}", { index: editor.index + 1 })}
+          targetLabel={
+            editor.section === "dns"
+              ? t("DNS server tag (server)")
+              : t("Outbound tag (outbound)")
+          }
           targetKey={editor.section === "dns" ? "server" : "outbound"}
           initial={editorDraft}
           onCancel={() => setEditor(null)}
@@ -726,9 +775,12 @@ export function RulesView() {
 
       {pending !== null && (
         <Dialog onClose={() => setPending(null)}>
-          <h2>应用规则改动</h2>
+          <h2>{t("Apply rule changes")}</h2>
           <p className={styles.confirmNote}>
-            将写入配置并重启 sing-box 核心，期间代理连接会中断。共 {pending.changes.length} 处改动。
+            {t(
+              "This writes the configuration and restarts the sing-box core; proxy connections drop meanwhile. {count} changes in total.",
+              { count: pending.changes.length },
+            )}
           </p>
           <div className={styles.confirmList}>
             {pending.changes.slice(0, 20).map((change) => (
@@ -745,13 +797,15 @@ export function RulesView() {
               </div>
             ))}
             {pending.changes.length > 20 && (
-              <div className={styles.muted}>…另有 {pending.changes.length - 20} 处改动</div>
+              <div className={styles.muted}>
+                {t("…{count} more changes", { count: pending.changes.length - 20 })}
+              </div>
             )}
           </div>
           <div className={styles.confirmActions}>
-            <Button onClick={() => setPending(null)}>取消</Button>
+            <Button onClick={() => setPending(null)}>{t("Cancel")}</Button>
             <Button variant="primary" disabled={saving} onClick={() => void applyPending()}>
-              {saving ? <Spinner /> : "校验并应用"}
+              {saving ? <Spinner /> : t("Validate and apply")}
             </Button>
           </div>
         </Dialog>

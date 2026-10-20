@@ -135,21 +135,25 @@ export function SpeedTestView() {
         actions={
           <Button variant="primary" onClick={() => void runAll()} disabled={!started || testingAll}>
             {testingAll ? <Spinner /> : <Icon name="speed" />}
-            {progress !== null ? t("Testing {done} of {total}", progress) : "全部测速"}
+            {progress !== null ? t("Testing {done} of {total}", progress) : t("URLTest All")}
           </Button>
         }
       />
 
       <div className={styles.summary}>
-        <Card title="策略组">
+        <Card title={t("Policy groups")}>
           <div className={styles.metric}>{groups.data.groups.length}</div>
         </Card>
-        <Card title="节点">
+        <Card title={t("Node")}>
           <div className={styles.metric}>{nodeCount}</div>
         </Card>
-        <Card title="状态">
+        <Card title={t("Status")}>
           <div className={styles.metricSmall}>
-            {started ? <Badge tone="good">核心运行中</Badge> : <Badge tone="danger">核心未运行</Badge>}
+            {started ? (
+              <Badge tone="good">{t("Core running")}</Badge>
+            ) : (
+              <Badge tone="danger">{t("Core not running")}</Badge>
+            )}
           </div>
         </Card>
       </div>
@@ -159,7 +163,7 @@ export function SpeedTestView() {
         loaded={groups.data.loaded}
         empty={groups.data.groups.length === 0}
         emptyIcon="speed"
-        emptyMessage="没有可测速的策略组"
+        emptyMessage={t("No policy groups to test")}
       />
 
       <div className={styles.grid}>
@@ -177,25 +181,27 @@ export function SpeedTestView() {
       <div className={styles.advanced}>
         <Card
           icon="network_check"
-          title="网络质量测试"
+          title={t("Network quality test")}
           actions={
             <Button size="small" onClick={() => navigate("tools/network-quality")}>
-              打开
+              {t("Open")}
             </Button>
           }
         >
-          <p className={styles.description}>下载 / 上传带宽、延迟与 RPM，使用原生 NetworkQualityTest。</p>
+          <p className={styles.description}>
+            {t("Download / upload bandwidth, latency and RPM, using the native NetworkQualityTest.")}
+          </p>
         </Card>
         <Card
           icon="route"
-          title="STUN 测试"
+          title={t("STUN Test")}
           actions={
             <Button size="small" onClick={() => navigate("tools/stun")}>
-              打开
+              {t("Open")}
             </Button>
           }
         >
-          <p className={styles.description}>检测 NAT 类型、外部地址与映射行为。</p>
+          <p className={styles.description}>{t("Detects NAT type, external address and mapping behavior.")}</p>
         </Card>
       </div>
     </div>
@@ -248,11 +254,11 @@ function GroupTestCard(props: {
               type="button"
               className={cx(styles.item, item.tag === selected && styles.selected)}
               onClick={() => select(item.tag)}
-              title={group.selectable ? "切换到该节点" : undefined}
+              title={group.selectable ? t("Switch to this node") : undefined}
               aria-pressed={item.tag === selected}
             >
               <span className={styles.itemName}>{item.tag}</span>
-              {item.tag === selected && <Badge tone="accent">当前</Badge>}
+              {item.tag === selected && <Badge tone="accent">{t("Current")}</Badge>}
               <span className={cx(styles.delay, styles[tone])}>{delay > 0 ? `${delay}ms` : "—"}</span>
             </button>
           );

@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  ageParams,
   clearConfigDraft,
   DRAFT_MAX_AGE_MS,
   draftIsMeaningful,
@@ -105,11 +106,14 @@ describe("undo stack", () => {
 });
 
 describe("formatAge", () => {
-  it("describes recent edits in Chinese", () => {
-    expect(formatAge(0)).toBe("刚刚");
-    expect(formatAge(-1000)).toBe("刚刚");
-    expect(formatAge(5 * 60_000)).toBe("5 分钟前");
-    expect(formatAge(3 * 3_600_000)).toBe("3 小时前");
-    expect(formatAge(2 * 86_400_000)).toBe("2 天前");
+  it("returns i18n keys with a count placeholder", () => {
+    expect(formatAge(0)).toBe("just now");
+    expect(formatAge(-1000)).toBe("just now");
+    expect(formatAge(5 * 60_000)).toBe("{count} minutes ago");
+    expect(ageParams(5 * 60_000)).toEqual({ count: 5 });
+    expect(formatAge(3 * 3_600_000)).toBe("{count} hours ago");
+    expect(ageParams(3 * 3_600_000)).toEqual({ count: 3 });
+    expect(formatAge(2 * 86_400_000)).toBe("{count} days ago");
+    expect(ageParams(2 * 86_400_000)).toEqual({ count: 2 });
   });
 });

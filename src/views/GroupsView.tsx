@@ -194,39 +194,41 @@ export function GroupsView() {
         />
       </div>
       {groups.data.groups.length > 0 && (
-        <Card title="健康巡检">
+        <Card title={t("Health check")}>
           <div className={styles.healthRow}>
-            <Badge tone="good">健康 {healthSummary.healthy}</Badge>
-            <Badge tone="medium">缓慢 {healthSummary.degraded}</Badge>
-            <Badge tone="bad">不可用 {healthSummary.down}</Badge>
-            <Badge>未知 {healthSummary.unknown}</Badge>
+            <Badge tone="good">{t("Healthy {count}", { count: healthSummary.healthy })}</Badge>
+            <Badge tone="medium">{t("Slow {count}", { count: healthSummary.degraded })}</Badge>
+            <Badge tone="bad">{t("Unavailable {count}", { count: healthSummary.down })}</Badge>
+            <Badge>{t("Unknown {count}", { count: healthSummary.unknown })}</Badge>
             <span className={styles.healthMeta}>
               {lastRunAt === 0
-                ? "尚未巡检"
-                : `上次巡检 ${Math.max(1, Math.round((now - lastRunAt) / 60_000))} 分钟前`}
+                ? t("Not checked yet")
+                : t("Last checked {minutes} minutes ago", {
+                    minutes: Math.max(1, Math.round((now - lastRunAt) / 60_000)),
+                  })}
             </span>
             <Button
               size="small"
               onClick={() => window.dispatchEvent(new Event(HEALTH_RUN_NOW_EVENT))}
             >
-              立即巡检
+              {t("Check now")}
             </Button>
           </div>
           <div className={styles.healthRow}>
             <Toggle
-              label="异常通知"
+              label={t("Notify on anomalies")}
               value={healthSettings.notify}
               onChange={(value) => updateHealth({ notify: value })}
             />
             <Toggle
-              label="自动切换到可用节点"
+              label={t("Auto switch to an available node")}
               value={healthSettings.autoSwitch}
               onChange={(value) => updateHealth({ autoSwitch: value })}
             />
           </div>
           <div className={styles.healthRow}>
             <label className={styles.healthField}>
-              缓慢阈值
+              {t("Slow threshold")}
               <input
                 className="input"
                 type="number"
@@ -238,7 +240,7 @@ export function GroupsView() {
               ms
             </label>
             <label className={styles.healthField}>
-              不可用阈值
+              {t("Unavailable threshold")}
               <input
                 className="input"
                 type="number"
@@ -251,7 +253,10 @@ export function GroupsView() {
             </label>
           </div>
           <div className={styles.healthNote}>
-            巡检只在标签页可见时进行，间隔沿用上方「{t("Auto test")}」；结果保存在本机浏览器。
+            {t(
+              "Checks run only while the tab is visible, using the {interval} interval above; results are stored in this browser.",
+              { interval: t("Auto test") },
+            )}
           </div>
         </Card>
       )}
@@ -338,8 +343,12 @@ function GroupCard(props: {
                 ? props.items.length
                 : `${props.items.length}/${props.total}`}
             </Badge>
-            {props.statuses[selected] === "down" && <Badge tone="bad">当前节点不可用</Badge>}
-            {props.statuses[selected] === "degraded" && <Badge tone="medium">当前节点缓慢</Badge>}
+            {props.statuses[selected] === "down" && (
+              <Badge tone="bad">{t("Current node is unavailable")}</Badge>
+            )}
+            {props.statuses[selected] === "degraded" && (
+              <Badge tone="medium">{t("Current node is slow")}</Badge>
+            )}
             <IconButton title={t("URL test")} onClick={runURLTest} disabled={testing}>
               {testing ? <Spinner /> : <Icon name="speed" />}
             </IconButton>

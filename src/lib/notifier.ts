@@ -8,17 +8,19 @@
  */
 
 import { isHttpUrl } from "../api/format";
+import type { MessageKey } from "../app/translations";
 import { loadStoredJson, removeStoredValue, saveStoredJson } from "./storage";
 
 const STORAGE_KEY = "notifier";
 
 export type NotifyEvent = "error" | "service" | "config" | "health";
 
-export const NOTIFY_EVENTS: { id: NotifyEvent; label: string; hint: string }[] = [
-  { id: "error", label: "面板错误", hint: "请求失败、令牌失效等" },
-  { id: "service", label: "核心致命错误", hint: "sing-box 启动失败或崩溃" },
-  { id: "config", label: "配置已应用", hint: "写入配置并重启核心之后" },
-  { id: "health", label: "节点健康变化", hint: "巡检发现节点不可用或恢复" },
+/** Labels are i18n keys: render them through `t()` at the call site. */
+export const NOTIFY_EVENTS: { id: NotifyEvent; label: MessageKey; hint: MessageKey }[] = [
+  { id: "error", label: "Panel errors", hint: "Failed requests, expired tokens, and so on" },
+  { id: "service", label: "Core fatal errors", hint: "sing-box failed to start or crashed" },
+  { id: "config", label: "Config applied", hint: "After the config is written and the core restarts" },
+  { id: "health", label: "Node health changes", hint: "A health check found a node down or recovered" },
 ];
 
 export interface NotifierConfig {

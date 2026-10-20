@@ -8,13 +8,14 @@
   "scripts": {
     "prebuild": "node scripts/ensure-generated.mjs",
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/gen-licenses.mjs",
     "preview": "vite preview",
     "generate": "buf generate && node scripts/gen-icons.mjs && node scripts/gen-terminal-themes.mjs",
     "generate:dev": "cp \"${SINGBOX_PROTO:-../sing-box/daemon/started_service.proto}\" proto/daemon/started_service.proto && buf generate",
     "lint": "eslint src scripts eslint.config.js vite.config.ts",
     "lint:css": "stylelint \"src/**/*.css\"",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -59,6 +60,7 @@
     "@types/react-dom": "^19.2.4",
     "@types/w3c-web-usb": "^1.0.14",
     "@vitejs/plugin-react": "^6.0.5",
+    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.8.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "husky": "^9.1.7",

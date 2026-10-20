@@ -122,8 +122,8 @@ describe("extractApiService", () => {
   });
 
   it("distinguishes an invalid config from a config without services.api", () => {
-    expect(() => extractApiService("{not json")).toThrow(/配置解析失败/);
-    expect(() => extractApiService("[]")).toThrow(/JSON 对象/);
+    expect(() => extractApiService("{not json")).toThrow(/Failed to parse/);
+    expect(() => extractApiService("[]")).toThrow(/JSON object/);
   });
 });
 

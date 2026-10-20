@@ -186,7 +186,7 @@ export function draftToRule(draft: RuleDraft, targetKey: "outbound" | "server"):
  */
 export function draftIssue(draft: RuleDraft): string | null {
   if (draft.action === "route" && draft.target.trim() === "") {
-    return "route 动作需要填写出站标签";
+    return "The route action needs an outbound tag";
   }
   return null;
 }

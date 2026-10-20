@@ -13,6 +13,7 @@ import type { DaemonApi } from "../api/daemon";
 import type { Group } from "../gen/daemon/started_service_pb";
 import { useToast } from "../components/Toast";
 import { useNow } from "./context";
+import { useI18n } from "./i18n";
 import {
   averageDelay,
   bestCandidate,
@@ -86,6 +87,7 @@ async function probeAll(api: DaemonApi, tags: readonly string[]): Promise<boolea
 
 export function useHealthMonitor(options: HealthMonitorOptions): HealthMonitor {
   const { api, serverId, intervalMs, active, groups, histories } = options;
+  const { t } = useI18n();
   const toast = useToast();
   /** Refreshes staleness: a sample older than the window says nothing. */
   const now = useNow(30_000);
@@ -163,15 +165,20 @@ export function useHealthMonitor(options: HealthMonitorOptions): HealthMonitor {
       return;
     }
     if (outages.length > 0) {
-      const list = `${outages.slice(0, 3).join("、")}${outages.length > 3 ? ` 等 ${outages.length} 个` : ""}`;
-      toast(`节点不可用：${list}`, "danger");
-      notify("health", "节点不可用", list);
+      const shown = outages.slice(0, 3).join(", ");
+      const list =
+        outages.length > 3
+          ? t("{nodes} and {count} more", { nodes: shown, count: outages.length - 3 })
+          : shown;
+      toast(t("Node unavailable: {nodes}", { nodes: list }), "danger");
+      notify("health", t("Node unavailable"), list);
     }
     if (recovered.length > 0) {
-      toast(`节点恢复：${recovered.slice(0, 3).join("、")}`, "good");
-      notify("health", "节点恢复", recovered.slice(0, 3).join("、"));
+      const list = recovered.slice(0, 3).join(", ");
+      toast(t("Node recovered: {nodes}", { nodes: list }), "good");
+      notify("health", t("Node recovered"), list);
     }
-  }, [serverId, settings.notify, statuses, toast]);
+  }, [serverId, settings.notify, statuses, t, toast]);
 
   // Opt-in failover: move a group off a node that is down.
   useEffect(() => {
@@ -194,11 +201,11 @@ export function useHealthMonitor(options: HealthMonitorOptions): HealthMonitor {
         continue;
       }
       api.selectOutbound(group.tag, target).then(
-        () => toast(`${group.tag} 已切换到 ${target}`, "info"),
+        () => toast(t("{group} switched to {target}", { group: group.tag, target }), "info"),
         () => undefined,
       );
     }
-  }, [active, api, groups, histories, settings.autoSwitch, thresholds, toast, verdicts]);
+  }, [active, api, groups, histories, settings.autoSwitch, t, thresholds, toast, verdicts]);
 
   const run = useCallback(async () => {
     if (runningRef.current) {
@@ -218,9 +225,9 @@ export function useHealthMonitor(options: HealthMonitorOptions): HealthMonitor {
     runningRef.current = false;
     setRunning(false);
     if (failed) {
-      toast("部分节点探测失败", "info");
+      toast(t("Some nodes could not be probed"), "info");
     }
-  }, [api, serverId, toast]);
+  }, [api, serverId, t, toast]);
 
   // Views trigger a sweep through a DOM event: the schedule lives here so the
   // interval and the manual run can never race each other.

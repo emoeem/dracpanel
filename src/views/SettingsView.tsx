@@ -12,6 +12,7 @@ import { useStream } from "../api/stream";
 import { navigate, useApi, type AccentPreference, type ThemePreference } from "../app/context";
 import { useDesktopHost, useLocalDesktopHost } from "../app/desktop";
 import type { DesktopHost, DesktopSettingsState, DesktopUpdateTrack } from "../app/desktop";
+import { buildLabel } from "../app/version";
 import {
   loadDisableDeprecatedWarnings,
   saveDisableDeprecatedWarnings,
@@ -90,7 +91,7 @@ export function SettingsView() {
             />
             <NavRow
               icon="code"
-              title={host !== null ? t("Source Code") : "上游项目"}
+              title={host !== null ? t("Source Code") : t("Upstream project")}
               href={
                 host !== null
                   ? "https://github.com/SagerNet/sing-box"
@@ -105,14 +106,23 @@ export function SettingsView() {
               }
             />
             {host === null && (
-              <NavRow icon="description" title="本构建说明" href="/README.md" />
+              <NavRow
+                icon="description"
+                title={t("About this build")}
+                href="/README.md"
+              />
             )}
           </div>
           {host === null && (
             <p className="hint" style={{ padding: "10px 14px 0", lineHeight: 1.6 }}>
-              非官方 DracPanel 定制构建，与 SagerNet / sing-box 项目无关联。源码与文档见项目仓库。
+              {t(
+                "An unofficial DracPanel build, not affiliated with the SagerNet or sing-box projects. Source and documentation live in the project repository.",
+              )}
             </p>
           )}
+          <p className="hint" style={{ padding: "10px 14px 0" }}>
+            {t("UI build {build}", { build: buildLabel() })}
+          </p>
         </div>
       </div>
     </div>

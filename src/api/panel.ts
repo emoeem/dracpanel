@@ -172,7 +172,7 @@ export interface PanelEbpfProbeData {
 
 export class PanelAuthError extends Error {
   constructor() {
-    super("面板令牌无效或已失效");
+    super("Panel token is invalid or expired");
     this.name = "PanelAuthError";
   }
 }
@@ -252,7 +252,7 @@ async function panelFetch(
       (error.name === "TimeoutError" || error.name === "AbortError")
     ) {
       throw new Error(
-        `面板请求超时（${Math.round(timeoutMs / 1000)} 秒），请检查 sing-box-panel 是否正常响应`,
+        `Panel request timed out after ${Math.round(timeoutMs / 1000)}s; check that sing-box-panel is responding`,
         { cause: error },
       );
     }
@@ -280,7 +280,7 @@ async function panelFetch(
         : response.statusText !== ""
           ? `（${response.statusText}）`
           : "";
-    throw new PanelHttpError(response.status, `面板返回 HTTP ${response.status}${suffix}`);
+    throw new PanelHttpError(response.status, `Panel returned HTTP ${response.status}${suffix}`);
   }
   return response;
 }
@@ -302,6 +302,8 @@ export async function probePanelEndpoint(
     return { supported: true };
   } catch (error) {
     if (error instanceof PanelHttpError) {
+      // The Chinese phrase is matched deliberately: older sing-box-panel
+      // builds answered unknown routes in Chinese, newer ones in English.
       const absent =
         error.status === 404 &&
         (error.message.includes("未知接口") || error.message.includes("Unknown endpoint"));
@@ -324,7 +326,7 @@ async function request<T>(
   try {
     return (await response.json()) as T;
   } catch {
-    throw new Error("面板返回了非 JSON 响应");
+    throw new Error("Panel returned a non-JSON response");
   }
 }
 
@@ -637,10 +639,10 @@ export function extractApiService(text: string): NativeApiService | null {
     config = JSON.parse(normalizeConfigJson(text));
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(`sing-box 配置解析失败：${detail}`, { cause: error });
+    throw new Error(`Failed to parse sing-box config: ${detail}`, { cause: error });
   }
   if (typeof config !== "object" || config === null || Array.isArray(config)) {
-    throw new Error("sing-box 配置必须是 JSON 对象");
+    throw new Error("sing-box config must be a JSON object");
   }
   const services = (config as { services?: unknown }).services;
   if (!Array.isArray(services)) {
@@ -656,7 +658,7 @@ export function extractApiService(text: string): NativeApiService | null {
     }
     const port = entry.listen_port;
     if (typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535) {
-      throw new Error("services.api 缺少有效的 listen_port（1-65535）");
+      throw new Error("services.api is missing a valid listen_port (1-65535)");
     }
     const secret = typeof entry.secret === "string" ? entry.secret : "";
     return { port, secret };
@@ -722,13 +724,13 @@ export async function ensureNativeServer(
   const config = await getPanelConfig();
   const api = extractApiService(config.text);
   if (api === null) {
-    throw new Error("sing-box 配置中没有 services.api（原生 API 未启用）");
+    throw new Error("sing-box config has no services.api (native API is disabled)");
   }
 
   const url = `127.0.0.1:${api.port}`;
   const server: Server = {
     id: MANAGED_SERVER_ID,
-    name: "本机 sing-box",
+    name: "Local sing-box",
     url,
     secret: api.secret,
   };
