@@ -59,6 +59,8 @@ import {
 import styles from "./ConnectionsView.module.css";
 
 const CONNECTION_ROW_HEIGHT = 84;
+/** Mobile rows wrap the chain column below the traffic columns. */
+const CONNECTION_MOBILE_ROW_HEIGHT = 140;
 const CONNECTION_GROUP_HEIGHT = 38;
 const CONNECTION_OVERSCAN = 6;
 const CLOSE_CONCURRENCY = 8;
@@ -101,7 +103,7 @@ export function ConnectionsView() {
   const { t } = useI18n();
   const connections = useStream(api.connections);
   const isMobile = useIsMobile();
-  const rowHeight = isMobile ? 112 : CONNECTION_ROW_HEIGHT;
+  const rowHeight = isMobile ? CONNECTION_MOBILE_ROW_HEIGHT : CONNECTION_ROW_HEIGHT;
   const [stateFilter, setStateFilter] = useState<ConnectionStateFilter>(loadConnectionStateFilter);
   const [sortKey, setSortKey] = useState<ConnectionSortKey>(loadConnectionSortKey);
   const [sortDirection, setSortDirection] =

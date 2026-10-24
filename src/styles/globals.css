@@ -78,8 +78,8 @@
   --control-height: 30px;
   --sidebar-width: 232px;
   --transition-fast: 0.12s ease;
-  --transition-medium: 0.15s ease;
-  --transition-slow: 0.18s ease;
+  --transition-medium: 0.18s ease;
+  --transition-slow: 0.24s ease;
 
   /* Shared motion curve for hover lifts and page transitions (ease-out-expo). */
   --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
@@ -159,8 +159,8 @@
   --medium-soft: rgb(241 250 140 / 14%);
   --bad: #ffb86c;
   --bad-soft: rgb(255 184 108 / 14%);
-  --danger: #f55;
-  --danger-soft: rgb(255 85 85 / 15%);
+  --danger: #ff6262;
+  --danger-soft: rgb(255 98 98 / 15%);
   --info: #8be9fd;
   --info-soft: rgb(139 233 253 / 13%);
   --neutral-soft: rgb(248 248 242 / 9%);
@@ -489,6 +489,26 @@ a:hover {
   clip-path: inset(50%);
 }
 
+/* Skip link: sr-only until keyboard-focused, then a floating action chip. */
+.skip-link:focus-visible {
+  position: fixed;
+  inset-block-start: var(--space-8);
+  inset-inline-start: var(--space-8);
+  z-index: var(--z-topbar);
+  width: auto;
+  height: auto;
+  padding: var(--space-8) var(--space-12);
+  margin: 0;
+  overflow: visible;
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--on-accent);
+  white-space: nowrap;
+  background: var(--accent);
+  border-radius: var(--radius-control);
+  clip-path: none;
+}
+
 @keyframes slide-in {
   from {
     opacity: 0;
@@ -544,6 +564,6 @@ a:hover {
     }
 
   :root {
-      --control-height: 36px;
+      --control-height: 44px;
     }
 }

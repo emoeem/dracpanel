@@ -865,6 +865,7 @@ export function SearchInput(props: { value: string; onChange: (value: string) =>
       <input
         className="input"
         placeholder={t("Search")}
+        aria-label={t("Search")}
         value={props.value}
         onChange={(event) => props.onChange(event.target.value)}
       />

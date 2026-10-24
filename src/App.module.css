@@ -325,7 +325,7 @@
       /* Horizontal swipes drive the drawer; vertical scrolling still works. */
       touch-action: pan-y;
       transform: translateX(-100%);
-      transition: transform 0.2s ease;
+      transition: transform var(--transition-slow);
     }
 
   [dir="rtl"] .sidebar {

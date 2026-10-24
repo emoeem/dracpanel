@@ -115,11 +115,18 @@ export function WebTopbar(props: {
           type="button"
           className={styles.iconButton}
           title={props.theme === "dark" ? t("Light") : t("Dark")}
+          aria-label={props.theme === "dark" ? t("Light") : t("Dark")}
           onClick={() => props.onThemeChange(props.theme === "dark" ? "light" : "dark")}
         >
           <Icon name={props.theme === "dark" ? "light_mode" : "dark_mode"} />
         </button>
-        <button type="button" className={styles.iconButton} title={t("Refresh")} onClick={reconnect}>
+        <button
+          type="button"
+          className={styles.iconButton}
+          title={t("Refresh")}
+          aria-label={t("Refresh")}
+          onClick={reconnect}
+        >
           <Icon name="sync" />
         </button>
       </div>

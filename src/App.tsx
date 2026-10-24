@@ -1121,8 +1121,18 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
     </>
   );
 
+  const skipToContent = (event: { preventDefault: () => void }) => {
+    // preventDefault keeps the hash router out of it; #main is not a route.
+    event.preventDefault();
+    document.getElementById("main")?.focus();
+  };
+
   const mainContent = (
-    <main className={styles.content}>
+    <>
+      <a className="sr-only skip-link" href="#main" onClick={skipToContent}>
+        {t("Skip to content")}
+      </a>
+      <main id="main" tabIndex={-1} className={styles.content}>
       <ErrorBoundary key={route.page}>
         <Suspense
           fallback={
@@ -1199,7 +1209,8 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
           )}
         </Suspense>
       </ErrorBoundary>
-    </main>
+      </main>
+    </>
   );
 
   return (

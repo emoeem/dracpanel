@@ -97,13 +97,13 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-overlay);
-  animation: menu-in 0.14s ease;
+  animation: menu-in var(--transition-fast);
 }
 
 .menu.open-up {
   top: auto;
   bottom: calc(100% + 6px);
-  animation: menu-in-up 0.14s ease;
+  animation: menu-in-up var(--transition-fast);
 }
 
 .menu-item {
@@ -210,7 +210,10 @@ a.menu-item {
 }
 
 .page {
+  /* Ultrawide guard: content columns stop growing past this width. */
+  max-width: 1280px;
   padding: var(--space-32) var(--space-36) var(--space-56);
+  margin-inline: auto;
   animation: page-in 0.25s var(--ease-out-soft);
 }
 
@@ -725,7 +728,8 @@ a.nav-line {
 }
 
 .input::placeholder {
-  color: var(--text-faint);
+  /* --text-faint only reaches 4.06:1 on --inset; placeholders must stay AA. */
+  color: var(--text-secondary);
 }
 
 .input:focus, .select:focus {
@@ -1066,7 +1070,7 @@ button.settings-row:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-card);
-  animation: page-in 0.3s ease-out;
+  animation: page-in var(--transition-slow);
 }
 
 .setup-brand {
@@ -1150,7 +1154,7 @@ button.settings-row:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-overlay);
-  animation: dialog-in 0.18s ease-out;
+  animation: dialog-in var(--transition-medium);
 }
 
 .dialog::backdrop {

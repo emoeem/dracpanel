@@ -53,8 +53,19 @@
 }
 
 .connection-row .columns .right {
+  /* Virtual rows have a fixed height: shrink and ellipsize instead of
+     wrapping, which would clip mid-glyph or overlap the next row. */
+  min-width: 0;
+  max-width: 100%;
   margin-inline-start: auto;
   text-align: end;
+}
+
+.connection-row .columns .right > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 [dir="rtl"] .connection-row {
@@ -90,7 +101,18 @@
   padding-bottom: var(--space-8);
 }
 
+/* Matches CONNECTION_MOBILE_ROW_HEIGHT; the virtual layout reserves this
+   height so the wrapped chain column clears the fixed row box. */
+@media (max-width: 900px) {
+  .virtual-row {
+    height: 140px;
+  }
+}
+
 .virtual-row .connection-row {
+  /* Mobile boxes are taller than the content (wrap only happens on narrow
+     screens); center it so the spare height splits evenly. */
+  justify-content: center;
   height: 100%;
   margin-bottom: 0;
   overflow: hidden;

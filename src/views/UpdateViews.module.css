@@ -25,10 +25,12 @@
 }
 
 .progress-fill {
-  height: 100%;
+  width: 100%;
   background: var(--accent);
   border-radius: var(--radius-pill);
-  transition: width 0.15s ease-out;
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  transition: transform var(--transition-medium);
 }
 
 .progress-indeterminate {
@@ -42,11 +44,11 @@
 
 @keyframes update-progress-slide {
   0% {
-    inset-inline-start: -40%;
+    transform: translateX(-100%);
   }
 
   100% {
-    inset-inline-start: 100%;
+    transform: translateX(250%);
   }
 }
 

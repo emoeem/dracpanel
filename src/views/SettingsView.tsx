@@ -135,9 +135,12 @@ export function AppSettingsView(props: {
   accent: AccentPreference;
   onAccentChange: (accent: AccentPreference) => void;
 }) {
+  const { t } = useI18n();
   const host = useDesktopHost();
   if (host === null) {
-    return null;
+    // Reachable via a direct URL on the web; render a state instead of a
+    // blank content area.
+    return <div className="empty-state">{t("Desktop settings are only available in the desktop app.")}</div>;
   }
   return <AppSettingsContent host={host} {...props} />;
 }
@@ -1035,6 +1038,7 @@ export function TerminalThemePickerView(props: { scheme: Scheme }) {
           <input
             className="input"
             placeholder={t("Search themes")}
+            aria-label={t("Search themes")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />

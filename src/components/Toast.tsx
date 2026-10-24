@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
+import { useI18n } from "../app/i18n";
 import { cx } from "../lib/cx";
 import styles from "./Toast.module.css";
 
@@ -48,6 +49,9 @@ export function ToastProvider(props: { children: ReactNode }) {
     };
   }, []);
 
+  const { t } = useI18n();
+  const dismissLabel = t("Dismiss");
+
   return (
     <ToastContext.Provider value={show}>
       {props.children}
@@ -57,6 +61,7 @@ export function ToastProvider(props: { children: ReactNode }) {
             key={toast.id}
             type="button"
             className={cx(styles.toast, styles[toast.tone])}
+            title={dismissLabel}
             onClick={() => dismiss(toast.id)}
           >
             {toast.message}

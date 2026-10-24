@@ -239,7 +239,7 @@ function UpdateDialog(props: {
           >
             <div
               className={progressIndeterminate ? styles.progressIndeterminate : styles.progressFill}
-              style={progressIndeterminate ? undefined : { width: `${downloadProgress}%` }}
+              style={progressIndeterminate ? undefined : { transform: `scaleX(${downloadProgress / 100})` }}
             />
           </div>
         </div>
