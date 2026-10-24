@@ -40,7 +40,7 @@ class CDP:
                     raise RuntimeError(f"{method}: {msg['error']}")
                 return msg.get("result", {})
 
-    async def eval(self, expression, await_promise=True):
+    async def evaluate(self, expression, await_promise=True):
         result = await self.send(
             "Runtime.evaluate",
             {"expression": expression, "awaitPromise": await_promise, "returnByValue": True},
@@ -55,7 +55,7 @@ class CDP:
         end = time.time() + timeout
         while time.time() < end:
             try:
-                if await self.eval(expression):
+                if await self.evaluate(expression):
                     return True
             except Exception:
                 pass
@@ -68,7 +68,7 @@ class CDP:
         print("screenshot:", SHOTS / f"{name}.png")
 
     async def click_text(self, label):
-        return await self.eval(f"""
+        return await self.evaluate(f"""
             (() => {{
               const node = [...document.querySelectorAll('button')]
                 .find((n) => (n.textContent || '').trim() === {json.dumps(label)});
@@ -79,7 +79,7 @@ class CDP:
         """)
 
     async def click_dialog(self, label):
-        return await self.eval(f"""
+        return await self.evaluate(f"""
             (() => {{
               const dialog = document.querySelector('dialog[open]');
               if (!dialog) return false;
@@ -142,8 +142,8 @@ async def login_if_needed(cdp):
     await cdp.send("Page.navigate", {"url": BASE})
     await cdp.wait_for("document.readyState === 'complete'")
     await asyncio.sleep(1.0)
-    if await cdp.eval("document.querySelector('input[type=password]') !== null"):
-        filled = await cdp.eval(f"""
+    if await cdp.evaluate("document.querySelector('input[type=password]') !== null"):
+        filled = await cdp.evaluate(f"""
             (() => {{
               const input = document.querySelector('input[type=password]');
               const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
@@ -154,18 +154,18 @@ async def login_if_needed(cdp):
         """)
         check("重新登录填入令牌", filled)
         await asyncio.sleep(0.3)
-        await cdp.eval("document.querySelector('form button[type=submit]').click()")
+        await cdp.evaluate("document.querySelector('form button[type=submit]').click()")
     ok = await cdp.wait_for("[...document.querySelectorAll('button')].some(b => (b.textContent||'').trim() === '概览')", 40)
     check("应用已登录", ok)
 
 
 async def ensure_manage(cdp):
-    await cdp.eval("location.hash = '#/manage'")
+    await cdp.evaluate("location.hash = '#/manage'")
     return await cdp.wait_for("[...document.querySelectorAll('button')].some(b => (b.textContent||'').trim() === '运行状态')", 15)
 
 
 async def panel_state(cdp):
-    return await cdp.eval("fetch('/api/state', { headers: { 'X-Panel-Token': localStorage.getItem('panel_token') } }).then(r => r.json())")
+    return await cdp.evaluate("fetch('/api/state', { headers: { 'X-Panel-Token': localStorage.getItem('panel_token') } }).then(r => r.json())")
 
 
 async def wait_pid_change(cdp, old_pid, timeout=60):
@@ -200,7 +200,7 @@ async def main():
         ok = await cdp.wait_for("document.querySelector('.cm-scroller') !== null", 20)
         check("配置编辑器加载", ok)
         if ok:
-            validate = await cdp.eval("""
+            validate = await cdp.evaluate("""
                 (() => {
                   const button = [...document.querySelectorAll('button')].find(b => (b.textContent||'').trim() === '校验');
                   if (!button) return false;
@@ -212,7 +212,7 @@ async def main():
             ok = await cdp.wait_for("document.body.innerText.includes('check 通过') || document.body.innerText.includes('校验通过')", 25)
             check("配置校验通过（真实配置）", ok)
 
-            await cdp.eval("document.querySelector('.cm-content')?.focus()")
+            await cdp.evaluate("document.querySelector('.cm-content')?.focus()")
             await cdp.send("Input.dispatchKeyEvent", {
                 "type": "keyDown", "modifiers": 2, "key": "a", "code": "KeyA",
                 "windowsVirtualKeyCode": 65, "nativeVirtualKeyCode": 65,
@@ -224,7 +224,7 @@ async def main():
             await asyncio.sleep(0.2)
             await cdp.send("Input.insertText", {"text": json.dumps(SAMPLE_CONFIG, ensure_ascii=False, indent=2)})
             await asyncio.sleep(1.0)
-            visible = await cdp.eval("document.querySelector('.cm-content')?.innerText || ''")
+            visible = await cdp.evaluate("document.querySelector('.cm-content')?.innerText || ''")
             safe = "geosite/cn" in visible and "secret" not in visible and "password" not in visible
             check("编辑器示例内容无密钥", safe, visible[:80].replace("\n", " "))
             if safe:
@@ -235,7 +235,7 @@ async def main():
         # ---- Restart core from management, verify no page reload and streams recover ----
         await cdp.click_text("运行状态")
         await asyncio.sleep(0.6)
-        marker = await cdp.eval("(() => { window.__noReloadMarker = 'alive'; return true; })()")
+        marker = await cdp.evaluate("(() => { window.__noReloadMarker = 'alive'; return true; })()")
         check("设置无刷新标记", marker)
         state_before = await panel_state(cdp)
         pid_before = state_before.get("service", {}).get("pid")
@@ -249,7 +249,7 @@ async def main():
         ok = await cdp.wait_for("document.body.innerText.includes('运行中')", 45)
         check("重启后核心恢复", ok)
         await asyncio.sleep(2.0)
-        survived = await cdp.eval("window.__noReloadMarker === 'alive'")
+        survived = await cdp.evaluate("window.__noReloadMarker === 'alive'")
         check("重启后页面未整页刷新", survived)
         await cdp.shot("13-manage-after-restart")
 
@@ -271,7 +271,7 @@ async def main():
         recovered = await cdp.wait_for("document.body.innerText.includes('运行中')", 45)
         check("eBPF 应用后核心恢复", recovered)
         await asyncio.sleep(1.5)
-        survived = await cdp.eval("window.__noReloadMarker === 'alive'")
+        survived = await cdp.evaluate("window.__noReloadMarker === 'alive'")
         check("eBPF 应用后页面未刷新", survived)
         await cdp.shot("14-manage-ebpf-applied")
 
@@ -294,7 +294,7 @@ async def main():
         ok = await cdp.wait_for("document.body.innerText.includes('已停止')", 20)
         check("管理页显示已停止", ok)
         await cdp.shot("15-manage-stopped")
-        survived = await cdp.eval("window.__noReloadMarker === 'alive'")
+        survived = await cdp.evaluate("window.__noReloadMarker === 'alive'")
         check("停止后管理页未刷新", survived)
         start = await cdp.click_text("启动")
         check("点击启动", start)
@@ -309,14 +309,14 @@ async def main():
         ok = await cdp.wait_for("document.body.innerText.includes('运行中')", 30)
         check("管理页显示运行中", ok)
         await asyncio.sleep(1.5)
-        survived = await cdp.eval("window.__noReloadMarker === 'alive'")
+        survived = await cdp.evaluate("window.__noReloadMarker === 'alive'")
         check("启动后页面未刷新", survived)
         await cdp.shot("16-manage-running")
 
         # ---- Light theme (visible header, Alucard) ----
-        await cdp.eval("location.hash = '#/overview'")
+        await cdp.evaluate("location.hash = '#/overview'")
         await asyncio.sleep(1.0)
-        clicked = await cdp.eval(f"""
+        clicked = await cdp.evaluate(f"""
             (() => {{
               const header = [...document.querySelectorAll('header')]
                 .find((h) => h.getBoundingClientRect().height > 0 && h.textContent.includes('DracPanel'));
@@ -330,10 +330,10 @@ async def main():
         """)
         check("切换亮色主题", clicked)
         ok = await cdp.wait_for("document.documentElement.dataset.theme === 'light'", 5)
-        check("当前为 Alucard 亮色", ok, await cdp.eval("document.documentElement.dataset.theme"))
+        check("当前为 Alucard 亮色", ok, await cdp.evaluate("document.documentElement.dataset.theme"))
         await asyncio.sleep(0.8)
         await cdp.shot("12-overview-light")
-        await cdp.eval(f"""
+        await cdp.evaluate(f"""
             (() => {{
               const header = [...document.querySelectorAll('header')]
                 .find((h) => h.getBoundingClientRect().height > 0 && h.textContent.includes('DracPanel'));
@@ -347,11 +347,11 @@ async def main():
         # ---- Narrow layout ----
         await cdp.send("Emulation.setDeviceMetricsOverride", {"width": 390, "height": 844, "deviceScaleFactor": 1, "mobile": True})
         await asyncio.sleep(0.8)
-        overflow = await cdp.eval("document.documentElement.scrollWidth <= window.innerWidth + 1")
-        check("窄屏无横向溢出", overflow, await cdp.eval("document.documentElement.scrollWidth + '/' + window.innerWidth"))
+        overflow = await cdp.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
+        check("窄屏无横向溢出", overflow, await cdp.evaluate("document.documentElement.scrollWidth + '/' + window.innerWidth"))
         await cdp.shot("17-overview-mobile")
 
-        errs = await cdp.eval("window.__errs || []")
+        errs = await cdp.evaluate("window.__errs || []")
         check("无 JS 错误", not errs, errs)
 
     print("\n===== SUMMARY 2 =====")

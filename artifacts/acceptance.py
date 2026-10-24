@@ -42,7 +42,7 @@ class CDP:
                     raise RuntimeError(f"{method}: {msg['error']}")
                 return msg.get("result", {})
 
-    async def eval(self, expression, await_promise=True):
+    async def evaluate(self, expression, await_promise=True):
         result = await self.send(
             "Runtime.evaluate",
             {"expression": expression, "awaitPromise": await_promise, "returnByValue": True},
@@ -57,7 +57,7 @@ class CDP:
         end = time.time() + timeout
         while time.time() < end:
             try:
-                if await self.eval(expression):
+                if await self.evaluate(expression):
                     return True
             except Exception:
                 pass
@@ -79,7 +79,7 @@ class CDP:
           return true;
         }})()
         """
-        return await self.eval(script)
+        return await self.evaluate(script)
 
     async def nav(self, label, hash_value, timeout=12):
         clicked = await self.click_text(label)
@@ -135,14 +135,14 @@ async def main():
             " return input.value.length > 0;"
             "})()"
         )
-        filled = await cdp.eval(filled_js)
+        filled = await cdp.evaluate(filled_js)
         check("填入令牌", filled)
         await asyncio.sleep(0.3)
-        clicked = await cdp.eval("(() => { const b = document.querySelector('form button[type=submit]'); if (!b) return false; b.click(); return true; })()")
+        clicked = await cdp.evaluate("(() => { const b = document.querySelector('form button[type=submit]'); if (!b) return false; b.click(); return true; })()")
         check("提交令牌", clicked)
         ok = await cdp.wait_for("[...document.querySelectorAll('button')].some(b => (b.textContent||'').trim() === '概览')", 35)
         if not ok:
-            body = await cdp.eval("document.body.innerText.slice(0, 800)")
+            body = await cdp.evaluate("document.body.innerText.slice(0, 800)")
             print("BODY:", body)
             check("登录进入应用", False)
             raise SystemExit(1)
@@ -150,7 +150,7 @@ async def main():
 
         ok = await cdp.wait_for("document.querySelector('header') && document.body.innerText.includes('运行中')", 20)
         check("顶栏状态为运行中", ok)
-        version = await cdp.eval("""
+        version = await cdp.evaluate("""
             (() => {
               const header = [...document.querySelectorAll('header')].find(h => h.textContent.includes('DracPanel'));
               return header ? header.innerText.replace(/\\s+/g, ' ').slice(0, 200) : '';
@@ -186,7 +186,7 @@ async def main():
             check(f"管理标签 {label}", clicked)
             await asyncio.sleep(1.0 if label != "配置" else 2.0)
             if label == "配置":
-                await cdp.eval("""
+                await cdp.evaluate("""
                     (() => {
                       const scroller = document.querySelector('.cm-scroller');
                       if (scroller) scroller.scrollTop = Math.min(9000, Math.max(0, scroller.scrollHeight - 500));
@@ -197,7 +197,7 @@ async def main():
 
         # Light theme
         await cdp.nav("概览", "#/overview", 15)
-        theme_clicked = await cdp.eval("""
+        theme_clicked = await cdp.evaluate("""
             (() => {
               const header = [...document.querySelectorAll('header')].find(h => h.textContent.includes('DracPanel'));
               if (!header) return false;
@@ -210,10 +210,10 @@ async def main():
         """)
         check("切换亮色主题", theme_clicked)
         await asyncio.sleep(0.8)
-        theme = await cdp.eval("document.documentElement.dataset.theme")
+        theme = await cdp.evaluate("document.documentElement.dataset.theme")
         check("当前为亮色", theme == "light", theme)
         await cdp.shot("12-overview-light")
-        await cdp.eval("""
+        await cdp.evaluate("""
             (() => {
               const header = [...document.querySelectorAll('header')].find(h => h.textContent.includes('DracPanel'));
               const buttons = [...header.querySelectorAll('button')];
@@ -223,12 +223,12 @@ async def main():
         """)
 
         # Mode switching via topbar, verified through Clash API
-        original = await cdp.eval("document.querySelector('header select')?.value || ''")
-        options = await cdp.eval("[...document.querySelectorAll('header select option')].map(o => o.value)")
+        original = await cdp.evaluate("document.querySelector('header select')?.value || ''")
+        options = await cdp.evaluate("[...document.querySelectorAll('header select option')].map(o => o.value)")
         print("MODES:", options, "current:", original)
         check("模式列表含四种自定义模式", all(m in options for m in ["Rule", "Proxy", "RuleAllowAds", "Direct"]), options)
         target = "RuleAllowAds" if original != "RuleAllowAds" else "Proxy"
-        await cdp.eval(f"""
+        await cdp.evaluate(f"""
             (() => {{
               const select = document.querySelector('header select');
               select.value = {json.dumps(target)};
@@ -236,7 +236,7 @@ async def main():
             }})()
         """)
         await asyncio.sleep(1.5)
-        mode = await cdp.eval("""
+        mode = await cdp.evaluate("""
             (async () => {
               const state = await fetch('/api/state', { headers: { 'X-Panel-Token': localStorage.getItem('panel_token') } }).then(r => r.json());
               const config = await fetch('http://127.0.0.1:9090/configs', { headers: { Authorization: 'Bearer ' + state.clash_secret } }).then(r => r.json());
@@ -244,7 +244,7 @@ async def main():
             })()
         """)
         check("模式切换落到 Clash API", mode == target, mode)
-        await cdp.eval(f"""
+        await cdp.evaluate(f"""
             (() => {{
               const select = document.querySelector('header select');
               select.value = {json.dumps(original)};
@@ -271,7 +271,7 @@ async def main():
         check("重载未重新拉取完整配置", not any(u.endswith("/api/config") for u in urls))
         check("重载仍校验 /api/state", any(u.endswith("/api/state") for u in urls))
 
-        errs = await cdp.eval("window.__errs")
+        errs = await cdp.evaluate("window.__errs")
         check("页面无 JS 错误", not errs, errs)
 
     print("\n===== SUMMARY =====")
