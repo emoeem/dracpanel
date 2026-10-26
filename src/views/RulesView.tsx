@@ -529,7 +529,7 @@ export function RulesView() {
           {t("Edit rules")}
         </Button>
       )}
-      <Button variant={editing ? undefined : "primary"} onClick={() => navigate("manage")}>
+      <Button variant={editing ? undefined : "primary"} onClick={() => navigate("system")}>
         {t("Edit config")}
       </Button>
     </>
@@ -540,7 +540,9 @@ export function RulesView() {
       <PageHeader title={t("Rules")} actions={actions} />
       {error !== "" && (
         <div className={styles.errorBox}>
-          <span>{error}</span>
+          {/* Errors are raised as English text; known strings double as
+              translation keys (see GlobalErrorDialog). */}
+          <span>{t(error as MessageKey)}</span>
           <Button size="small" onClick={() => void load()}>
             {t("Retry")}
           </Button>

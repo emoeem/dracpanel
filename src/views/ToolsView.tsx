@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import {
   formatBitrate,
@@ -9,9 +9,7 @@ import {
   proxyDisplayType,
 } from "../api/format";
 import { useStream } from "../api/stream";
-import { useSupportsCapability } from "../app/capabilities";
 import { navigate, useApi } from "../app/context";
-import { useLocalDesktopHost } from "../app/desktop";
 import { useStreamingAction } from "../app/hooks";
 import { useI18n } from "../app/i18n";
 import { Icon } from "../components/Icon";
@@ -23,38 +21,26 @@ import {
   DataLine,
   Dialog,
   Field,
-  MenuItem,
-  MenuLabel,
   NavRow,
   Select,
   Spinner,
   Toggle,
 } from "../components/ui";
 import {
-  ServiceStatus_Type,
   type NetworkQualityTestProgress,
   type STUNTestProgress,
-  type TailscaleEndpointStatus,
 } from "../gen/daemon/started_service_pb";
-import { useTaildropSendSessions } from "../lib/taildropSend";
-import { allPeers, peerDisplayName, peerSSHAvailable } from "../lib/tailscaleSSH";
-import { useTailscaleSSH } from "./TailscaleSSHConnect";
 
 const NETWORK_QUALITY_DEFAULT_URL = "https://mensura.cdn-apple.com/api/v1/gm/config";
 const STUN_DEFAULT_SERVER = "stun.voipgate.com:3478";
 
 export function ToolsView() {
-  const api = useApi();
   const { t } = useI18n();
-  const serviceStatus = useStream(api.serviceStatus);
-  const started = serviceStatus.data.status?.status === ServiceStatus_Type.STARTED;
 
   return (
     <div className="page">
       <PageHeader title={t("Tools")} />
       <div className="settings-stack">
-        {started && <EndpointRows />}
-        {started && <UsbipServerRows />}
         <div>
           <div className="list-section-title">{t("Network")}</div>
           <div className="nav-list">
@@ -64,7 +50,6 @@ export function ToolsView() {
               onClick={() => navigate("tools/network-quality")}
             />
             <NavRow icon="swap_horiz" title={t("STUN Test")} onClick={() => navigate("tools/stun")} />
-            <NavRow icon="dns" title={t("DNS Tools")} onClick={() => navigate("tools/dns")} />
             <NavRow
               icon="network_check"
               title={t("Connectivity Test")}
@@ -72,241 +57,6 @@ export function ToolsView() {
             />
           </div>
         </div>
-        <DebugRows />
-      </div>
-    </div>
-  );
-}
-
-function DebugRows() {
-  const host = useLocalDesktopHost();
-  const { t } = useI18n();
-  const [crashUnreadCount, setCrashUnreadCount] = useState(0);
-  const [oomUnreadCount, setOOMUnreadCount] = useState(0);
-  const [powerUnreadCount, setPowerUnreadCount] = useState(0);
-
-  useEffect(() => {
-    if (host === null) {
-      return;
-    }
-    let stale = false;
-    host.reports.crash
-      .list()
-      .then((reports) => {
-        if (!stale) {
-          setCrashUnreadCount(reports.filter((report) => !report.isRead).length);
-        }
-      })
-      .catch(() => {});
-    host.reports.oom
-      .list()
-      .then((reports) => {
-        if (!stale) {
-          setOOMUnreadCount(reports.filter((report) => !report.isRead).length);
-        }
-      })
-      .catch(() => {});
-    host.reports.power
-      .list()
-      .then((reports) => {
-        if (!stale) {
-          setPowerUnreadCount(reports.filter((report) => !report.isRead).length);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      stale = true;
-    };
-  }, [host]);
-
-  if (host === null) {
-    return null;
-  }
-  return (
-    <div>
-      <div className="list-section-title">{t("Debug")}</div>
-      <div className="nav-list">
-        <NavRow
-          icon="bug_report"
-          title={t("Crash Report")}
-          detail={crashUnreadCount > 0 ? crashUnreadCount : undefined}
-          onClick={() => navigate("tools/crash-reports")}
-        />
-        <NavRow
-          icon="memory"
-          title={t("OOM Report")}
-          detail={oomUnreadCount > 0 ? oomUnreadCount : undefined}
-          onClick={() => navigate("tools/oom-reports")}
-        />
-        <NavRow
-          icon="bolt"
-          title={t("Power Report")}
-          detail={powerUnreadCount > 0 ? powerUnreadCount : undefined}
-          onClick={() => navigate("tools/power-reports")}
-        />
-      </div>
-    </div>
-  );
-}
-
-function EndpointRows() {
-  const api = useApi();
-  const { t } = useI18n();
-  const tailscale = useStream(api.tailscale);
-  const supportsVPN = useSupportsCapability("openVpnAndOpenConnect");
-  const endpoints = tailscale.data.loaded ? tailscale.data.endpoints : [];
-  const tailscaleRows = endpoints.map((endpoint) => (
-    <TailscaleEndpointRow
-      key={`tailscale/${endpoint.endpointTag}`}
-      endpoint={endpoint}
-      title={
-        endpoints.length > 1 && endpoint.endpointTag !== ""
-          ? t("Tailscale: {tag}", { tag: endpoint.endpointTag })
-          : "Tailscale"
-      }
-    />
-  ));
-  if (!supportsVPN) {
-    return <EndpointsSection rows={tailscaleRows} />;
-  }
-  return <OpenVPNAndOpenConnectEndpointRows tailscaleRows={tailscaleRows} />;
-}
-
-function OpenVPNAndOpenConnectEndpointRows(props: { tailscaleRows: ReactNode[] }) {
-  const api = useApi();
-  const openConnect = useStream(api.openConnect);
-  const openVPN = useStream(api.openVPN);
-  const rows = [
-    ...props.tailscaleRows,
-    ...openConnect.data.endpoints.map((endpoint) => (
-      <OpenConnectEndpointRow
-        key={`openconnect/${endpoint.endpointTag}`}
-        tag={endpoint.endpointTag}
-        showTag={openConnect.data.endpoints.length > 1}
-      />
-    )),
-    ...openVPN.data.endpoints.map((endpoint) => (
-      <OpenVPNEndpointRow
-        key={`openvpn/${endpoint.endpointTag}`}
-        tag={endpoint.endpointTag}
-        showTag={openVPN.data.endpoints.length > 1}
-      />
-    )),
-  ];
-  return <EndpointsSection rows={rows} />;
-}
-
-function EndpointsSection(props: { rows: ReactNode[] }) {
-  const { t } = useI18n();
-  if (props.rows.length === 0) {
-    return null;
-  }
-  return (
-    <div>
-      <div className="list-section-title">{t("Endpoints")}</div>
-      <div className="nav-list">{props.rows}</div>
-    </div>
-  );
-}
-
-function OpenConnectEndpointRow(props: { tag: string; showTag: boolean }) {
-  return (
-    <NavRow
-      icon="route"
-      title={props.showTag && props.tag !== "" ? `OpenConnect: ${props.tag}` : "OpenConnect"}
-      onClick={() => navigate(`tools/openconnect/${encodeURIComponent(props.tag)}`)}
-    />
-  );
-}
-
-function OpenVPNEndpointRow(props: { tag: string; showTag: boolean }) {
-  return (
-    <NavRow
-      icon="route"
-      title={props.showTag && props.tag !== "" ? `OpenVPN: ${props.tag}` : "OpenVPN"}
-      onClick={() => navigate(`tools/openvpn/${encodeURIComponent(props.tag)}`)}
-    />
-  );
-}
-
-function TailscaleEndpointRow(props: { endpoint: TailscaleEndpointStatus; title: string }) {
-  const api = useApi();
-  const { t } = useI18n();
-  const ssh = useTailscaleSSH(props.endpoint.endpointTag);
-  const sshPeers = allPeers(props.endpoint).filter(peerSSHAvailable);
-  const supportsTaildrop = useSupportsCapability("taildrop");
-  const unreadCount = supportsTaildrop ? props.endpoint.unreadFileCount : 0;
-  const hasFailedSend = useTaildropSendSessions(api, props.endpoint.endpointTag).some(
-    (session) => session.error !== "",
-  );
-
-  let connectMenu: ReactNode;
-  if (sshPeers.length === 1) {
-    connectMenu = (
-      <MenuItem icon="terminal" onSelect={() => ssh.connect(sshPeers[0])}>
-        {t("Connect via SSH")}
-      </MenuItem>
-    );
-  } else if (sshPeers.length > 1) {
-    connectMenu = (
-      <>
-        <MenuLabel>{t("Connect via SSH")}</MenuLabel>
-        {sshPeers.map((peer) => (
-          <MenuItem key={peer.stableID} onSelect={() => ssh.connect(peer)}>
-            {peerDisplayName(peer)}
-          </MenuItem>
-        ))}
-      </>
-    );
-  }
-
-  return (
-    <>
-      <NavRow
-        icon="hub"
-        title={props.title}
-        detail={
-          hasFailedSend ? (
-            <Badge tone="danger">!</Badge>
-          ) : unreadCount > 0 ? (
-            <Badge tone="accent">{unreadCount}</Badge>
-          ) : undefined
-        }
-        onClick={() =>
-          navigate(`tools/tailscale/${encodeURIComponent(props.endpoint.endpointTag)}`)
-        }
-        contextMenu={connectMenu}
-      />
-      {ssh.element}
-    </>
-  );
-}
-
-function UsbipServerRows() {
-  const api = useApi();
-  const { t } = useI18n();
-  const usbip = useStream(api.usbip);
-  const supported = useSupportsCapability("usbip");
-  const servers = usbip.data.servers;
-  if (!supported || !usbip.data.loaded || servers.length === 0) {
-    return null;
-  }
-  return (
-    <div>
-      <div className="list-section-title">{t("Services")}</div>
-      <div className="nav-list">
-        {servers.map((server) => (
-          <NavRow
-            key={server.serverTag}
-            icon="usb"
-            title={
-              servers.length > 1 && server.serverTag !== ""
-                ? t("USB/IP: {tag}", { tag: server.serverTag })
-                : "USB/IP"
-            }
-            onClick={() => navigate(`tools/usbip/${encodeURIComponent(server.serverTag)}`)}
-          />
-        ))}
       </div>
     </div>
   );
@@ -415,10 +165,6 @@ function AccuracyBadge(props: { accuracy: number }) {
 export function NetworkQualityView() {
   const api = useApi();
   const { t } = useI18n();
-  const host = useLocalDesktopHost();
-  const serviceStatus = useStream(api.serviceStatus);
-  const started = serviceStatus.data.status?.status === ServiceStatus_Type.STARTED;
-  const standalone = host !== null && !started;
   const [configURL, setConfigURL] = useState(NETWORK_QUALITY_DEFAULT_URL);
   const [outboundTag, setOutboundTag] = useState("");
   const [serial, setSerial] = useState(false);
@@ -427,31 +173,19 @@ export function NetworkQualityView() {
   const [progress, setProgress] = useState<NetworkQualityTestProgress | null>(null);
   const { running, error, reportError, start: startAction, stop } = useStreamingAction();
 
-  useEffect(() => {
-    if (standalone) {
-      setOutboundTag("");
-    }
-  }, [standalone]);
-
   const start = () =>
     startAction(async (signal) => {
       setProgress(null);
-      const updates =
-        host !== null && !started
-          ? host.tools.startStandaloneNetworkQualityTest(
-              { configURL, serial, http3, maxRuntimeSeconds: maxRuntime },
-              { signal },
-            )
-          : api.client.startNetworkQualityTest(
-              {
-                configURL,
-                outboundTag,
-                serial,
-                http3,
-                maxRuntimeSeconds: maxRuntime,
-              },
-              { signal },
-            );
+      const updates = api.client.startNetworkQualityTest(
+        {
+          configURL,
+          outboundTag,
+          serial,
+          http3,
+          maxRuntimeSeconds: maxRuntime,
+        },
+        { signal },
+      );
       for await (const update of updates) {
         setProgress(update);
         if (update.error !== "") {
@@ -476,9 +210,7 @@ export function NetworkQualityView() {
               disabled={running}
             />
           </Field>
-          {!standalone && (
-            <OutboundPicker value={outboundTag} onChange={setOutboundTag} disabled={running} />
-          )}
+          <OutboundPicker value={outboundTag} onChange={setOutboundTag} disabled={running} />
           <Field label={t("Max runtime")}>
             <Select
               options={[20, 30, 60].map((count) => ({
@@ -591,28 +323,15 @@ function ResultValue(props: { pending: boolean; value: string; badge: React.Reac
 export function STUNTestView() {
   const api = useApi();
   const { t } = useI18n();
-  const host = useLocalDesktopHost();
-  const serviceStatus = useStream(api.serviceStatus);
-  const started = serviceStatus.data.status?.status === ServiceStatus_Type.STARTED;
-  const standalone = host !== null && !started;
   const [server, setServer] = useState(STUN_DEFAULT_SERVER);
   const [outboundTag, setOutboundTag] = useState("");
   const [progress, setProgress] = useState<STUNTestProgress | null>(null);
   const { running, error, reportError, start: startAction, stop } = useStreamingAction();
 
-  useEffect(() => {
-    if (standalone) {
-      setOutboundTag("");
-    }
-  }, [standalone]);
-
   const start = () =>
     startAction(async (signal) => {
       setProgress(null);
-      const updates =
-        host !== null && !started
-          ? host.tools.startStandaloneSTUNTest({ server }, { signal })
-          : api.client.startSTUNTest({ server, outboundTag }, { signal });
+      const updates = api.client.startSTUNTest({ server, outboundTag }, { signal });
       for await (const update of updates) {
         setProgress(update);
         if (update.error !== "") {
@@ -634,9 +353,7 @@ export function STUNTestView() {
               disabled={running}
             />
           </Field>
-          {!standalone && (
-            <OutboundPicker value={outboundTag} onChange={setOutboundTag} disabled={running} />
-          )}
+          <OutboundPicker value={outboundTag} onChange={setOutboundTag} disabled={running} />
           <div className="row-actions" style={{ marginTop: 10 }}>
             {running ? (
               <Button variant="danger" onClick={stop}>

@@ -20,6 +20,16 @@ All screenshots were taken against the live stack:
 - Clash API: `http://127.0.0.1:9090/` (zashboard fallback)
 - sing-box: `v1.14.3-reF1nd`
 
+## FlClash redesign screenshots (2026-10-27, `flclash/`)
+
+Captured from the Vite dev server against an **isolated test sing-box
+instance** (dedicated ports 9190/9191/9192, direct-only outbounds, no real
+traffic beyond the two probe requests visible in `requests-*`). Covers the
+new information architecture, the flclash palette (dark/light/AMOLED) and
+four viewports: 1920×1080, 1440×900, 768×1024, 390×844. These are working
+acceptance captures for the 2026-10 FlClash-style redesign; see the project
+README for the feature list.
+
 ## Screenshots
 
 | File | Page | Notes |

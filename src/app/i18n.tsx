@@ -109,7 +109,7 @@ export function I18nProvider(props: { children: ReactNode }) {
 export function LanguageSelect() {
   const { t, preference, setPreference } = useI18n();
   const options: { value: LanguagePreference; label: string }[] = [
-    { value: "auto", label: t("System") },
+    { value: "auto", label: t("Follow system") },
     ...LANGUAGES.map((language) => ({ value: language.value, label: language.label })),
   ];
   return <Select inline options={options} value={preference} onChange={setPreference} />;

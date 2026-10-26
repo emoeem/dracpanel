@@ -47,7 +47,7 @@ function ErrorFallback(props: { error: Error; onReset: () => void }) {
         <Button
           onClick={() => {
             props.onReset();
-            navigate("overview");
+            navigate("dashboard");
           }}
         >
           {t("Go to Overview")}

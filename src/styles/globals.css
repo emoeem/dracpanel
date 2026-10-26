@@ -6,6 +6,16 @@
   font-display: swap;
 }
 
+/*
+ * Design tokens.
+ *
+ * Two palettes ship: "flclash" (default; neutral Material-You-style surfaces
+ * aligned with the FlClash dashboard, dark + light + AMOLED) and "dracula"
+ * (the original Dracula/Alucard scheme). The html element carries
+ * data-palette, data-theme (resolved from "auto") and, for the pure-black
+ * dark variant, data-amoled.
+ */
+
 :root {
   /* Resolved scheme for the UA: iOS Safari tints its chrome (status bar,
      toolbars) from this plus the canvas background, not from theme-color. */
@@ -15,56 +25,54 @@
   --font-serif: "Source Serif 4 Variable", "Apple Color Emoji", "Noto Color Emoji", ui-serif, georgia, serif;
   --font-mono: "IBM Plex Mono", "Apple Color Emoji", "Noto Color Emoji", ui-monospace, "SF Mono", menlo, consolas, monospace;
 
-  /* Alucard (official Dracula light variant) */
-  --bg: #fffbeb;
-  --surface: #f3eddd;
-  --card: #fffdf6;
-  --inset: #f3eddd;
-  --text: #1f1f1f;
-  --text-secondary: #6c664b;
+  /* FlClash light: warm-neutral Material surfaces. */
+  --bg: #f2f2f0;
+  --surface: #fafaf8;
+  --card: #fff;
+  --inset: #e9e9e6;
+  --text: #1b1b1d;
+  --text-secondary: #565660;
 
-  /* Darkened from #8d866e: at 3.51:1 against --bg the old value failed WCAG
-     AA (4.5:1) for the many small hint/label texts using this token. */
-  --text-faint: #7a7358;
-  --border: rgb(31 31 31 / 10%);
-  --border-strong: rgb(31 31 31 / 20%);
-  --hover: rgb(31 31 31 / 5%);
+  /* 4.56:1 against --bg; WCAG AA for the small hint/label texts using it. */
+  --text-faint: #6e6e78;
+  --border: rgb(27 27 29 / 10%);
+  --border-strong: rgb(27 27 29 / 21%);
+  --hover: rgb(27 27 29 / 5%);
 
-  --accent: #644ac9;
-  --accent-strong: #5038a8;
-  --accent-soft: rgb(100 74 201 / 14%);
-  --on-accent: #fffbeb;
+  /* Accent tokens come from the [data-accent=...] blocks below (per-palette
+     "default" + shared presets), never from the palette base blocks: base
+     blocks outrank shared presets, so a fallback here would freeze the accent. */
 
-  --good: #14710a;
-  --good-soft: rgb(20 113 10 / 13%);
-  --medium: #846e15;
-  --medium-soft: rgb(132 110 21 / 14%);
-  --bad: #a34d14;
-  --bad-soft: rgb(163 77 20 / 14%);
-  --danger: #cb3a2a;
-  --danger-soft: rgb(203 58 42 / 12%);
-  --info: #036a96;
-  --info-soft: rgb(3 106 150 / 12%);
-  --neutral-soft: rgb(31 31 31 / 7%);
+  --good: #1d7a35;
+  --good-soft: rgb(29 122 53 / 13%);
+  --medium: #8a6d14;
+  --medium-soft: rgb(138 109 20 / 14%);
+  --bad: #a05c10;
+  --bad-soft: rgb(160 92 16 / 14%);
+  --danger: #cb3527;
+  --danger-soft: rgb(203 53 39 / 12%);
+  --info: #0b6aa8;
+  --info-soft: rgb(11 106 168 / 12%);
+  --neutral-soft: rgb(27 27 29 / 7%);
 
-  --highlight: #cfcfde;
+  --highlight: #d9d9d4;
 
-  --scrim: rgb(31 31 31 / 32%);
+  --scrim: rgb(27 27 29 / 32%);
   --window-controls-surface: var(--surface);
   --window-controls-text: var(--text);
   --bright: #fff;
-  --terminal-bg: #1f1f1f;
+  --terminal-bg: #1b1b1d;
 
   --scrollbar-size: 7px;
-  --scrollbar-thumb: rgb(31 31 31 / 22%);
-  --scrollbar-thumb-hover: rgb(31 31 31 / 38%);
+  --scrollbar-thumb: rgb(27 27 29 / 22%);
+  --scrollbar-thumb-hover: rgb(27 27 29 / 38%);
   --scrollbar-thumb-on-dark: rgb(255 255 255 / 22%);
   --scrollbar-thumb-hover-on-dark: rgb(255 255 255 / 38%);
 
-  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236c664b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23565660' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 
-  --shadow-card: 0 1px 2px rgb(31 31 31 / 5%), 0 4px 16px rgb(31 31 31 / 4%);
-  --shadow-card-hover: 0 2px 4px rgb(31 31 31 / 6%), 0 10px 28px rgb(31 31 31 / 9%);
+  --shadow-card: 0 1px 2px rgb(27 27 29 / 5%), 0 4px 16px rgb(27 27 29 / 4%);
+  --shadow-card-hover: 0 2px 4px rgb(27 27 29 / 6%), 0 10px 28px rgb(27 27 29 / 9%);
   --shadow-control: 0 1px 2px rgb(0 0 0 / 4%);
   --shadow-overlay: 0 12px 48px rgb(0 0 0 / 22%);
   --radius-xs: 4px;
@@ -125,11 +133,85 @@
   --z-scrim: 400;
   --z-topbar: 410;
   --z-drawer: 500;
-  --z-terminal-overlay: 600;
-  --z-terminal-bar: 610;
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
+
+  /* FlClash dark: the reference dashboard's near-black neutral surfaces. */
+  --bg: #121214;
+  --surface: #1a1a1d;
+  --card: #212124;
+  --inset: #0d0d0f;
+  --text: #f3f3f4;
+  --text-secondary: #c0c0c7;
+
+  /* 5.7:1 against --bg; WCAG AA for hint/label text. */
+  --text-faint: #8e8e99;
+  --border: rgb(243 243 244 / 9%);
+  --border-strong: rgb(243 243 244 / 21%);
+  --hover: rgb(243 243 244 / 6%);
+
+  --good: #58c76f;
+  --good-soft: rgb(88 199 111 / 14%);
+  --medium: #e3c052;
+  --medium-soft: rgb(227 192 82 / 15%);
+  --bad: #eda23f;
+  --bad-soft: rgb(237 162 63 / 15%);
+  --danger: #f4594d;
+  --danger-soft: rgb(244 89 77 / 16%);
+  --info: #64b5f6;
+  --info-soft: rgb(100 181 246 / 15%);
+  --neutral-soft: rgb(243 243 244 / 8%);
+
+  --highlight: #333338;
+
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238e8e99' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 25%), 0 4px 16px rgb(0 0 0 / 18%);
+  --shadow-card-hover: 0 2px 4px rgb(0 0 0 / 30%), 0 10px 28px rgb(0 0 0 / 35%);
+  --shadow-control: 0 1px 2px rgb(0 0 0 / 18%);
+  --shadow-overlay: 0 12px 48px rgb(0 0 0 / 60%);
+
+  --scrollbar-thumb: var(--scrollbar-thumb-on-dark);
+  --scrollbar-thumb-hover: var(--scrollbar-thumb-hover-on-dark);
+}
+
+/* Dracula palette: the original scheme, kept as a selectable alternative. */
+:root[data-palette="dracula"] {
+  /* Alucard (official Dracula light variant) */
+  --bg: #fffbeb;
+  --surface: #f3eddd;
+  --card: #fffdf6;
+  --inset: #f3eddd;
+  --text: #1f1f1f;
+  --text-secondary: #6c664b;
+
+  /* Darkened from #8d866e: at 3.51:1 against --bg the old value failed WCAG
+     AA (4.5:1) for the many small hint/label texts using this token. */
+  --text-faint: #7a7358;
+  --border: rgb(31 31 31 / 10%);
+  --border-strong: rgb(31 31 31 / 20%);
+  --hover: rgb(31 31 31 / 5%);
+
+  --good: #14710a;
+  --good-soft: rgb(20 113 10 / 13%);
+  --medium: #846e15;
+  --medium-soft: rgb(132 110 21 / 14%);
+  --bad: #a34d14;
+  --bad-soft: rgb(163 77 20 / 14%);
+  --danger: #cb3a2a;
+  --danger-soft: rgb(203 58 42 / 12%);
+  --info: #036a96;
+  --info-soft: rgb(3 106 150 / 12%);
+  --neutral-soft: rgb(31 31 31 / 7%);
+
+  --highlight: #cfcfde;
+
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236c664b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+[data-theme="dark"][data-palette="dracula"] {
   color-scheme: dark;
 
   /* Dracula */
@@ -148,11 +230,6 @@
   --border-strong: rgb(248 248 242 / 22%);
   --hover: rgb(248 248 242 / 7%);
 
-  --accent: #bd93f9;
-  --accent-strong: #d6bcff;
-  --accent-soft: rgb(189 147 249 / 16%);
-  --on-accent: #282a36;
-
   --good: #50fa7b;
   --good-soft: rgb(80 250 123 / 14%);
   --medium: #f1fa8c;
@@ -168,6 +245,72 @@
   --highlight: #44475a;
 
   --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236272a4' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+/* Nord palette: polar-night dark and snow-storm light. */
+:root[data-palette="nord"] {
+  --bg: #dfe5ec;
+  --surface: #eceff4;
+  --card: #f7f9fb;
+  --inset: #d8dee9;
+  --text: #2e3440;
+  --text-secondary: #434c5e;
+
+  /* 4.6:1 against --bg; WCAG AA for hint/label text. */
+  --text-faint: #5b6675;
+  --border: rgb(46 52 64 / 10%);
+  --border-strong: rgb(46 52 64 / 21%);
+  --hover: rgb(46 52 64 / 5%);
+
+  --good: #3f7d52;
+  --good-soft: rgb(63 125 82 / 13%);
+  --medium: #8a6d1f;
+  --medium-soft: rgb(138 109 31 / 14%);
+  --bad: #a4562e;
+  --bad-soft: rgb(164 86 46 / 14%);
+  --danger: #ad3f4c;
+  --danger-soft: rgb(173 63 76 / 12%);
+  --info: #466f95;
+  --info-soft: rgb(70 111 149 / 12%);
+  --neutral-soft: rgb(46 52 64 / 7%);
+
+  --highlight: #d5dbe4;
+
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23434c5e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+[data-theme="dark"][data-palette="nord"] {
+  color-scheme: dark;
+
+  /* Nord dark: deepened polar night for UI contrast. */
+  --bg: #242933;
+  --surface: #2e3440;
+  --card: #353c4a;
+  --inset: #1f242d;
+  --text: #eceff4;
+  --text-secondary: #c7cdd8;
+
+  /* 5.8:1 against --bg; WCAG AA for hint/label text. */
+  --text-faint: #9aa5b6;
+  --border: rgb(236 239 244 / 10%);
+  --border-strong: rgb(236 239 244 / 21%);
+  --hover: rgb(236 239 244 / 6%);
+
+  --good: #a3be8c;
+  --good-soft: rgb(163 190 140 / 14%);
+  --medium: #ebcb8b;
+  --medium-soft: rgb(235 203 139 / 15%);
+  --bad: #d08770;
+  --bad-soft: rgb(208 135 112 / 15%);
+  --danger: #bf616a;
+  --danger-soft: rgb(191 97 106 / 16%);
+  --info: #81a1c1;
+  --info-soft: rgb(129 161 193 / 15%);
+  --neutral-soft: rgb(236 239 244 / 8%);
+
+  --highlight: #434c5e;
+
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa5b6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 
   --shadow-card: 0 1px 2px rgb(0 0 0 / 25%), 0 4px 16px rgb(0 0 0 / 18%);
   --shadow-card-hover: 0 2px 4px rgb(0 0 0 / 30%), 0 10px 28px rgb(0 0 0 / 35%);
@@ -176,6 +319,93 @@
 
   --scrollbar-thumb: var(--scrollbar-thumb-on-dark);
   --scrollbar-thumb-hover: var(--scrollbar-thumb-hover-on-dark);
+}
+
+/* Catppuccin palette: latte light and mocha dark. */
+:root[data-palette="catppuccin"] {
+  --bg: #e6e9ef;
+  --surface: #eff1f5;
+  --card: #fafbfe;
+  --inset: #dce0e8;
+  --text: #4c4f69;
+  --text-secondary: #5c5f77;
+
+  /* 4.8:1 against --bg; WCAG AA for hint/label text. */
+  --text-faint: #666a80;
+  --border: rgb(76 79 105 / 10%);
+  --border-strong: rgb(76 79 105 / 21%);
+  --hover: rgb(76 79 105 / 5%);
+
+  --good: #2f7a26;
+  --good-soft: rgb(47 122 38 / 13%);
+  --medium: #9a6a15;
+  --medium-soft: rgb(154 106 21 / 14%);
+  --bad: #a8541f;
+  --bad-soft: rgb(168 84 31 / 14%);
+  --danger: #d20f39;
+  --danger-soft: rgb(210 15 57 / 12%);
+  --info: #1e66f5;
+  --info-soft: rgb(30 102 245 / 12%);
+  --neutral-soft: rgb(76 79 105 / 7%);
+
+  --highlight: #d5dae4;
+
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235c5f77' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+[data-theme="dark"][data-palette="catppuccin"] {
+  color-scheme: dark;
+
+  /* Catppuccin mocha: mantle background, base surfaces, crust insets. */
+  --bg: #181825;
+  --surface: #1e1e2e;
+  --card: #242440;
+  --inset: #11111b;
+  --text: #cdd6f4;
+  --text-secondary: #a6adc8;
+
+  /* 6.4:1 against --bg; WCAG AA for hint/label text. */
+  --text-faint: #9399b2;
+  --border: rgb(205 214 244 / 9%);
+  --border-strong: rgb(205 214 244 / 21%);
+  --hover: rgb(205 214 244 / 6%);
+
+  --good: #a6e3a1;
+  --good-soft: rgb(166 227 161 / 14%);
+  --medium: #f9e2af;
+  --medium-soft: rgb(249 226 175 / 15%);
+  --bad: #fab387;
+  --bad-soft: rgb(250 179 135 / 15%);
+  --danger: #f38ba8;
+  --danger-soft: rgb(243 139 168 / 16%);
+  --info: #89b4fa;
+  --info-soft: rgb(137 180 250 / 15%);
+  --neutral-soft: rgb(205 214 244 / 8%);
+
+  --highlight: #313244;
+
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239399b2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 25%), 0 4px 16px rgb(0 0 0 / 18%);
+  --shadow-card-hover: 0 2px 4px rgb(0 0 0 / 30%), 0 10px 28px rgb(0 0 0 / 35%);
+  --shadow-control: 0 1px 2px rgb(0 0 0 / 18%);
+  --shadow-overlay: 0 12px 48px rgb(0 0 0 / 60%);
+
+  --scrollbar-thumb: var(--scrollbar-thumb-on-dark);
+  --scrollbar-thumb-hover: var(--scrollbar-thumb-hover-on-dark);
+}
+
+/* AMOLED: pure-black variant of any dark palette (FlClash "pure black").
+   Declared after the palette blocks so it wins the equal-specificity tie. */
+:root[data-theme="dark"][data-amoled="true"] {
+  --bg: #000;
+  --surface: #0b0b0c;
+  --card: #131315;
+  --inset: #000;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow-card-hover: 0 2px 4px rgb(0 0 0 / 45%), 0 10px 28px rgb(0 0 0 / 45%);
+  --shadow-control: 0 1px 2px rgb(0 0 0 / 30%);
 }
 
 @property --window-controls-surface {
@@ -204,13 +434,69 @@
   --window-controls-text: var(--text);
 }
 
-[data-accent="default"] {
+/* Accent presets — FlClash palette (iOS-style seeds; "default" is the
+   reference dashboard's orange). */
+
+/* Per-palette default accents. Every palette must define both variants:
+   pre-paint sets data-accent="default" whenever nothing is stored. */
+[data-palette="flclash"][data-accent="default"] {
+  --accent: #d97316;
+  --accent-strong: #b85c06;
+  --accent-soft: rgb(217 115 22 / 13%);
+  --on-accent: #fff;
+}
+
+[data-palette="flclash"][data-theme="dark"][data-accent="default"] {
+  --accent: #f79b3c;
+  --accent-strong: #fdb96e;
+  --accent-soft: rgb(247 155 60 / 16%);
+  --on-accent: #1a1a1a;
+}
+
+[data-palette="dracula"][data-accent="default"] {
   --accent: #644ac9;
   --accent-strong: #5038a8;
   --accent-soft: rgb(100 74 201 / 14%);
   --on-accent: #fffbeb;
 }
 
+[data-palette="dracula"][data-theme="dark"][data-accent="default"] {
+  --accent: #bd93f9;
+  --accent-strong: #d6bcff;
+  --accent-soft: rgb(189 147 249 / 16%);
+  --on-accent: #282a36;
+}
+
+[data-palette="nord"][data-accent="default"] {
+  --accent: #5e81ac;
+  --accent-strong: #4c6a90;
+  --accent-soft: rgb(94 129 172 / 13%);
+  --on-accent: #fff;
+}
+
+[data-palette="nord"][data-theme="dark"][data-accent="default"] {
+  --accent: #88c0d0;
+  --accent-strong: #a5d2df;
+  --accent-soft: rgb(136 192 208 / 16%);
+  --on-accent: #1a1a1a;
+}
+
+[data-palette="catppuccin"][data-accent="default"] {
+  --accent: #7287fd;
+  --accent-strong: #5f73dd;
+  --accent-soft: rgb(114 135 253 / 13%);
+  --on-accent: #fff;
+}
+
+[data-palette="catppuccin"][data-theme="dark"][data-accent="default"] {
+  --accent: #b4befe;
+  --accent-strong: #c9d2ff;
+  --accent-soft: rgb(180 190 254 / 16%);
+  --on-accent: #1a1a1a;
+}
+
+/* Shared accent presets (iOS-style seeds). These apply to every palette;
+   per-palette "default" blocks above win on specificity when selected. */
 [data-accent="blue"] {
   --accent: #007aff;
   --accent-strong: #0064d2;
@@ -219,136 +505,119 @@
 }
 
 [data-accent="purple"] {
-  --accent: #644ac9;
-  --accent-strong: #5038a8;
-  --accent-soft: rgb(100 74 201 / 14%);
-  --on-accent: #fffbeb;
+  --accent: #b422c9;
+  --accent-strong: #9712a9;
+  --accent-soft: rgb(180 34 201 / 12%);
+  --on-accent: #fff;
 }
 
 [data-accent="pink"] {
-  --accent: #f74f9e;
-  --accent-strong: #d63486;
-  --accent-soft: rgb(247 79 158 / 13%);
+  --accent: #e02449;
+  --accent-strong: #c01436;
+  --accent-soft: rgb(224 36 73 / 12%);
   --on-accent: #fff;
 }
 
 [data-accent="red"] {
-  --accent: #ff5257;
-  --accent-strong: #e03237;
-  --accent-soft: rgb(255 82 87 / 13%);
+  --accent: #e63236;
+  --accent-strong: #c81d21;
+  --accent-soft: rgb(230 50 54 / 12%);
   --on-accent: #fff;
 }
 
 [data-accent="orange"] {
-  --accent: #f7821b;
-  --accent-strong: #d56c0c;
-  --accent-soft: rgb(247 130 27 / 13%);
+  --accent: #d97316;
+  --accent-strong: #b85c06;
+  --accent-soft: rgb(217 115 22 / 13%);
   --on-accent: #fff;
 }
 
 [data-accent="yellow"] {
-  --accent: #ffc600;
-  --accent-strong: #cc9e00;
-  --accent-soft: rgb(255 198 0 / 16%);
+  --accent: #cf9200;
+  --accent-strong: #a97400;
+  --accent-soft: rgb(207 146 0 / 15%);
   --on-accent: #1a1a1a;
 }
 
 [data-accent="green"] {
-  --accent: #62ba46;
-  --accent-strong: #4f9d37;
-  --accent-soft: rgb(98 186 70 / 13%);
+  --accent: #2e9e4d;
+  --accent-strong: #1f8238;
+  --accent-soft: rgb(46 158 77 / 13%);
   --on-accent: #fff;
 }
 
 [data-accent="graphite"] {
-  --accent: #8c8c8c;
-  --accent-strong: #6e6e6e;
-  --accent-soft: rgb(140 140 140 / 15%);
+  --accent: #767680;
+  --accent-strong: #5c5c66;
+  --accent-soft: rgb(118 118 128 / 15%);
   --on-accent: #fff;
 }
 
-[data-theme="dark"][data-accent="default"],
-[data-theme="dark"] [data-accent="default"] {
-  --accent: #bd93f9;
-  --accent-strong: #d6bcff;
-  --accent-soft: rgb(189 147 249 / 16%);
-  --on-accent: #282a36;
-}
-
-[data-theme="dark"][data-accent="blue"],
-[data-theme="dark"] [data-accent="blue"] {
+[data-theme="dark"][data-accent="blue"] {
   --accent: #0a84ff;
-  --accent-strong: #4ba3ff;
-  --accent-soft: rgb(10 132 255 / 18%);
+  --accent-strong: #6cb5ff;
+  --accent-soft: rgb(10 132 255 / 20%);
   --on-accent: #fff;
 }
 
-[data-theme="dark"][data-accent="purple"],
-[data-theme="dark"] [data-accent="purple"] {
-  --accent: #bd93f9;
-  --accent-strong: #d6bcff;
-  --accent-soft: rgb(189 147 249 / 16%);
-  --on-accent: #282a36;
-}
-
-[data-theme="dark"][data-accent="pink"],
-[data-theme="dark"] [data-accent="pink"] {
-  --accent: #f765aa;
-  --accent-strong: #fa8cc0;
-  --accent-soft: rgb(247 101 170 / 18%);
-  --on-accent: #fff;
-}
-
-[data-theme="dark"][data-accent="red"],
-[data-theme="dark"] [data-accent="red"] {
-  --accent: #ff5c61;
-  --accent-strong: #ff8589;
-  --accent-soft: rgb(255 92 97 / 18%);
-  --on-accent: #fff;
-}
-
-[data-theme="dark"][data-accent="orange"],
-[data-theme="dark"] [data-accent="orange"] {
-  --accent: #f78f33;
-  --accent-strong: #faa75f;
-  --accent-soft: rgb(247 143 51 / 18%);
-  --on-accent: #fff;
-}
-
-[data-theme="dark"][data-accent="yellow"],
-[data-theme="dark"] [data-accent="yellow"] {
-  --accent: #ffcc2e;
-  --accent-strong: #ffd95c;
-  --accent-soft: rgb(255 204 46 / 18%);
+[data-theme="dark"][data-accent="purple"] {
+  --accent: #d873ec;
+  --accent-strong: #e79ff6;
+  --accent-soft: rgb(216 115 236 / 18%);
   --on-accent: #1a1a1a;
 }
 
-[data-theme="dark"][data-accent="green"],
-[data-theme="dark"] [data-accent="green"] {
-  --accent: #6fc452;
-  --accent-strong: #90d277;
-  --accent-soft: rgb(111 196 82 / 18%);
+[data-theme="dark"][data-accent="pink"] {
+  --accent: #ff5c7f;
+  --accent-strong: #ff8ba6;
+  --accent-soft: rgb(255 92 127 / 18%);
   --on-accent: #1a1a1a;
 }
 
-[data-theme="dark"][data-accent="graphite"],
-[data-theme="dark"] [data-accent="graphite"] {
+[data-theme="dark"][data-accent="red"] {
+  --accent: #ff5c5f;
+  --accent-strong: #ff8b8d;
+  --accent-soft: rgb(255 92 95 / 18%);
+  --on-accent: #1a1a1a;
+}
+
+[data-theme="dark"][data-accent="orange"] {
+  --accent: #f79b3c;
+  --accent-strong: #fdb96e;
+  --accent-soft: rgb(247 155 60 / 16%);
+  --on-accent: #1a1a1a;
+}
+
+[data-theme="dark"][data-accent="yellow"] {
+  --accent: #ffd60a;
+  --accent-strong: #ffe45c;
+  --accent-soft: rgb(255 214 10 / 18%);
+  --on-accent: #1a1a1a;
+}
+
+[data-theme="dark"][data-accent="green"] {
+  --accent: #47d16b;
+  --accent-strong: #74e191;
+  --accent-soft: rgb(71 209 107 / 18%);
+  --on-accent: #1a1a1a;
+}
+
+[data-theme="dark"][data-accent="graphite"] {
   --accent: #98989d;
   --accent-strong: #b4b4b8;
   --accent-soft: rgb(152 152 157 / 18%);
-  --on-accent: #fff;
+  --on-accent: #1a1a1a;
 }
 
 [data-accent="custom"] {
   --accent: var(--custom-accent);
-  --accent-strong: color-mix(in srgb, var(--custom-accent), #000 18%);
-  --accent-soft: color-mix(in srgb, var(--custom-accent), transparent 86%);
+  --accent-strong: var(--custom-accent-strong, color-mix(in srgb, var(--custom-accent), #000 18%));
+  --accent-soft: var(--custom-accent-soft, color-mix(in srgb, var(--custom-accent), transparent 86%));
 }
 
-[data-theme="dark"][data-accent="custom"],
-[data-theme="dark"] [data-accent="custom"] {
-  --accent-strong: color-mix(in srgb, var(--custom-accent), #fff 25%);
-  --accent-soft: color-mix(in srgb, var(--custom-accent), transparent 82%);
+[data-theme="dark"][data-accent="custom"] {
+  --accent-strong: var(--custom-accent-strong, color-mix(in srgb, var(--custom-accent), #fff 25%));
+  --accent-soft: var(--custom-accent-soft, color-mix(in srgb, var(--custom-accent), transparent 82%));
 }
 
 * {

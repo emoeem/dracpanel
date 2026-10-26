@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
 import type { DaemonApi } from "../api/daemon";
+import { deriveAccentScale } from "../lib/tonalPalette";
 import { loadStoredString, removeStoredValue, saveStoredString } from "../lib/storage";
 import { useLatestRef } from "./useLatest";
 
@@ -63,6 +64,9 @@ export function useNavigationGuard(active: boolean, onBlock: NavigationGuard) {
 /** Matches the CSS drawer breakpoint (tablets and phones get the drawer). */
 const MOBILE_QUERY = "(max-width: 900px)";
 
+/** Phone breakpoint: the drawer gives way to the bottom navigation bar. */
+const PHONE_QUERY = "(max-width: 600px)";
+
 export function useIsMobile(): boolean {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia(MOBILE_QUERY).matches);
   useEffect(() => {
@@ -74,6 +78,17 @@ export function useIsMobile(): boolean {
   return isMobile;
 }
 
+export function useIsPhone(): boolean {
+  const [isPhone, setIsPhone] = useState(() => window.matchMedia(PHONE_QUERY).matches);
+  useEffect(() => {
+    const media = window.matchMedia(PHONE_QUERY);
+    const onChange = () => setIsPhone(media.matches);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+  return isPhone;
+}
+
 export type ThemePreference = "auto" | "light" | "dark";
 
 const THEME_KEY = "theme";
@@ -83,12 +98,46 @@ export function loadThemePreference(): ThemePreference {
   if (value === "light" || value === "dark" || value === "auto") {
     return value;
   }
-  // DracPanel defaults to dark; light is the official Alucard variant.
+  // The panel defaults to dark.
   return "dark";
 }
 
 export function saveThemePreference(preference: ThemePreference) {
   saveStoredString(THEME_KEY, preference);
+}
+
+/** Color scheme family: FlClash-style neutral, or one of the alternates. */
+export type PalettePreference = "flclash" | "dracula" | "nord" | "catppuccin";
+
+const PALETTE_KEY = "palette";
+
+const PALETTE_VALUES: readonly PalettePreference[] = ["flclash", "dracula", "nord", "catppuccin"];
+
+export function isPalettePreference(value: string): value is PalettePreference {
+  return (PALETTE_VALUES as readonly string[]).includes(value);
+}
+
+export function loadPalettePreference(): PalettePreference {
+  const value = loadStoredString(PALETTE_KEY);
+  if (value !== null && isPalettePreference(value)) {
+    return value;
+  }
+  // Migration: a stored theme key marks a pre-palette user, who keeps the
+  // original Dracula look. Fresh installs default to the FlClash palette.
+  return loadStoredString(THEME_KEY) !== null ? "dracula" : "flclash";
+}
+
+export function savePalettePreference(preference: PalettePreference) {
+  saveStoredString(PALETTE_KEY, preference);
+}
+
+/** Pure-black variant of the dark theme (FlClash "pure black"). */
+export function loadAmoledPreference(): boolean {
+  return loadStoredString("amoled") === "true";
+}
+
+export function saveAmoledPreference(enabled: boolean) {
+  saveStoredString("amoled", enabled ? "true" : "false");
 }
 
 export function applyTheme(preference: ThemePreference) {
@@ -175,27 +224,48 @@ export function saveAccentPreference(preference: AccentPreference) {
   }
 }
 
-export function applyAccent(preference: AccentPreference) {
+export function applyAccent(preference: AccentPreference, dark: boolean) {
   const root = document.documentElement;
   if (isAccentPreset(preference)) {
     root.dataset.accent = preference;
     root.style.removeProperty("--custom-accent");
+    root.style.removeProperty("--custom-accent-strong");
+    root.style.removeProperty("--custom-accent-soft");
     root.style.removeProperty("--on-accent");
   } else {
     root.dataset.accent = "custom";
+    const scale = deriveAccentScale(preference, dark);
     root.style.setProperty("--custom-accent", preference);
-    const channel = (index: number) => {
-      const value = parseInt(preference.slice(1 + index * 2, 3 + index * 2), 16) / 255;
-      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-    };
-    const luminance = 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2);
-    root.style.setProperty("--on-accent", luminance > 0.45 ? "#1a1a1a" : "#ffffff");
+    root.style.setProperty("--custom-accent-strong", scale.accentStrong);
+    root.style.setProperty("--custom-accent-soft", scale.accentSoft);
+    root.style.setProperty("--on-accent", scale.onAccent);
   }
 }
 
-export function watchSystemTheme(getPreference: () => ThemePreference): () => void {
+/**
+ * Applies the whole appearance (palette, contrast variant, resolved theme and
+ * accent). One entry point so a system-theme change under "auto" also refreshes
+ * the derived custom-accent tokens.
+ */
+export function applyAppearance(
+  theme: ThemePreference,
+  accent: AccentPreference,
+  palette: PalettePreference = loadPalettePreference(),
+  amoled: boolean = loadAmoledPreference(),
+) {
+  const root = document.documentElement;
+  root.dataset.palette = palette;
+  root.dataset.amoled = amoled ? "true" : "false";
+  const dark =
+    theme === "dark" ||
+    (theme === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  applyTheme(theme);
+  applyAccent(accent, dark);
+}
+
+export function watchSystemTheme(apply: () => void): () => void {
   const media = window.matchMedia("(prefers-color-scheme: dark)");
-  const onChange = () => applyTheme(getPreference());
+  const onChange = () => apply();
   media.addEventListener("change", onChange);
   return () => media.removeEventListener("change", onChange);
 }

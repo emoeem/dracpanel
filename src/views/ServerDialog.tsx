@@ -19,6 +19,8 @@ export function ServerDialog(props: {
   const [name, setName] = useState(props.server?.name ?? "");
   const [url, setUrl] = useState(props.server?.url ?? "");
   const [secret, setSecret] = useState(props.server?.secret ?? "");
+  const [clashUrl, setClashUrl] = useState(props.server?.clashUrl ?? "");
+  const [clashSecret, setClashSecret] = useState(props.server?.clashSecret ?? "");
   const reachability = useServerReachability(url, secret);
 
   const normalizedUrl = normalizeServerUrl(url);
@@ -38,6 +40,8 @@ export function ServerDialog(props: {
             name: name.trim(),
             url: normalizedUrl,
             secret,
+            clashUrl: clashUrl.trim() === "" ? undefined : clashUrl.trim(),
+            clashSecret: clashSecret === "" ? undefined : clashSecret,
           });
         }}
       >
@@ -61,6 +65,25 @@ export function ServerDialog(props: {
           <SecretInput value={secret} placeholder={t("Optional")} onChange={setSecret} />
         </Field>
         <ReachabilityIndicator reachability={reachability} url={url} />
+        <Field label={t("Clash API URL")}>
+          <input
+            className="input"
+            value={clashUrl}
+            placeholder="http://127.0.0.1:9190"
+            spellCheck={false}
+            onChange={(event) => setClashUrl(event.target.value)}
+          />
+        </Field>
+        <p className="hint" style={{ margin: "0 0 10px" }}>
+          {t("Used by DNS tools and delay tests; required in direct mode.")}
+        </p>
+        <Field label={t("Clash API secret")}>
+          <SecretInput
+            value={clashSecret}
+            placeholder={t("Optional")}
+            onChange={setClashSecret}
+          />
+        </Field>
         <div className="row-actions dialog-actions">
           {props.server && props.canDelete && (
             <Button

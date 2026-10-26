@@ -1,14 +1,11 @@
-// src/gen/ and terminalThemes.generated.ts are build artifacts and are not
-// committed, so a fresh clone cannot compile until `pnpm generate` has run.
-// `prebuild` calls this script so `pnpm build` recovers on its own instead of
-// failing with a wall of "cannot find module ..." errors.
+// src/gen/ is a build artifact and is not committed, so a fresh clone cannot
+// compile until `pnpm generate` has run. `prebuild` calls this script so
+// `pnpm build` recovers on its own instead of failing with a wall of
+// "cannot find module ..." errors.
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 
-const GENERATED = [
-  "src/gen/daemon/started_service_pb.ts",
-  "src/lib/terminalThemes.generated.ts",
-];
+const GENERATED = ["src/gen/daemon/started_service_pb.ts"];
 
 const missing = GENERATED.filter((file) => !existsSync(new URL(`../${file}`, import.meta.url)));
 
@@ -25,10 +22,8 @@ const result = spawnSync("pnpm", ["generate"], {
 });
 
 if (result.status !== 0) {
-  console.error(
-    "[prebuild] `pnpm generate` failed. If the iterm2-color-schemes submodule is empty, run:",
-  );
-  console.error("  git submodule update --init --depth 1");
+  console.error("[prebuild] `pnpm generate` failed. Check that buf is installed:");
+  console.error("  pnpm generate");
 }
 
 process.exit(result.status ?? 1);

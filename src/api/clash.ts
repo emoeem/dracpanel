@@ -1,5 +1,5 @@
-import { serverConnectUrl } from "./config";
-import { getPanelState } from "./panel";
+import { loadServersState, serverConnectUrl } from "./config";
+import { getPanelState, hasPanelToken } from "./panel";
 
 export interface ClashApiConfig {
   baseUrl: string;
@@ -55,6 +55,18 @@ export async function resolveClashApi(force = false): Promise<ClashApiConfig | n
     return pendingConfig;
   }
   pendingConfig = (async () => {
+    if (!hasPanelToken()) {
+      // Direct mode: the Clash API endpoint comes from the server entry.
+      const state = loadServersState();
+      const server = state.servers.find((item) => item.id === state.activeId) ?? null;
+      const baseUrl = server?.clashUrl ? normalizeClashBaseUrl(server.clashUrl) : null;
+      const value =
+        baseUrl === null
+          ? null
+          : { baseUrl, secret: typeof server?.clashSecret === "string" ? server.clashSecret : "" };
+      cachedConfig = { value, at: Date.now() };
+      return value;
+    }
     const state = await getPanelState();
     const baseUrl = state.clash_api ? normalizeClashBaseUrl(state.clash_api) : null;
     const value =

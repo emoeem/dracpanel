@@ -1,0 +1,139 @@
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-12);
+}
+
+.card-grid > :global(.card).wide {
+  grid-column: 1 / -1;
+}
+
+.status-chip {
+  display: inline-flex;
+  gap: var(--space-6);
+  align-items: center;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.status-actions {
+  display: flex;
+  gap: var(--space-6);
+  margin-top: var(--space-10);
+}
+
+.metric {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.metric-sub {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.card-hint {
+  margin: var(--space-6) 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+.unavailable {
+  color: var(--text-faint);
+}
+
+.ip-row {
+  display: flex;
+  gap: var(--space-6);
+  align-items: center;
+  justify-content: space-between;
+  min-height: 26px;
+}
+
+.ip-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  word-break: break-all;
+}
+
+.group-row {
+  display: flex;
+  gap: var(--space-8);
+  align-items: center;
+  justify-content: space-between;
+  min-height: 30px;
+  padding: var(--space-4) 0;
+}
+
+.group-row + .group-row {
+  border-top: 1px solid var(--border);
+}
+
+.group-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.group-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
+.group-selected {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.group-select {
+  flex-shrink: 0;
+  max-width: 46%;
+}
+
+.conn-table {
+  width: 100%;
+  font-size: var(--text-xs);
+  border-collapse: collapse;
+}
+
+.conn-table th {
+  padding: 0 var(--space-6) var(--space-6);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-faint);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.conn-table td {
+  max-width: 180px;
+  padding: var(--space-6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conn-table tbody tr + tr {
+  border-top: 1px solid var(--border);
+}
+
+.conn-table td.num {
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.card-footer-link {
+  display: inline-flex;
+  margin-top: var(--space-8);
+}

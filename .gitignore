@@ -2,7 +2,6 @@ node_modules/
 dist/
 coverage/
 src/gen/
-src/lib/terminalThemes.generated.ts
 *.local
 *.tsbuildinfo
 .DS_Store
@@ -11,3 +10,10 @@ src/lib/terminalThemes.generated.ts
 /.workbuddy/
 # local test token / temp files
 .test-token
+
+# Local review artifacts and security-scan session state
+/_review/
+/.mimosa/
+
+# ZCode session artifacts
+/.zcode/

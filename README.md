@@ -20,65 +20,82 @@ automatically.
 
 ## 这是什么
 
-一个桌面形态的 sing-box Web 面板：
+一个 sing-box Web 面板，交互与视觉以 [FlClash](https://github.com/chen08209/FlClash)
+为参照重新设计：
 
 - 以**官方 sing-box-dashboard 源码**为底版做深度定制，保留 React 19 + Vite +
-  TypeScript + Connect RPC 的架构和对原生 gRPC API 的完整封装。
-- 全局换成 **Dracula**（暗）/ **Alucard**（亮）主题，覆盖官方页面、管理模块、
-  CodeMirror 配置编辑器和图表。
-- 增加一个**管理模块**：服务启停/重启/重载、订阅、eBPF 分应用策略、配置编辑
-  （校验 → 备份 → 原子替换 → 重启 → 失败回滚），与官方页面同一设计系统，
-  没有 iframe。
-- **全球连接实时地图**：概览页底部按目标城市聚合实时连接，Canvas 绘制动态
-  弧线；GeoIP 只通过本机 panel 的 `/api/geoip` 查询。
+  TypeScript + Connect RPC 的架构和对原生 gRPC API 的完整封装；上游遗留的
+  桌面宿主页面（Tailscale/USB-IP/OpenVPN/终端/报告等）已从 Web 构建移除。
+- **双配色方案**：默认 FlClash 风格的中性 Material 配色（暗/亮/纯黑 AMOLED，
+  种子色生成强调色阶），原 Dracula/Alucard 配色保留为可选方案，覆盖所有页面、
+  管理模块、CodeMirror 编辑器和图表。
+- **信息架构对齐 FlClash**：仪表板 / 代理 / 配置 / 请求 / 连接 / DNS / 日志 /
+  规则 / 测速 / 工具 / 设置 / 系统；桌面端侧栏，手机端底部导航栏。
+- 保留**管理模块**（现“系统”页）：服务启停/重启/重载、eBPF 分应用策略、配置
+  编辑（校验 → 备份 → 原子替换 → 重启 → 失败回滚）；订阅管理独立为“配置”页。
+- **直连模式**：没有特权 panel 时，可在登录页选择“直连 sing-box 内核”，直接
+  管理一个 sing-box API 服务（订阅与服务控制在该模式下不可用，界面如实标注）。
+- **全球连接实时地图**：仪表板按目标城市聚合实时连接，Canvas 绘制动态弧线；
+  GeoIP 只通过本机 panel 的 `/api/geoip` 查询。
 - **一个浏览器入口**：`http://127.0.0.1:9096/`。原生 API 仅作为内部 RPC
   (`9091`)，自带 dashboard 已关闭；如果 panel 配置了 `zashboard_dir`，
   zashboard 仍在 `/dash/` 作为可选回退。
 
 ## 功能
 
-- **概览 / 代理 / 连接 / 日志 / 规则 / 测速 / 设置 / 管理**，外加官方工具页
-- 四模式顶栏下拉：`Rule` / `Proxy` / `RuleAllowAds` / `Direct`，走原生
-  `SetClashMode`，切换后立即生效
+- **仪表板 / 代理 / 配置 / 请求 / 连接 / DNS / 日志 / 规则 / 测速 / 工具 /
+  设置 / 系统**（信息架构对齐 FlClash）
+- **仪表板卡片化**：核心状态（运行状态/运行时间/版本 + 面板模式下的
+  启动/停止/重启）、上下行速率、模式切换、内存、连接数、出口 IP、TUN 状态、
+  系统接管状态、当前配置、代理组快切、实时连接表、流量/连接历史、全球连接
+  地图；卡片可增删排序
+- 四模式顶栏下拉：走原生 `SetClashMode`，切换后立即生效
 - 原生 API：节点切换、URLTest、连接流、日志流、实时流量、NetworkQuality/STUN
 - **代理**：节点搜索、按名称/延迟排序、隐藏不可用节点；节点延迟历史与
   可选自动 URLTest（关闭 / 5 / 15 / 30 分钟）
+- **配置**：订阅添加/更新/定时/删除、流量与到期信息、写入配置（走 panel
+  校验/备份/重启/回滚事务）
+- **请求**：由实时连接流派生的近期请求台账（内核不保留历史请求日志，页面
+  如实标注），搜索、状态过滤、详情
 - **连接**：暂停刷新、任意字段排序、按 host/process/outbound/rule/source
   分组、来源 IP/TCP/UDP/隐藏链过滤、CSV/JSON 导出、关闭筛选结果、
   目标 GeoIP 详情
 - **日志**：级别过滤、日志类型过滤、隐藏正则、保留条数、暂停与导出
+- **DNS**：一级页面；按需查询、查询历史、会话查询记录（如实标注数据来源）、
+  DNS/FakeIP 缓存清理；直连模式下 Clash API 地址来自服务器条目
 - **规则**：从**实时配置**派生（原生 API 没有规则 RPC），支持关键词/
   action/outbound 过滤与排序，展示 route/DNS 规则、规则集、final
-- **概览**：实时流量、内存/连接数、1m/5m/1h 流量历史、连接历史聚合、
-  全球连接地图
-- **工具**：DNS 查询、DNS/FakeIP 缓存清理、按节点/多目标连通性测试、
-  NetworkQuality/STUN
+- **工具**：连通性测试、NetworkQuality/STUN
 - 连接表窗口化虚拟滚动（不再截断 500 条）
 - 全球连接地图：GeoIP 城市聚合、动态贝塞尔弧线、30 条上限、亮暗主题跟随；
   无连接/缺少 GeoIP 数据库时优雅降级
-- `Ctrl+1…8` 切换八个主页面；主题/强调色/最后页面/管理标签页持久化
+- `Ctrl+1…8` 切换八个主页面；⌘K 命令面板；主题/配色/强调色/最后页面持久化
 - 44px 顶栏：logo、运行状态灯、版本、模式下拉、亮暗、刷新
-- 窄屏自动降级：侧栏抽屉、模式选择器降级为下拉、无横向溢出
+- 窄屏自动降级：≤600px 底部导航栏（FlClash NavigationBar 风格）、
+  601–900px 侧栏抽屉（带滑动手势）、无横向溢出
 
 ## Roadmap / 计划
 
 按当前优先级排列，都是已经在做或刚做完的事。**没有日期承诺**，顺序会随真实
 使用情况调整。
 
-- **规则集在线更新与 TUN 入站状态展示**：规则页现在只能从实时配置读出规则集
-  列表（tag / type / format / path），没有更新入口；管理页的“运行状态”目前
-  只把 `inbounds` 拼成一行，TUN 入站的启用/地址/MTU 需要单独展示。
-- **英文界面文案补全**：`src/app/translations.ts` 的 key 是英文原文，四种语言
-  都要填；fa / ru 现在大量是英文占位，**待母语校对**。新增文案的登记规则见
-  [CONTRIBUTING.md](CONTRIBUTING.md#用户可见文案)。
+- **规则集在线更新**：规则页现在只能从实时配置读出规则集列表
+  （tag / type / format / path），没有更新入口。
+- **fa / ru 界面文案母语校对**：新增文案已四语登记，但 fa / ru 仍需母语校对。
+  新增文案的登记规则见 [CONTRIBUTING.md](CONTRIBUTING.md#用户可见文案)。
 - **端到端冒烟测试接入**：`scripts/smoke-dist.mjs` 已能就地起服务校验 dist 的
-  资源引用，下一步是接进发布前的固定流程并覆盖更多页面入口。
+  资源引用；浏览器级验收目前由 `artifacts/` 下的 CDP 脚本承担，尚未接入 CI。
 - **覆盖率提升**：`pnpm test:coverage` 已可用，当前用例集中在纯逻辑模块
   （`src/lib`、`src/api`），继续补视图层与交互路径。
 
 ## 功能截图
 
-> 前六张截图来自已经验收的本机实例；最后两张是 `TrafficMap` 组件的合成连接预览
+> **2026-10 FlClash 风格改造后的截图**在
+> [artifacts/screenshots/flclash/](artifacts/screenshots/flclash)（新信息架构、
+> flclash 配色、四个视口、亮暗主题）。下表是 2026-10-17 验收时 Dracula 配色的
+> 存档截图，页面名称以当时为准。
+>
+> 旧截图来自已经验收的本机实例；最后两张是 `TrafficMap` 组件的合成连接预览
 > （不是线上流量），用于展示地图布局。订阅流量/自动更新、系统日志、集成卡和
 > 真实地图需要安装 `sing-box-panel 0.1.0-8` 和新版 UI 后显示。
 
@@ -140,18 +157,21 @@ Browser
 
 | Page | 说明 |
 | --- | --- |
-| 概览 | 流量、内存、连接数、历史曲线、连接聚合、四模式卡片、全球连接地图 |
-| 代理 | 策略组、节点切换、搜索/排序、延迟历史、自动测速 |
+| 仪表板 | 核心状态卡片（状态/运行时间/版本/服务控制）、流量、内存、连接数、模式、出口 IP、TUN、系统接管、当前配置、代理组快切、实时连接表、历史曲线、全球连接地图 |
+| 代理 | 策略组、节点切换、搜索/排序、延迟历史、健康巡检、自动测速 |
+| 配置 | 订阅管理（添加/更新/定时/删除、流量与到期、写入配置） |
+| 请求 | 由实时连接流派生的近期请求台账（如实标注）、搜索、过滤、详情 |
 | 连接 | 实时连接、搜索、排序/分组/过滤、暂停、导出、批量关闭 |
+| DNS | 按需查询、查询历史、会话记录、DNS/FakeIP 缓存清理 |
 | 日志 | 原生日志流、级别/类型过滤、隐藏正则、搜索、暂停、导出 |
-| 规则 | 配置派生的路由/DNS 规则、搜索/过滤/排序、规则集、final |
+| 规则 | 配置派生的路由/DNS 规则、搜索/过滤/排序、规则集、final、可视化编辑 |
 | 测速 | 分组 URLTest、网络质量/STUN 入口 |
-| 工具 | DNS 查询、缓存清理、连通性测试、NetworkQuality/STUN 及上游桌面工具 |
-| 设置 | 偏好、服务器、上游链接、非官方声明 |
-| 管理 | 运行状态、订阅、eBPF、配置 |
+| 工具 | 连通性测试、NetworkQuality/STUN |
+| 设置 | 偏好（外观/配色/语言）、服务器、上游链接、非官方声明 |
+| 系统 | 服务运行状态、eBPF、配置编辑器、通知 |
 
-`Ctrl+1` 概览 · `Ctrl+2` 代理 · `Ctrl+3` 连接 · `Ctrl+4` 日志 ·
-`Ctrl+5` 规则 · `Ctrl+6` 测速 · `Ctrl+7` 设置 · `Ctrl+8` 管理
+`Ctrl+1` 仪表板 · `Ctrl+2` 代理 · `Ctrl+3` 连接 · `Ctrl+4` 日志 ·
+`Ctrl+5` 规则 · `Ctrl+6` 测速 · `Ctrl+7` 设置 · `Ctrl+8` 系统 · `⌘K` 命令面板
 
 ## 管理模块
 
@@ -170,8 +190,8 @@ Browser
   应用失败由 panel 自动回滚。配置可以带注释/trailing comma，panel 与原生 API
   都按 sing-box 实际支持的子集解析。
 
-管理模块目前只提供中文界面；上游 dashboard 页面仍跟随其语言设置。上述
-panel 侧能力和全球连接地图需要配套的 `sing-box-panel 0.1.0-8`，包括
+订阅管理已独立为“配置”页（信息架构对齐 FlClash）；上述 panel 侧能力和全球
+连接地图需要配套的 `sing-box-panel 0.1.0-8`，包括
 `POST /api/subscriptions/<id>/schedule`、`GET /api/subscriptions/managed`、
 `GET /api/config/backups/<name>`、`GET /api/geoip?ip=...`、`/api/logs` 和
 `/api/state` 的可用性/`egress_ip` 字段。
@@ -197,10 +217,16 @@ UI 登录后会优先读取 `/api/state.features`（可选，字符串数组）�
 
 ## 主题
 
-- 暗色：Dracula（`#282a36` / `#44475a` / `#f8f8f2` / `#6272a4` / `#bd93f9` / `#8be9fd`）
-- 亮色：Alucard（`#fffbeb` / `#1f1f1f` / `#6c664b` / `#cfcfde` / `#644ac9`）
-- CodeMirror：属性/字符串/数字/布尔/注释/错误分别映射到 cyan/green/yellow/
-  orange/comment/red
+- **flclash（默认）**：中性 Material 风格表面，暗色 `#121214` 系、亮色
+  `#f2f2f0` 系，另有纯黑 AMOLED 变体（设置或主题菜单中开启）；默认强调色为
+  FlClash 参考截图的橙色，另有 8 个预设 + 任意自定义色（OKLCH 色阶派生，
+  见 `src/lib/tonalPalette.ts`）
+- **dracula**：原 Dracula（暗 `#282a36` 系）/ Alucard（亮 `#fffbeb` 系）配色，
+  老用户自动沿用，新装默认 flclash
+- 两种配色 × 亮暗 × AMOLED 通过 `data-palette` / `data-theme` /
+  `data-amoled` 三个根属性组合，全部走 `globals.css` 设计令牌；
+  `index.html` 内联脚本在首帧前应用，无主题闪烁
+- CodeMirror：属性/字符串/数字/布尔/注释/错误分别映射到状态色
 - PWA / Service Worker 已关闭，升级/回滚不会被旧缓存挡住
 
 更多截图见 [artifacts/README.md](artifacts/README.md)（含验收记录）。
@@ -223,13 +249,11 @@ UI 登录后会优先读取 `/api/state.features`（可选，字符串数组）�
 ## 构建
 
 ```bash
-git clone --recursive https://github.com/emoeem/dracpanel.git
+git clone https://github.com/emoeem/dracpanel.git
 cd dracpanel
-# 如果克隆时没有 --recursive：
-git submodule update --init --depth 1
 
 npx --yes pnpm@11.13.1 install --frozen-lockfile --trust-lockfile
-npx --yes pnpm@11.13.1 generate   # protobuf + 图标 + 终端主题
+npx --yes pnpm@11.13.1 generate   # protobuf + 图标
 ./node_modules/.bin/tsc -b
 ./node_modules/.bin/vite build
 ```
@@ -237,8 +261,7 @@ npx --yes pnpm@11.13.1 generate   # protobuf + 图标 + 终端主题
 > `--trust-lockfile` 用于跳过 pnpm 11 对 lockfile 每个条目的供应链元数据校验；
 > 仓库使用的是上游固定 lockfile。网络条件好时可以省略。
 
-`src/gen/` 和 `src/lib/terminalThemes.generated.ts` 是生成文件，按上游约定
-不提交；`pnpm generate` 会生成它们。
+`src/gen/` 是生成文件，按上游约定不提交；`pnpm generate` 会生成它。
 
 ## 部署
 
@@ -384,10 +407,16 @@ Dracula UI 本身。
 ## 限制
 
 - 原生 API 没有规则 RPC；规则页只能从实时配置派生，不是“内核实际命中规则”的
-  实时日志。
-- 上游仅桌面宿主可用的页面（崩溃/功耗/OOM 报告等）在 Web 构建中仍保持
-  host-only 行为。
-- `Global` 模式保留在配置中供 zashboard 回退使用，但新 UI 只展示四个目标模式。
+  实时日志，且配置读写依赖 panel（直连模式下规则页如实显示不可用）。
+- 内核不提供历史请求日志；请求页由实时连接流派生，重启后记录消失（页面有
+  明确说明）。
+- 内核不提供 DNS 查询日志；DNS 页只记录用户在本页面发起的查询。
+- WebDAV 备份未实现（panel 后端不在本仓库，无法新增服务端点）；备份/恢复
+  走 panel 的本地配置备份。
+- 直连模式下没有特权 panel：订阅管理、服务控制、配置编辑、eBPF、GeoIP
+  不可用，相关卡片隐藏或显示说明；Clash API 地址需在服务器条目中填写。
+- `Global` 模式保留在配置中供 zashboard 回退使用，但新 UI 只展示配置实际
+  提供的模式。
 - 订阅的“写入配置”使用与配置应用相同的 panel 事务；验收中未把测试节点写入
   真实配置。
 - 全球连接地图不做 DNS 解析；只有 `destination` 是公网 IP 的连接会出现弧线，
@@ -397,10 +426,10 @@ Dracula UI 本身。
 ## 目录
 
 ```text
-├── src/                 React 源码（官方 dashboard + 新增管理/规则/测速/顶栏）
+├── src/                 React 源码（官方 dashboard + FlClash 风格改造）
 ├── public/              图标等静态资源
 ├── proto/               StartedService protobuf
-├── vendor/              iTerm2 色板 submodule（生成终端主题）
+├── docs/                架构与适配层边界说明
 ├── artifacts/           验收脚本、截图、验收记录
 ├── deploy/              一次性部署脚本、回滚演练脚本
 ├── NOTICE               上游/主题/非官方声明

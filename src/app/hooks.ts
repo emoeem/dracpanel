@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 
 import type { StreamSnapshot } from "../api/stream";
-import { loadTerminalConfig, TERMINAL_CONFIG_EVENT, type TerminalConfig } from "../lib/tailscaleSSH";
 import { useLatestRef } from "./useLatest";
 
 export const RECONNECT_GRACE_MS = 6500;
@@ -67,20 +66,6 @@ export function useKeyboardInset(): number {
     return () => viewport.removeEventListener("resize", update);
   }, []);
   return inset;
-}
-
-export function useTerminalConfig(): TerminalConfig {
-  const [config, setConfig] = useState<TerminalConfig>(loadTerminalConfig);
-  useEffect(() => {
-    const update = () => setConfig(loadTerminalConfig());
-    window.addEventListener("storage", update);
-    window.addEventListener(TERMINAL_CONFIG_EVENT, update);
-    return () => {
-      window.removeEventListener("storage", update);
-      window.removeEventListener(TERMINAL_CONFIG_EVENT, update);
-    };
-  }, []);
-  return config;
 }
 
 const escapeStack: (() => void)[] = [];

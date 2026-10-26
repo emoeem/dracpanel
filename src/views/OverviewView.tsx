@@ -1,10 +1,9 @@
 import { useRef, useState } from "react";
 
-import { formatBytes, formatMemoryBytes } from "../api/format";
+import { formatBytes } from "../api/format";
+import { hasPanelToken } from "../api/panel";
 import { useStream } from "../api/stream";
 import { useApi } from "../app/context";
-import { useLocalDesktopHost } from "../app/desktop";
-import type { DesktopHost } from "../app/desktop";
 import { showError } from "../app/errorStore";
 import { usePendingValue } from "../app/hooks";
 import { useI18n } from "../app/i18n";
@@ -20,6 +19,7 @@ import {
   toggleCard,
   type DashboardCardsConfig,
 } from "../app/dashboardCards";
+import { usePanelState } from "../app/usePanelState";
 import { Icon } from "../components/Icon";
 import { PageHeader } from "../components/PageHeader";
 import { StreamBanner } from "../components/StreamBanner";
@@ -28,17 +28,26 @@ import { TrafficHistoryCard } from "../components/TrafficHistoryCard";
 import { ConnectionHistoryCard } from "../components/ConnectionHistoryCard";
 import { AdaptiveSegmented, Button, Card, DataLine, Dialog, EmptyState, IconButton, Sparkline } from "../components/ui";
 import { ServiceStatus_Type } from "../gen/daemon/started_service_pb";
-import { ProfileCard, SystemProxyCard } from "./ProfileViews";
-import styles from "./OverviewView.module.css";
+import { ConnectionsTableCard } from "./dashboard/ConnectionsTableCard";
+import { CoreStatusCard } from "./dashboard/CoreStatusCard";
+import {
+  EgressIpCard,
+  MemoryCard,
+  ProfileCard,
+  SystemTakeoverCard,
+  TunCard,
+} from "./dashboard/InfoCards";
+import { ProxyGroupsCard } from "./dashboard/ProxyGroupsCard";
 import { cx } from "../lib/cx";
+import styles from "./OverviewView.module.css";
 
 export function OverviewView() {
   const api = useApi();
   const { t } = useI18n();
-  const host = useLocalDesktopHost();
   const serviceStatus = useStream(api.serviceStatus);
+  const panel = usePanelState();
   const [cardsConfig, setCardsConfig] = useState<DashboardCardsConfig>(() =>
-    loadDashboardCardsConfig(host !== null),
+    loadDashboardCardsConfig(),
   );
   const [managing, setManaging] = useState(false);
   const statusType = serviceStatus.data.status?.status;
@@ -65,7 +74,7 @@ export function OverviewView() {
   return (
     <div className="page">
       <PageHeader
-        title={t("Overview")}
+        title={t("Dashboard")}
         actions={
           started ? (
             <IconButton
@@ -79,11 +88,7 @@ export function OverviewView() {
       />
       <StreamBanner snapshot={serviceStatus} />
       {started ? (
-        <OverviewCards config={cardsConfig} host={host} />
-      ) : host !== null ? (
-        <div className={styles.cardGrid}>
-          {orderedEnabledCards(cardsConfig).includes("profile") && <ProfileCard host={host} />}
-        </div>
+        <OverviewCards config={cardsConfig} panel={panel} />
       ) : (
         stateLabel !== null && <EmptyState icon="dashboard">{stateLabel}</EmptyState>
       )}
@@ -94,7 +99,6 @@ export function OverviewView() {
       {managing && (
         <CardManagementDialog
           config={cardsConfig}
-          desktop={host !== null}
           onChange={(next) => {
             saveDashboardCardsConfig(next);
             setCardsConfig(() => next);
@@ -126,24 +130,25 @@ function OverviewHistoryCards(props: { config: DashboardCardsConfig }) {
   );
 }
 
-function OverviewCards(props: { config: DashboardCardsConfig; host: DesktopHost | null }) {
+function OverviewCards(props: {
+  config: DashboardCardsConfig;
+  panel: ReturnType<typeof usePanelState>;
+}) {
   const api = useApi();
   const { t } = useI18n();
-  const status = useStream(api.status);
   const clashMode = useStream(api.clashMode);
   const [currentMode, setPendingMode] = usePendingValue(clashMode.data.currentMode);
 
-  const current = status.data.current;
-  const trafficAvailable = current?.trafficAvailable ?? false;
   const modeList = clashMode.data.modeList.filter(
     (mode) => mode !== "Global" || mode === currentMode,
   );
 
   const isCardVisible = (card: string) => {
+    if (isDashboardCardId(card) && DASHBOARD_CARDS[card].panel === true) {
+      // Panel-backed cards have no data source in direct mode.
+      return hasPanelToken();
+    }
     switch (card) {
-      case "systemProxy":
-      case "profile":
-        return props.host !== null;
       case "clashMode":
         return modeList.length > 1;
       default:
@@ -153,49 +158,16 @@ function OverviewCards(props: { config: DashboardCardsConfig; host: DesktopHost 
 
   const renderCard = (card: string, wide: boolean) => {
     switch (card) {
+      case "core":
+        return (
+          <Card key={card} icon="bug_report" title={t("Core status")} wide={wide}>
+            <CoreStatusCard />
+          </Card>
+        );
       case "uploadTraffic":
-        return (
-          <Card key={card} icon="upload" title={t("Upload")} wide={wide}>
-            <div className={styles.metric}>
-              {trafficAvailable ? `${formatBytes(Number(current?.uplink ?? 0))}/s` : "..."}
-            </div>
-            <div className={styles.metricSub}>
-              {trafficAvailable ? formatBytes(Number(current?.uplinkTotal ?? 0)) : "..."}
-            </div>
-            <Sparkline data={status.data.uplinkHistory} />
-          </Card>
-        );
+        return <UploadTrafficCard key={card} />;
       case "downloadTraffic":
-        return (
-          <Card key={card} icon="download" title={t("Download")} wide={wide}>
-            <div className={styles.metric}>
-              {trafficAvailable ? `${formatBytes(Number(current?.downlink ?? 0))}/s` : "..."}
-            </div>
-            <div className={styles.metricSub}>
-              {trafficAvailable ? formatBytes(Number(current?.downlinkTotal ?? 0)) : "..."}
-            </div>
-            <Sparkline data={status.data.downlinkHistory} />
-          </Card>
-        );
-      case "status":
-        return (
-          <Card key={card} icon="bug_report" title={t("Status")} wide={wide}>
-            <DataLine label={t("Memory")} value={current ? formatMemoryBytes(current.memory) : "..."} />
-            <DataLine label={t("Goroutines")} value={current ? current.goroutines : "..."} />
-          </Card>
-        );
-      case "connections":
-        return (
-          <Card key={card} icon="cable" title={t("Connections")} wide={wide}>
-            <DataLine label={t("Inbound")} value={current ? current.connectionsIn : "..."} />
-            <DataLine label={t("Outbound")} value={current ? current.connectionsOut : "..."} />
-          </Card>
-        );
-      case "systemProxy":
-        if (props.host === null) {
-          return null;
-        }
-        return <SystemProxyCard key={card} host={props.host} />;
+        return <DownloadTrafficCard key={card} />;
       case "clashMode":
         if (modeList.length <= 1) {
           return null;
@@ -215,11 +187,50 @@ function OverviewCards(props: { config: DashboardCardsConfig; host: DesktopHost 
             />
           </Card>
         );
+      case "memory":
+        return (
+          <Card key={card} icon="memory" title={t("Memory")} wide={wide}>
+            <MemoryCard />
+          </Card>
+        );
+      case "connections":
+        return <ConnectionsCountCard key={card} />;
+      case "egressIp":
+        return (
+          <Card key={card} icon="public" title={t("Egress IP")} wide={wide}>
+            <EgressIpCard panel={props.panel} />
+          </Card>
+        );
+      case "tun":
+        return (
+          <Card key={card} icon="layers" title={t("TUN")} wide={wide}>
+            <TunCard panel={props.panel} />
+          </Card>
+        );
+      case "systemProxy":
+        return (
+          <Card key={card} icon="router" title={t("System takeover")} wide={wide}>
+            <SystemTakeoverCard />
+          </Card>
+        );
       case "profile":
-        if (props.host === null) {
-          return null;
-        }
-        return <ProfileCard key={card} host={props.host} />;
+        return (
+          <Card key={card} icon="folder" title={t("Profile")} wide={wide}>
+            <ProfileCard panel={props.panel} />
+          </Card>
+        );
+      case "proxyGroups":
+        return (
+          <Card key={card} icon="folder" title={t("Proxy groups")} wide={wide}>
+            <ProxyGroupsCard />
+          </Card>
+        );
+      case "connectionsTable":
+        return (
+          <Card key={card} icon="swap_vert" title={t("Live connections")} wide={wide}>
+            <ConnectionsTableCard />
+          </Card>
+        );
       default:
         return null;
     }
@@ -241,9 +252,59 @@ function OverviewCards(props: { config: DashboardCardsConfig; host: DesktopHost 
   );
 }
 
+function UploadTrafficCard() {
+  const api = useApi();
+  const { t } = useI18n();
+  const status = useStream(api.status);
+  const current = status.data.current;
+  const trafficAvailable = current?.trafficAvailable ?? false;
+  return (
+    <Card icon="upload" title={t("Upload")}>
+      <div className={styles.metric}>
+        {trafficAvailable ? `${formatBytes(Number(current?.uplink ?? 0))}/s` : "..."}
+      </div>
+      <div className={styles.metricSub}>
+        {trafficAvailable ? formatBytes(Number(current?.uplinkTotal ?? 0)) : "..."}
+      </div>
+      <Sparkline data={status.data.uplinkHistory} />
+    </Card>
+  );
+}
+
+function DownloadTrafficCard() {
+  const api = useApi();
+  const { t } = useI18n();
+  const status = useStream(api.status);
+  const current = status.data.current;
+  const trafficAvailable = current?.trafficAvailable ?? false;
+  return (
+    <Card icon="download" title={t("Download")}>
+      <div className={styles.metric}>
+        {trafficAvailable ? `${formatBytes(Number(current?.downlink ?? 0))}/s` : "..."}
+      </div>
+      <div className={styles.metricSub}>
+        {trafficAvailable ? formatBytes(Number(current?.downlinkTotal ?? 0)) : "..."}
+      </div>
+      <Sparkline data={status.data.downlinkHistory} />
+    </Card>
+  );
+}
+
+function ConnectionsCountCard() {
+  const api = useApi();
+  const { t } = useI18n();
+  const status = useStream(api.status);
+  const current = status.data.current;
+  return (
+    <Card icon="cable" title={t("Connections")}>
+      <DataLine label={t("Inbound")} value={current ? current.connectionsIn : "..."} />
+      <DataLine label={t("Outbound")} value={current ? current.connectionsOut : "..."} />
+    </Card>
+  );
+}
+
 function CardManagementDialog(props: {
   config: DashboardCardsConfig;
-  desktop: boolean;
   onChange: (config: DashboardCardsConfig) => void;
   onClose: () => void;
 }) {
@@ -315,7 +376,7 @@ function CardManagementDialog(props: {
         <Button
           variant="danger"
           style={{ marginInlineEnd: "auto" }}
-          onClick={() => props.onChange(resetDashboardCardsConfig(props.desktop))}
+          onClick={() => props.onChange(resetDashboardCardsConfig())}
         >
           {t("Reset")}
         </Button>

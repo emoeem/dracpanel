@@ -4,6 +4,95 @@ All notable changes to DracPanel are documented here. The format follows [Keep a
 
 ## [Unreleased]
 
+### FlClash-style redesign (2026-10-27)
+
+#### Added
+- **Two more palettes**: `nord` (polar-night dark / snow-storm light) and
+  `catppuccin` (mocha / latte) join `flclash` and `dracula`; the pure-black
+  AMOLED variant now applies to every dark palette (it previously lost the
+  specificity tie against palette-scoped blocks).
+- **Appearance menu in the topbar** (`AppearanceMenuContent`): theme mode,
+  palette grid, AMOLED toggle and accent swatches in one popover — on the
+  desktop web topbar, the mobile topbar (≤900px, which previously had no
+  appearance entry at all) and the settings/setup pages via `ThemeMenu`.
+  The menu stays open while you preview palettes.
+
+#### Fixed
+- **Pages could not scroll at 601–900px widths**: `.web-column` lacked
+  `min-height: 0`, so in the ≤900px column layout the content pushed the
+  column past the viewport, `.content`'s `overflow-y: auto` never engaged and
+  everything below the fold was unreachable. The mobile topbar also now shows
+  on phones (brand + appearance button; navigation stays in the bottom bar).
+- The accent popover could be squeezed to a ~36px anchor width; it now has a
+  readable min-width.
+- **Dual color palettes**: a new default `flclash` palette — neutral Material-style
+  surfaces with dark / light / pure-black AMOLED variants and an orange default
+  accent aligned with the FlClash reference dashboard — alongside the original
+  `dracula` palette (Dracula dark / Alucard light), selectable in the theme menu.
+  Pre-palette users keep Dracula automatically; fresh installs get flclash.
+  All tokens are CSS custom properties combined via `data-palette` × `data-theme`
+  × `data-amoled`; the pre-paint script in `index.html` applies them before
+  first paint (no theme flash).
+- Seed-derived accent scales (`src/lib/tonalPalette.ts`): custom accent colors
+  now generate accent/strong/soft/on-accent tokens from the seed via OKLCH
+  tone mapping (M3-style), unit tested.
+- **New information architecture** aligned with FlClash: `dashboard` (was
+  overview), `proxies` (was groups), `profiles` (new), `requests` (new),
+  `connections`, `dns` (promoted from tools), `logs`, `rules`, `speedtest`,
+  `tools`, `system` (was manage), `settings`. Old hashes keep working as
+  aliases; stored last-route and manage-tab values migrate.
+- **Profiles page** (`src/views/ProfilesView.tsx`): subscription management
+  (add URL, update all/per item, auto-update schedule with userinfo, delete)
+  extracted from the former manage tab, plus a dedicated route, sidebar entry
+  and command-palette command.
+- **Requests page**: a recent-request ledger derived from the live connections
+  stream (`src/lib/requestLedger.ts`, unit tested), with search, state filter
+  and a per-request detail dialog. The page states explicitly that the core
+  keeps no historical request log.
+- **DNS as a top-level page** with an honest data-source notice, a session
+  query ledger (queries you start here, capped at 100) and the existing
+  query/cache tools; `tools/dns` hashes redirect to it.
+- **Direct-connect mode**: the login gate offers “Connect to a core directly”,
+  which manages a sing-box API service without the privileged panel. In direct
+  mode panel-backed dashboard cards are hidden, Profiles shows an explicit
+  empty state, and the Clash API endpoint comes from the server entry
+  (`ServerDialog` gained Clash API URL/secret fields).
+- **FlClash-style mobile navigation bar** (`src/components/BottomNav.tsx`) at
+  ≤600px with a pill active indicator; the drawer remains for 601–900px.
+- Rebuilt dashboard card set: core status (state/uptime/version + panel-gated
+  start/stop/restart with a stop confirmation), memory with sparkline,
+  connections, egress IP, TUN state (derived from the live config, read-only),
+  system takeover (eBPF, read-only), active profile, proxy-group quick switcher
+  with inline node selection, and a live-connections table — all backed by the
+  existing streams/panel API, no mock data. Cards stay user-arrangeable.
+- `docs/ARCHITECTURE.md` documenting the three-service topology, the
+  kernel-adapter client boundary, capability degradation and the theme system.
+- Acceptance screenshots for the redesign under `artifacts/screenshots/flclash/`
+  (4 viewports × palettes, captured against an isolated test instance).
+
+#### Changed
+- Removed the upstream desktop-host surface that was unreachable in the web
+  build (Tailscale, Taildrop, USB/IP, OpenConnect/OpenVPN, terminal, crash/OOM/
+  power reports, profile editor window, tray menu, terminal theme machinery,
+  the iterm2-color-schemes submodule and the `@xterm/*`, `luby-transform`,
+  `react-markdown`, `remark-*` dependencies). Bundle total drops from ~2.26 MB
+  to ~1.32 MB.
+- `PanelGate` fails fast with `PanelUnavailableError` when no panel token is
+  configured instead of firing `panel-auth-error` (a missing token is not an
+  expired one), so direct mode cannot bounce the user to the gate.
+- `ToolsView` slimmed to the network tools that exist on the web panel;
+  DNS moved to its own page.
+- Sidebar follows the FlClash page order; the command palette and Ctrl+1…8
+  shortcuts follow the renamed routes.
+- `hasPanelToken()` added to `src/api/panel.ts`; all feature gating uses it
+  (the raw getter returns `""`, which previously defeated `!== null` checks).
+
+#### Fixed
+- Rules page error banners now translate known error strings instead of
+  showing raw English text.
+- Stale `.gitignore` entry for the removed terminal-theme generated file;
+  `_review/` and `.mimosa/` local directories are ignored.
+
 ### Added
 - React `ErrorBoundary` (with i18n-aware fallback and a reset shortcut) wrapped around every route view, so a crashing view no longer white-screens the panel.
 - Route views are now code-split via `React.lazy`; the main bundle no longer pulls in the settings editors, terminal theme picker or report readers until they are opened.

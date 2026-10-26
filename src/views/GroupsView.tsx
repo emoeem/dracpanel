@@ -157,7 +157,7 @@ export function GroupsView() {
 
   return (
     <div className="page">
-      <PageHeader title={t("Groups")} />
+      <PageHeader title={t("Proxies")} />
       <div className={styles.toolbar}>
         <div className={styles.toolbarSearch}>
           <SearchInput value={search} onChange={setSearch} />

@@ -177,6 +177,14 @@ export class PanelAuthError extends Error {
   }
 }
 
+/** No panel token is configured (direct mode); the panel API is not usable. */
+export class PanelUnavailableError extends Error {
+  constructor() {
+    super("The panel backend is not configured (direct mode)");
+    this.name = "PanelUnavailableError";
+  }
+}
+
 export class PanelHttpError extends Error {
   constructor(
     readonly status: number,
@@ -196,6 +204,11 @@ export class GeoIpUnavailableError extends Error {
 
 export function getPanelToken(): string {
   return localStorage.getItem(PANEL_TOKEN_KEY) ?? "";
+}
+
+/** True when a panel token is configured (the panel backend is reachable in principle). */
+export function hasPanelToken(): boolean {
+  return getPanelToken() !== "";
 }
 
 export function setPanelToken(token: string): void {
@@ -230,10 +243,13 @@ async function panelFetch(
   timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
   const token = getPanelToken();
-  const headers = new Headers(init.headers);
-  if (token) {
-    headers.set("X-Panel-Token", token);
+  if (token === "") {
+    // Direct mode: no panel is configured. Fail fast without firing
+    // panel-auth-error — a missing token is not an expired one.
+    throw new PanelUnavailableError();
   }
+  const headers = new Headers(init.headers);
+  headers.set("X-Panel-Token", token);
   if (init.body !== undefined && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }

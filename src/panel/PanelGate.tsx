@@ -25,9 +25,17 @@ import {
 } from "./loginThrottle";
 import { useI18n, type Translate } from "../app/i18n";
 import { useLatestRef } from "../app/useLatest";
+import { loadStoredString, removeStoredValue, saveStoredString } from "../lib/storage";
 import styles from "./PanelGate.module.css";
 
 type Phase = "checking" | "gate" | "error" | "recovery" | "ready";
+
+/** Direct mode: talk to the sing-box API service without the privileged panel. */
+const DIRECT_MODE_KEY = "direct-mode";
+
+function directModeActive(): boolean {
+  return getPanelToken() === "" && loadStoredString(DIRECT_MODE_KEY) === "true";
+}
 
 function lockMessage(t: Translate, remaining: number): string {
   return t("Too many attempts, retry in {seconds} seconds.", {
@@ -53,7 +61,10 @@ function sleep(ms: number) {
 export function PanelGate(props: { children: ReactNode }) {
   const { t } = useI18n();
   const translateRef = useLatestRef(t);
-  const [phase, setPhase] = useState<Phase>(() => (getPanelToken() ? "checking" : "gate"));
+  const [phase, setPhase] = useState<Phase>(() =>
+    getPanelToken() ? "checking" : directModeActive() ? "ready" : "gate",
+  );
+  const [directMode, setDirectMode] = useState(() => directModeActive());
   const [message, setMessage] = useState("");
   const [tokenInput, setTokenInput] = useState("");
   const [state, setState] = useState<PanelState | null>(null);
@@ -294,6 +305,24 @@ export function PanelGate(props: { children: ReactNode }) {
                 {message}
               </p>
             )}
+            <button
+              type="button"
+              className={styles.secondary}
+              disabled={locked}
+              onClick={() => {
+                saveStoredString(DIRECT_MODE_KEY, "true");
+                setDirectMode(true);
+                setCapabilities(unknownPanelCapabilities());
+                setPhase("ready");
+              }}
+            >
+              {t("Connect to a core directly")}
+            </button>
+            <p className={styles.hint}>
+              {t(
+                "Direct mode manages a sing-box API service without the privileged panel; subscriptions and service control are unavailable there.",
+              )}
+            </p>
           </form>
         )}
 
@@ -358,11 +387,28 @@ export function PanelGate(props: { children: ReactNode }) {
 
         {phase !== "gate" && phase !== "checking" && (
           <p className={styles.footerLink}>
-            {showFallback ? (
+            {showFallback && !directMode ? (
               <>
                 <a href={fallbackUrl} target="_blank" rel="noreferrer">
                   {t("Fallback panel")}
                 </a>
+                <span aria-hidden="true"> · </span>
+              </>
+            ) : null}
+            {directMode ? (
+              <>
+                <button
+                  type="button"
+                  className={styles.textButton}
+                  onClick={() => {
+                    removeStoredValue(DIRECT_MODE_KEY);
+                    setDirectMode(false);
+                    lockPanel();
+                    setPhase("gate");
+                  }}
+                >
+                  {t("Sign in with a panel token")}
+                </button>
                 <span aria-hidden="true"> · </span>
               </>
             ) : null}

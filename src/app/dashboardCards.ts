@@ -5,13 +5,18 @@ import type { MessageKey } from "./translations";
 export type DashboardCardId =
   | "uploadTraffic"
   | "downloadTraffic"
-  | "status"
+  | "core"
   | "connections"
   | "trafficHistory"
   | "connectionHistory"
   | "systemProxy"
   | "clashMode"
-  | "profile";
+  | "profile"
+  | "memory"
+  | "egressIp"
+  | "tun"
+  | "proxyGroups"
+  | "connectionsTable";
 
 export type DashboardCardPairGroup = "traffic" | "statistics";
 
@@ -20,32 +25,43 @@ export const DASHBOARD_CARDS: Record<
   {
     title: MessageKey;
     icon: IconName;
-    desktop?: boolean;
+    /** Requires the privileged panel backend; hidden in direct mode. */
+    panel?: boolean;
     permanent?: boolean;
     pairGroup?: DashboardCardPairGroup;
   }
 > = {
   uploadTraffic: { title: "Upload", icon: "upload", pairGroup: "traffic" },
   downloadTraffic: { title: "Download", icon: "download", pairGroup: "traffic" },
-  status: { title: "Status", icon: "bug_report", pairGroup: "statistics" },
+  core: { title: "Core status", icon: "bug_report" },
   connections: { title: "Connections", icon: "cable", pairGroup: "statistics" },
   trafficHistory: { title: "Traffic History", icon: "speed" },
   connectionHistory: { title: "Connection History", icon: "hub" },
-  systemProxy: { title: "System HTTP Proxy", icon: "router", desktop: true },
-  clashMode: { title: "Clash Mode", icon: "route" },
-  profile: { title: "Profile", icon: "folder", desktop: true, permanent: true },
+  systemProxy: { title: "System takeover", icon: "router", panel: true },
+  clashMode: { title: "Mode", icon: "route" },
+  profile: { title: "Profile", icon: "folder", panel: true, permanent: true },
+  memory: { title: "Memory", icon: "memory", pairGroup: "statistics" },
+  egressIp: { title: "Egress IP", icon: "public", panel: true },
+  tun: { title: "TUN", icon: "layers", panel: true },
+  proxyGroups: { title: "Proxy groups", icon: "folder" },
+  connectionsTable: { title: "Live connections", icon: "swap_vert" },
 };
 
 const DEFAULT_CARD_ORDER: DashboardCardId[] = [
+  "core",
   "uploadTraffic",
   "downloadTraffic",
-  "status",
+  "clashMode",
+  "memory",
   "connections",
+  "egressIp",
+  "tun",
+  "systemProxy",
+  "profile",
+  "proxyGroups",
+  "connectionsTable",
   "trafficHistory",
   "connectionHistory",
-  "systemProxy",
-  "clashMode",
-  "profile",
 ];
 
 export interface DashboardCardsConfig {
@@ -59,12 +75,12 @@ export function isDashboardCardId(value: string): value is DashboardCardId {
   return value in DASHBOARD_CARDS;
 }
 
-export function dashboardCardIds(desktop: boolean): DashboardCardId[] {
-  return DEFAULT_CARD_ORDER.filter((card) => desktop || DASHBOARD_CARDS[card].desktop !== true);
+export function dashboardCardIds(): DashboardCardId[] {
+  return DEFAULT_CARD_ORDER;
 }
 
-export function loadDashboardCardsConfig(desktop: boolean): DashboardCardsConfig {
-  const defaults = dashboardCardIds(desktop);
+export function loadDashboardCardsConfig(): DashboardCardsConfig {
+  const defaults = dashboardCardIds();
   const known = new Set<string>(defaults);
   const parsed = loadStoredJson(STORAGE_KEY) as Partial<DashboardCardsConfig> | null;
   if (parsed) {
@@ -99,9 +115,9 @@ export function saveDashboardCardsConfig(config: DashboardCardsConfig) {
   saveStoredJson(STORAGE_KEY, config);
 }
 
-export function resetDashboardCardsConfig(desktop: boolean): DashboardCardsConfig {
+export function resetDashboardCardsConfig(): DashboardCardsConfig {
   removeStoredValue(STORAGE_KEY);
-  const defaults = dashboardCardIds(desktop);
+  const defaults = dashboardCardIds();
   return { enabled: [...defaults], order: [...defaults] };
 }
 

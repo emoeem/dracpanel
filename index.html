@@ -7,8 +7,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <!-- iOS 26 Safari ignores theme-color and samples #statusbar-tint instead. -->
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fffbeb" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#282a36" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fafaf8" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1a1a1d" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="DracPanel" />
@@ -23,6 +23,31 @@
           dark = stored !== "light";
         } catch (e) {}
         document.documentElement.dataset.theme = dark ? "dark" : "light";
+      })();
+      (function () {
+        // Palette must land before first paint: flclash (default for fresh
+        // installs) or one of the alternates; pre-palette users keep dracula.
+        try {
+          var palette = localStorage.getItem("sing-box-dashboard.palette");
+          var known = ["flclash", "dracula", "nord", "catppuccin"];
+          if (known.indexOf(palette) === -1) {
+            palette = localStorage.getItem("sing-box-dashboard.theme") !== null ? "dracula" : "flclash";
+          }
+          document.documentElement.dataset.palette = palette;
+          if (localStorage.getItem("sing-box-dashboard.amoled") === "true") {
+            document.documentElement.dataset.amoled = "true";
+          }
+        } catch (e) {}
+        // The accent attribute must exist before first paint so the per-palette
+        // default block (not a stale inherited value) provides --accent.
+        try {
+          var accent = localStorage.getItem("sing-box-dashboard.accent");
+          var presets = ["blue", "purple", "pink", "red", "orange", "yellow", "green", "graphite"];
+          if (presets.indexOf(accent) === -1 && !(accent && accent.charAt(0) === "#")) {
+            accent = "default";
+          }
+          document.documentElement.dataset.accent = accent;
+        } catch (e) {}
       })();
       (function () {
         try {

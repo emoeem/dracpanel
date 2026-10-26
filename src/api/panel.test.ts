@@ -179,6 +179,8 @@ describe("setSubscriptionSchedule", () => {
 
 describe("probePanelEndpoint", () => {
   it("distinguishes an absent route from a known route's 404", async () => {
+    // Probes only run with a panel configured; the client fails fast without one.
+    localStorage.setItem(PANEL_TOKEN_KEY, "token");
     const responses = [
       new Response(JSON.stringify({ ok: false, message: "未知接口：GET /api/geoip" }), {
         status: 404,

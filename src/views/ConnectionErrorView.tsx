@@ -62,7 +62,7 @@ export function ConnectionErrorView(props: {
             {t("Edit Server")}
           </Button>
           {localStorage.getItem("panel_token") !== null && (
-            <Button onClick={() => navigate("manage")}>{t("Manage")}</Button>
+            <Button onClick={() => navigate("system")}>{t("System")}</Button>
           )}
         </div>
         {others.length > 0 && (

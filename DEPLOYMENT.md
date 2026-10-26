@@ -186,7 +186,7 @@ unit remains a defense-in-depth fallback, not the primary guarantee.
 
 ## Pages
 
-概览 / 代理 / 连接 / 日志 / 规则 / 测速 / 设置 / 管理, plus the upstream
+仪表板 / 代理 / 配置 / 请求 / 连接 / DNS / 日志 / 规则 / 测速 / 工具 / 设置 / 系统
 工具 pages. `Ctrl+1…8` jumps to the eight primary pages.
 The 规则 page is derived from the live config via the panel API because the
 native API has no rules RPC. 测速 uses the native URLTest/NetworkQuality/STUN
@@ -195,20 +195,16 @@ RPCs. The connections list is windowed (virtual scrolling), not capped at 500.
 ## Build
 
 ```bash
-git clone --recursive https://github.com/emoeem/dracpanel.git
+git clone https://github.com/emoeem/dracpanel.git
 cd dracpanel
-# if cloned without --recursive:
-git submodule update --init --depth 1
 
 npx --yes pnpm@11.13.1 install --frozen-lockfile --trust-lockfile
-npx --yes pnpm@11.13.1 generate   # protobuf + icons + terminal themes
+npx --yes pnpm@11.13.1 generate   # protobuf + icons
 ./node_modules/.bin/tsc -b
 ./node_modules/.bin/vite build
 ```
 
-`src/gen/` and `src/lib/terminalThemes.generated.ts` are generated (not
-committed); `pnpm generate` creates them. The `vendor/iterm2-color-schemes`
-submodule is required by the terminal-theme generator.
+`src/gen/` is generated (not committed); `pnpm generate` creates it.
 
 `--trust-lockfile` skips pnpm 11's per-entry supply-chain metadata check; the
 lockfile is the upstream pinned lockfile. Omit it on fast/clean networks.
@@ -348,7 +344,6 @@ Verified on 2026-10-17 against sing-box v1.14.3-reF1nd:
 src/                 React source (upstream dashboard + Dracula shell + management)
 public/              icons / static assets
 proto/               StartedService protobuf
-vendor/              iTerm2 color-schemes submodule (terminal theme generator)
 artifacts/           acceptance scripts, screenshots, acceptance record
 deploy/              install.sh, rollback-test.sh
 NOTICE, LICENSE      GPL-3.0-or-later (full text) and upstream/palette/name notices

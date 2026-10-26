@@ -1,9 +1,8 @@
 import type { DescMessage, DescMethodBiDiStreaming } from "@bufbuild/protobuf";
 import type { Client, Transport } from "@connectrpc/connect";
-import { Code, ConnectError, createClient } from "@connectrpc/connect";
+import { createClient } from "@connectrpc/connect";
 import { createGrpcWebTransport } from "@connectrpc/connect-web";
 
-import { MIN_API_VERSION } from "../app/capabilities";
 import {
   Connection,
   ConnectionEventType,
@@ -15,10 +14,6 @@ import {
   ServiceStatus_Type,
   StartedService,
   Status,
-  TailscaleEndpointStatus,
-  USBIPServerStatus,
-  type OpenConnectEndpointStatus,
-  type OpenVPNEndpointStatus,
 } from "../gen/daemon/started_service_pb";
 import {
   openBidirectionalStream,
@@ -101,26 +96,6 @@ export interface OutboundsData {
   loaded: boolean;
 }
 
-export interface TailscaleData {
-  endpoints: TailscaleEndpointStatus[];
-  loaded: boolean;
-}
-
-export interface UsbipData {
-  servers: USBIPServerStatus[];
-  loaded: boolean;
-}
-
-export interface OpenConnectData {
-  endpoints: OpenConnectEndpointStatus[];
-  loaded: boolean;
-}
-
-export interface OpenVPNData {
-  endpoints: OpenVPNEndpointStatus[];
-  loaded: boolean;
-}
-
 export interface ServerInfo {
   version: string;
   apiVersion: number;
@@ -141,10 +116,6 @@ export class DaemonApi {
   readonly logs: StreamStore<LogsData>;
   readonly connections: StreamStore<ConnectionsData>;
   readonly outbounds: StreamStore<OutboundsData>;
-  readonly tailscale: StreamStore<TailscaleData>;
-  readonly usbip: StreamStore<UsbipData>;
-  readonly openConnect: StreamStore<OpenConnectData>;
-  readonly openVPN: StreamStore<OpenVPNData>;
 
   private logSequence = 0;
   private versionCache: ServerInfo | null = null;
@@ -403,53 +374,6 @@ export class DaemonApi {
         }
       },
     );
-
-    this.tailscale = new StreamStore<TailscaleData>(
-      () => ({ endpoints: [], loaded: false }),
-      async ({ signal, update }) => {
-        for await (const message of this.client.subscribeTailscaleStatus({}, { signal })) {
-          update(() => ({ endpoints: message.endpoints, loaded: true }));
-        }
-      },
-    );
-
-    this.usbip = new StreamStore<UsbipData>(
-      () => ({ servers: [], loaded: false }),
-      async ({ signal, update }) => {
-        const { apiVersion } = await this.serverInfo();
-        if (apiVersion < MIN_API_VERSION.usbip) {
-          throw new ConnectError(
-            `requires server API version ${MIN_API_VERSION.usbip}`,
-            Code.Unimplemented,
-          );
-        }
-        for await (const message of this.client.subscribeUSBIPServerStatus({}, { signal })) {
-          update(() => ({ servers: message.servers, loaded: true }));
-        }
-      },
-    );
-
-    this.openConnect = new StreamStore<OpenConnectData>(
-      () => ({ endpoints: [], loaded: false }),
-      async ({ signal, update }) => {
-        await this.requireApiVersion(MIN_API_VERSION.openVpnAndOpenConnect);
-        for await (const message of this.client.subscribeOpenConnectStatus({}, { signal })) {
-          update(() => ({ endpoints: message.endpoints, loaded: true }));
-        }
-      },
-      true,
-    );
-
-    this.openVPN = new StreamStore<OpenVPNData>(
-      () => ({ endpoints: [], loaded: false }),
-      async ({ signal, update }) => {
-        await this.requireApiVersion(MIN_API_VERSION.openVpnAndOpenConnect);
-        for await (const message of this.client.subscribeOpenVPNStatus({}, { signal })) {
-          update(() => ({ endpoints: message.endpoints, loaded: true }));
-        }
-      },
-      true,
-    );
   }
 
   openBidirectionalStream<I extends DescMessage, O extends DescMessage>(
@@ -473,10 +397,6 @@ export class DaemonApi {
     this.logs.retryNow();
     this.connections.retryNow();
     this.outbounds.retryNow();
-    this.tailscale.retryNow();
-    this.usbip.retryNow();
-    this.openConnect.retryNow();
-    this.openVPN.retryNow();
   }
 
   reconnectNow(): void {
@@ -487,8 +407,6 @@ export class DaemonApi {
     this.logs.reconnectNow();
     this.connections.reconnectNow();
     this.outbounds.reconnectNow();
-    this.tailscale.reconnectNow();
-    this.usbip.reconnectNow();
   }
 
   async urlTest(outboundTag: string): Promise<void> {
@@ -534,13 +452,6 @@ export class DaemonApi {
     return this.versionCache;
   }
 
-  private async requireApiVersion(min: number): Promise<void> {
-    const { apiVersion } = await this.serverInfo();
-    if (apiVersion < min) {
-      throw new ConnectError(`requires server API version ${min}`, Code.Unimplemented);
-    }
-  }
-
   async getStartedAt(): Promise<number> {
     const response = await this.client.getStartedAt({});
     return Number(response.startedAt);
@@ -549,14 +460,6 @@ export class DaemonApi {
   async getDeprecatedWarnings(): Promise<DeprecatedWarning[]> {
     const response = await this.client.getDeprecatedWarnings({});
     return response.warnings;
-  }
-
-  async setTailscaleExitNode(endpointTag: string, stableID: string): Promise<void> {
-    await this.client.setTailscaleExitNode({ endpointTag, stableID });
-  }
-
-  async tailscaleLogout(endpointTag: string): Promise<void> {
-    await this.client.tailscaleLogout({ endpointTag });
   }
 }
 

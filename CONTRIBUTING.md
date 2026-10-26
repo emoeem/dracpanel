@@ -15,21 +15,18 @@ GPL-3.0-or-later），改动请遵守上游许可证的要求（不得使用原�
 - **pnpm**：`packageManager` 固定为 **pnpm@11.13.1**（pnpm 11）。仓库里的
   lockfile 来自上游，安装时加 `--trust-lockfile` 可跳过 pnpm 11 的供应链
   元数据校验（网络条件好时可以省略）。
-- **Git submodule**：`vendor/`（iTerm2 色板）用于生成终端主题，克隆时记得
-  `--recursive`，否则 `pnpm generate` 会失败。
 - Linux + systemd 才能跑真实部署；纯前端改动不需要装 `sing-box-panel`。
 
 ```bash
-git clone --recursive https://github.com/emoeem/dracpanel.git
+git clone https://github.com/emoeem/dracpanel.git
 cd dracpanel
-git submodule update --init --depth 1          # 克隆时忘了 --recursive 才需要
 
 npx --yes pnpm@11.13.1 install --frozen-lockfile --trust-lockfile
-npx --yes pnpm@11.13.1 generate                # protobuf + 图标 + 终端主题
+npx --yes pnpm@11.13.1 generate                # protobuf + 图标
 npx --yes pnpm@11.13.1 dev
 ```
 
-`src/gen/` 和 `src/lib/terminalThemes.generated.ts` 是**生成产物，不提交**。
+`src/gen/` 是**生成产物，不提交**。
 `pnpm build` 之前会由 `prebuild`（`scripts/ensure-generated.mjs`）自动补跑
 `pnpm generate`，所以新克隆直接 `pnpm build` 也能过。
 
@@ -38,7 +35,7 @@ npx --yes pnpm@11.13.1 dev
 | 命令 | 作用 |
 | --- | --- |
 | `pnpm dev` | Vite 开发服务器（5173） |
-| `pnpm generate` | `buf generate` + 图标 + 终端主题（改 proto 或 submodule 后必跑） |
+| `pnpm generate` | `buf generate` + 图标（改 proto 或图标清单后必跑） |
 | `pnpm lint` | ESLint（`src` `scripts` `eslint.config.js` `vite.config.ts`） |
 | `pnpm lint:css` | Stylelint（`src/**/*.css`） |
 | `pnpm test` | Vitest 单次运行 |
@@ -152,7 +149,7 @@ pnpm test` 基本就够了。
   全部测试。装钩子：`pnpm install` 会跑 `prepare`（`husky`）。
 - 提交信息沿用仓库现有风格：`feat(scope): ...` / `fix: ...` / `docs: ...`；
   管理模块用 `feat(panel/...)`。
-- 不要提交 `dist/`、`src/gen/`、`src/lib/terminalThemes.generated.ts`、
+- 不要提交 `dist/`、`src/gen/`、
   `coverage/`（已在 `.gitignore` 里）。
 - 截图/验收记录放 `artifacts/`，**发布前必须脱敏**（真实目标、节点名、应用
   名、本机路径）。

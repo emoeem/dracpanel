@@ -4,7 +4,6 @@ import type { LogEntry } from "../api/daemon";
 import { pad2 } from "../api/format";
 import { isTerminalCode, useStream } from "../api/stream";
 import { useApi } from "../app/context";
-import { useDesktopHost } from "../app/desktop";
 import { showError } from "../app/errorStore";
 import { useStreamOutage } from "../app/hooks";
 import { useI18n } from "../app/i18n";
@@ -95,7 +94,6 @@ function onShareError(error: unknown): void {
 
 export function LogsView() {
   const api = useApi();
-  const host = useDesktopHost();
   const { t } = useI18n();
   const logs = useStream(api.logs);
   const outage = useStreamOutage(logs, isTerminalCode(logs.errorCode));
@@ -178,7 +176,7 @@ export function LogsView() {
   });
 
   const logsText = () => filtered.map((entry) => stripAnsi(entry.message)).join("\n");
-  const sharingAvailable = canShare(host);
+  const sharingAvailable = canShare();
 
   const saveLogs = () => {
     const url = URL.createObjectURL(new Blob([logsText()], { type: "text/plain" }));
@@ -191,7 +189,7 @@ export function LogsView() {
 
   const shareLogs = () => {
     const text = logsText();
-    void shareFile(host, logFileName(), text, "text/plain").catch(onShareError);
+    void shareFile(logFileName(), text, "text/plain").catch(onShareError);
   };
 
   let body: ReactNode;

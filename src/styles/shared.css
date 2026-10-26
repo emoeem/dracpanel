@@ -1050,7 +1050,89 @@ button.settings-row:focus-visible {
 }
 
 .menu.accent-menu {
+  /* Anchors can be as narrow as an icon button; the appearance content needs
+     room for the palette grid and the accent swatches. */
+  min-width: 264px;
   padding: var(--space-12) var(--space-14);
+}
+
+.accent-menu-section {
+  display: grid;
+  gap: var(--space-6);
+  padding-bottom: var(--space-10);
+  margin-bottom: var(--space-10);
+  border-bottom: 1px solid var(--border);
+}
+
+.accent-menu-title {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-faint);
+}
+
+.accent-menu-row {
+  display: flex;
+  gap: var(--space-8);
+  align-items: center;
+  justify-content: space-between;
+  min-height: 26px;
+  font-size: var(--text-sm);
+}
+
+.palette-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.palette-grid button {
+  height: var(--control-height);
+  padding: 0 var(--space-10);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.palette-grid button:hover {
+  background: var(--hover);
+}
+
+.palette-grid button.active {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.accent-menu-hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+}
+
+.menu .icon-segmented button {
+  width: auto;
+  height: var(--control-height);
+  padding: 0 var(--space-12);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+
+.menu .icon-segmented button.active {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .setup {

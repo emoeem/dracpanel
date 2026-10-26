@@ -312,6 +312,13 @@
       letter-spacing: -0.015em;
     }
 
+  .mobile-topbar-actions {
+      display: flex;
+      gap: var(--space-4);
+      align-items: center;
+      margin-inline-start: auto;
+    }
+
   .sidebar {
       position: fixed;
       inset-inline-start: 0;
@@ -380,9 +387,23 @@
   flex: 1;
   flex-direction: column;
   min-width: 0;
+
+  /* In the ≤900px column layout the app root is the fixed-height ancestor;
+     without this the flex item's min-height:auto lets the page content push
+     the column past the viewport and .content never becomes scrollable. */
+  min-height: 0;
 }
 
 .web-column > .content {
   flex: 1;
   min-height: 0;
+}
+
+/* Phone layout: the bottom navigation bar overlays the scroll area. */
+.with-bottom-nav .content {
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+}
+
+.with-bottom-nav .reconnect-pill {
+  bottom: calc(76px + env(safe-area-inset-bottom));
 }

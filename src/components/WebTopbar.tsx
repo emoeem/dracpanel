@@ -1,11 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useStream } from "../api/stream";
 import { ServiceStatus_Type } from "../gen/daemon/started_service_pb";
-import { useApi } from "../app/context";
+import {
+  useApi,
+  type AccentPreference,
+  type PalettePreference,
+  type ThemePreference,
+} from "../app/context";
 import { showError } from "../app/errorStore";
 import { useI18n } from "../app/i18n";
-import type { ThemePreference } from "../app/context";
+import { useDismiss } from "../app/hooks";
+import { AppearanceMenuContent } from "./ui";
 import { Icon } from "./Icon";
 import styles from "./WebTopbar.module.css";
 
@@ -23,12 +29,21 @@ export function WebTopbar(props: {
   version: string | null;
   theme: ThemePreference;
   onThemeChange: (theme: ThemePreference) => void;
+  accent: AccentPreference;
+  onAccentChange: (accent: AccentPreference) => void;
+  palette: PalettePreference;
+  onPaletteChange: (palette: PalettePreference) => void;
+  amoled: boolean;
+  onAmoledChange: (amoled: boolean) => void;
 }) {
   const api = useApi();
   const { t } = useI18n();
   const serviceStatus = useStream(api.serviceStatus);
   const clashMode = useStream(api.clashMode);
   const [pendingMode, setPendingMode] = useState<string | null>(null);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const appearanceRef = useRef<HTMLDivElement>(null);
+  useDismiss(appearanceRef, appearanceOpen, () => setAppearanceOpen(false));
 
   const status = serviceStatus.data.status?.status ?? ServiceStatus_Type.IDLE;
   const started = status === ServiceStatus_Type.STARTED;
@@ -111,15 +126,32 @@ export function WebTopbar(props: {
       </div>
 
       <div className={styles.actions}>
-        <button
-          type="button"
-          className={styles.iconButton}
-          title={props.theme === "dark" ? t("Light") : t("Dark")}
-          aria-label={props.theme === "dark" ? t("Light") : t("Dark")}
-          onClick={() => props.onThemeChange(props.theme === "dark" ? "light" : "dark")}
-        >
-          <Icon name={props.theme === "dark" ? "light_mode" : "dark_mode"} />
-        </button>
+        <div className="menu-anchor" ref={appearanceRef}>
+          <button
+            type="button"
+            className={styles.iconButton}
+            title={t("Appearance")}
+            aria-label={t("Appearance")}
+            aria-expanded={appearanceOpen}
+            onClick={() => setAppearanceOpen(!appearanceOpen)}
+          >
+            <Icon name="palette" />
+          </button>
+          {appearanceOpen && (
+            <div className="menu align-right accent-menu">
+              <AppearanceMenuContent
+                theme={props.theme}
+                onThemeChange={props.onThemeChange}
+                accent={props.accent}
+                onChangeAccent={props.onAccentChange}
+                palette={props.palette}
+                onPaletteChange={props.onPaletteChange}
+                amoled={props.amoled}
+                onAmoledChange={props.onAmoledChange}
+              />
+            </div>
+          )}
+        </div>
         <button
           type="button"
           className={styles.iconButton}

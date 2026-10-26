@@ -29,7 +29,7 @@ beforeEach(() => {
 
 describe("loadDashboardCardsConfig", () => {
   it("enables the new history cards for a fresh config", () => {
-    const config = loadDashboardCardsConfig(false);
+    const config = loadDashboardCardsConfig();
     expect(config.enabled).toContain("trafficHistory");
     expect(config.enabled).toContain("connectionHistory");
     expect(config.order).toContain("trafficHistory");
@@ -41,7 +41,7 @@ describe("loadDashboardCardsConfig", () => {
       order: ["uploadTraffic", "downloadTraffic", "status", "connections", "systemProxy", "clashMode", "profile"],
     };
     saveDashboardCardsConfig(saved);
-    const config = loadDashboardCardsConfig(false);
+    const config = loadDashboardCardsConfig();
     expect(config.enabled).toContain("trafficHistory");
     expect(config.enabled).toContain("connectionHistory");
     expect(config.enabled).not.toContain("status");
@@ -50,9 +50,9 @@ describe("loadDashboardCardsConfig", () => {
   });
 
   it("does not re-enable a new card after the user hides it", () => {
-    const initial = loadDashboardCardsConfig(false);
+    const initial = loadDashboardCardsConfig();
     saveDashboardCardsConfig(toggleCard(initial, "trafficHistory"));
-    const reloaded = loadDashboardCardsConfig(false);
+    const reloaded = loadDashboardCardsConfig();
     expect(reloaded.enabled).not.toContain("trafficHistory");
   });
 });

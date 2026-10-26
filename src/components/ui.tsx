@@ -10,6 +10,7 @@ import {
   useIsMobile,
   type AccentPreference,
   type AccentPreset,
+  type PalettePreference,
   type ThemePreference,
 } from "../app/context";
 import { showError } from "../app/errorStore";
@@ -371,7 +372,7 @@ export function ThemeSelect(props: {
     <div className="icon-segmented">
       {(
         [
-          { value: "auto", icon: "brightness_auto", title: t("System") },
+          { value: "auto", icon: "brightness_auto", title: t("Follow system") },
           { value: "light", icon: "light_mode", title: t("Light") },
           { value: "dark", icon: "dark_mode", title: t("Dark") },
         ] as const
@@ -440,9 +441,98 @@ function AccentSelect(props: {
   );
 }
 
+export interface AppearanceMenuProps {
+  theme: ThemePreference;
+  onThemeChange: (theme: ThemePreference) => void;
+  accent: AccentPreference;
+  onChangeAccent: (accent: AccentPreference) => void;
+  palette: PalettePreference;
+  onPaletteChange: (palette: PalettePreference) => void;
+  amoled: boolean;
+  onAmoledChange: (amoled: boolean) => void;
+}
+
+/** Popover body shared by the settings page and the topbar appearance menu. */
+export function AppearanceMenuContent(props: AppearanceMenuProps) {
+  const { t } = useI18n();
+  const palettes: { value: PalettePreference; label: string }[] = [
+    { value: "flclash", label: t("FlClash") },
+    { value: "dracula", label: t("Dracula") },
+    { value: "nord", label: t("Nord") },
+    { value: "catppuccin", label: t("Catppuccin") },
+  ];
+  return (
+    <>
+      <div className="accent-menu-section">
+        <div className="accent-menu-title">{t("Appearance")}</div>
+        <div className="icon-segmented">
+          {(
+            [
+              { value: "auto", icon: "brightness_auto", title: t("Follow system") },
+              { value: "light", icon: "light_mode", title: t("Light") },
+              { value: "dark", icon: "dark_mode", title: t("Dark") },
+            ] as const
+          ).map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              title={option.title}
+              aria-label={option.title}
+              aria-pressed={props.theme === option.value}
+              className={props.theme === option.value ? "active" : ""}
+              onClick={() => props.onThemeChange(option.value)}
+            >
+              <Icon name={option.icon} size={15} />
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="accent-menu-section">
+        <div className="accent-menu-title">{t("Color scheme")}</div>
+        <div className="palette-grid">
+          {palettes.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={props.palette === option.value ? "active" : ""}
+              aria-pressed={props.palette === option.value}
+              onClick={() => props.onPaletteChange(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <div className="accent-menu-row">
+          <span>{t("Pure black")}</span>
+          <button
+            type="button"
+            className={props.amoled ? "switch on" : "switch"}
+            role="switch"
+            aria-checked={props.amoled}
+            aria-label={t("Pure black")}
+            onClick={() => props.onAmoledChange(!props.amoled)}
+          />
+        </div>
+      </div>
+      <AccentSelect
+        accent={props.accent}
+        onChange={(accent) => {
+          props.onChangeAccent(accent);
+        }}
+      />
+    </>
+  );
+}
+
 export function ThemeMenu(props: {
+  theme: ThemePreference;
+  onThemeChange: (theme: ThemePreference) => void;
   accent: AccentPreference;
   onChange: (accent: AccentPreference) => void;
+  palette: PalettePreference;
+  onPaletteChange: (palette: PalettePreference) => void;
+  amoled: boolean;
+  onAmoledChange: (amoled: boolean) => void;
   openUp?: boolean;
 }) {
   const { t } = useI18n();
@@ -468,14 +558,20 @@ export function ThemeMenu(props: {
       </Button>
       {open && (
         <div className={props.openUp ? "menu open-up align-right accent-menu" : "menu align-right accent-menu"}>
-          <AccentSelect
+          <AppearanceMenuContent
+            theme={props.theme}
+            onThemeChange={props.onThemeChange}
             accent={props.accent}
-            onChange={(accent) => {
+            onChangeAccent={(accent) => {
               props.onChange(accent);
               if (isAccentPreset(accent)) {
                 setOpen(false);
               }
             }}
+            palette={props.palette}
+            onPaletteChange={props.onPaletteChange}
+            amoled={props.amoled}
+            onAmoledChange={props.onAmoledChange}
           />
         </div>
       )}

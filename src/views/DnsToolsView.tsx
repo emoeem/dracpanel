@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { formatDateTime } from "../api/format";
 import {
   ClashApiError,
   flushDnsCache,
@@ -11,7 +12,6 @@ import {
 import { useI18n } from "../app/i18n";
 import { Button, Card, DataLine, Dialog, EmptyState, Field, Select, Spinner } from "../components/ui";
 import { loadStoredJson, saveStoredJson } from "../lib/storage";
-import { ToolsPageHeader } from "./ToolsView";
 import styles from "./DnsToolsView.module.css";
 
 const QUERY_HISTORY_KEY = "dns-query-history";
@@ -20,6 +20,15 @@ const DNS_TYPES = ["A", "AAAA", "CNAME", "TXT", "MX", "NS", "PTR", "SRV", "SOA"]
 interface QueryHistoryEntry {
   name: string;
   type: string;
+}
+
+interface DnsQueryLogEntry {
+  at: number;
+  name: string;
+  type: string;
+  ok: boolean;
+  answers: number;
+  error?: string;
 }
 
 const DNS_TYPE_NAMES: Record<number, string> = {
@@ -62,7 +71,7 @@ function recordTypeName(record: ClashDnsRecord): string {
 }
 
 export function DnsToolsView() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [name, setName] = useState("");
   const [type, setType] = useState("A");
   const [querying, setQuerying] = useState(false);
@@ -72,6 +81,7 @@ export function DnsToolsView() {
   const [cacheBusy, setCacheBusy] = useState<"dns" | "fakeip" | null>(null);
   const [cacheMessage, setCacheMessage] = useState("");
   const [confirmFakeIp, setConfirmFakeIp] = useState(false);
+  const [ledger, setLedger] = useState<DnsQueryLogEntry[]>([]);
 
   const remember = (entry: QueryHistoryEntry) => {
     const next = [entry, ...history.filter((item) => item.name !== entry.name || item.type !== entry.type)].slice(0, 8);
@@ -91,8 +101,24 @@ export function DnsToolsView() {
       const response = await queryDns(queryName, type);
       setResult(response);
       remember({ name: queryName, type });
+      setLedger((current) =>
+        [
+          {
+            at: Date.now(),
+            name: queryName,
+            type,
+            ok: (response.Status ?? 0) === 0,
+            answers: (response.Answer ?? []).length,
+          },
+          ...current,
+        ].slice(0, 100),
+      );
     } catch (cause) {
-      setError(errorMessage(cause));
+      const message = errorMessage(cause);
+      setError(message);
+      setLedger((current) =>
+        [{ at: Date.now(), name: queryName, type, ok: false, answers: 0, error: message }, ...current].slice(0, 100),
+      );
     } finally {
       setQuerying(false);
     }
@@ -126,8 +152,15 @@ export function DnsToolsView() {
 
   return (
     <div className="page">
-      <ToolsPageHeader title={t("DNS Tools")} />
+      <div className="page-header">
+        <h1 className="page-title">{t("DNS")}</h1>
+      </div>
       <div className="settings-stack">
+        <p className="hint" style={{ margin: 0 }}>
+          {t(
+            "The core does not expose a DNS query log; this page queries on demand and records only the queries you start here.",
+          )}
+        </p>
         <Card title={t("DNS query")} icon="dns">
           <div className={styles.form}>
             <Field label={t("Name")}>
@@ -209,6 +242,35 @@ export function DnsToolsView() {
                 </Button>
               ))}
             </div>
+          )}
+        </Card>
+
+        <Card title={t("Session log")} icon="history">
+          {ledger.length === 0 ? (
+            <EmptyState icon="history">{t("No DNS queries in this session yet")}</EmptyState>
+          ) : (
+            <>
+              <div className={styles.records}>
+                {ledger.map((entry, index) => (
+                  <div key={`${entry.at}-${index}`} className={styles.record}>
+                    <span className={styles.recordName}>{entry.name}</span>
+                    <span className={styles.recordType}>{entry.type}</span>
+                    <span className={styles.recordTtl}>
+                      {entry.ok ? t("{count} answers", { count: entry.answers }) : t("Failed")}
+                    </span>
+                    <span className={styles.recordData}>
+                      {formatDateTime(entry.at, language)}
+                      {entry.error ? ` · ${entry.error}` : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className={styles.cacheActions}>
+                <Button size="small" onClick={() => setLedger([])}>
+                  {t("Clear session log")}
+                </Button>
+              </div>
+            </>
           )}
         </Card>
 

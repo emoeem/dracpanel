@@ -5,6 +5,12 @@ export interface Server {
   name: string;
   url: string;
   secret: string;
+  /**
+   * Clash API endpoint of the same core (e.g. http://127.0.0.1:9190).
+   * Optional: the panel normally provides it; direct mode needs it here.
+   */
+  clashUrl?: string;
+  clashSecret?: string;
 }
 
 export interface ServersState {

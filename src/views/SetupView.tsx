@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { createServerId, normalizeServerUrl, type Server } from "../api/config";
 import { DaemonApi } from "../api/daemon";
 import { useDiagnosedConnectError } from "../app/connectError";
-import type { AccentPreference, ThemePreference } from "../app/context";
+import type { AccentPreference, PalettePreference, ThemePreference } from "../app/context";
 import { LanguageSelect, useI18n, type Translate } from "../app/i18n";
 import { Icon } from "../components/Icon";
 import {
@@ -38,6 +38,10 @@ export function SetupView(props: {
   onThemeChange: (theme: ThemePreference) => void;
   accent: AccentPreference;
   onAccentChange: (accent: AccentPreference) => void;
+  palette: PalettePreference;
+  onPaletteChange: (palette: PalettePreference) => void;
+  amoled: boolean;
+  onAmoledChange: (amoled: boolean) => void;
 }) {
   const { t, language } = useI18n();
   const [name, setName] = useState("");
@@ -181,7 +185,17 @@ export function SetupView(props: {
           </div>
           <div className="settings-row">
             <span className="settings-row-label">{t("Theme")}</span>
-            <ThemeMenu accent={props.accent} onChange={props.onAccentChange} openUp />
+            <ThemeMenu
+              theme={props.theme}
+              onThemeChange={props.onThemeChange}
+              accent={props.accent}
+              onChange={props.onAccentChange}
+              palette={props.palette}
+              onPaletteChange={props.onPaletteChange}
+              amoled={props.amoled}
+              onAmoledChange={props.onAmoledChange}
+              openUp
+            />
           </div>
           <div className="settings-row">
             <span className="settings-row-label">{t("Language")}</span>
