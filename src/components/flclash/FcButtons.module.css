@@ -1,0 +1,113 @@
+.button {
+  display: inline-flex;
+  gap: var(--fc-space-8);
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 var(--fc-space-18);
+  font-size: var(--fc-text-footnote);
+  font-weight: var(--fc-weight-semibold);
+  color: var(--fc-on-surface);
+  white-space: nowrap;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--fc-radius-pill);
+  transition:
+    background var(--fc-duration-fast) var(--fc-ease-out-cubic),
+    color var(--fc-duration-fast) var(--fc-ease-out-cubic),
+    transform var(--fc-duration-fast) var(--fc-ease-out-cubic);
+}
+
+.button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.primary {
+  color: var(--fc-on-primary);
+  background: var(--fc-primary);
+}
+
+.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fc-primary), var(--fc-on-surface) 8%);
+}
+
+.tonal {
+  color: var(--fc-primary-container-text);
+  background: var(--fc-primary-container);
+}
+
+.tonal:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fc-primary-container), var(--fc-primary) 10%);
+}
+
+.text {
+  color: var(--fc-on-surface-variant);
+}
+
+.text:hover:not(:disabled) {
+  background: var(--fc-block);
+}
+
+.small {
+  height: 32px;
+  padding: 0 var(--fc-space-12);
+  font-size: var(--fc-text-caption1);
+}
+
+.icon-button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  color: var(--fc-on-surface-variant);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--fc-radius-pill);
+  transition:
+    background var(--fc-duration-fast) var(--fc-ease-out-cubic),
+    color var(--fc-duration-fast) var(--fc-ease-out-cubic),
+    transform var(--fc-duration-fast) var(--fc-ease-out-cubic);
+}
+
+.icon-button:hover:not(:disabled) {
+  color: var(--fc-on-surface);
+  background: var(--fc-block);
+}
+
+.icon-button:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.icon-button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.active {
+  color: var(--fc-primary-container-text);
+  background: var(--fc-primary-container);
+}
+
+.danger {
+  color: var(--fc-error);
+}
+
+@media (max-width: 600px) {
+  .button {
+    height: 44px;
+  }
+
+  .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+}

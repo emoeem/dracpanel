@@ -1,409 +1,80 @@
 .app {
   display: flex;
   height: 100%;
-}
-
-.mobile-topbar, .sidebar-scrim {
-  display: none;
-}
-
-.sidebar {
-  display: flex;
-  flex-shrink: 0;
-  flex-direction: column;
-  gap: var(--space-px);
-  width: var(--sidebar-width);
-  padding: var(--space-20) var(--space-12) var(--space-14);
-  background: var(--surface);
-  border-inline-end: 1px solid var(--border);
-}
-
-.sidebar-brand {
-  composes: text-title from global;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-px);
-  padding: 0 var(--space-10) var(--space-14);
-}
-
-.sidebar-brand-version {
-  composes: text-mono-caption from global;
-  color: var(--text-faint);
-  letter-spacing: 0;
-}
-
-.nav-item {
-  position: relative;
-  display: flex;
-  gap: var(--space-10);
-  align-items: center;
-  width: 100%;
-  padding: var(--space-8) var(--space-10);
-  font-size: var(--text-base);
-  font-weight: var(--weight-medium);
-  color: var(--text-secondary);
-  text-align: start;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-control);
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.health-alert {
-  display: flex;
-  gap: var(--space-8);
-  align-items: center;
-  padding: var(--space-8) var(--space-10);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  color: var(--danger);
-  background: var(--danger-soft);
-  border-radius: var(--radius-md);
-}
-
-.nav-item:hover {
-  color: var(--text);
-  background: var(--hover);
-}
-
-.nav-item.active {
-  font-weight: var(--weight-semibold);
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-}
-
-/* Active-route indicator bar on the inline-start edge, like modern dashboards. */
-.nav-item.active::before {
-  position: absolute;
-  inset-inline-start: 0;
-  top: 50%;
-  width: 3px;
-  height: 16px;
-  content: "";
-  background: var(--accent);
-  border-radius: var(--radius-pill);
-  transform: translateY(-50%);
-}
-
-.nav-item :global(.icon) {
-  flex-shrink: 0;
-  color: var(--text-faint);
-  transition: color var(--transition-fast);
-}
-
-.nav-item:hover :global(.icon) {
-  color: var(--text-secondary);
-}
-
-.nav-item.active :global(.icon) {
-  color: var(--accent);
-}
-
-.nav-item :global(.badge) {
-  margin-inline-start: auto;
-}
-
-.server-picker {
-  position: relative;
-  padding-top: var(--space-10);
-  margin-top: auto;
-  border-top: 1px solid var(--border);
-}
-
-.server-picker-button {
-  display: flex;
-  gap: var(--space-10);
-  align-items: center;
-  width: 100%;
-  padding: var(--space-8) var(--space-10);
-  font-size: var(--text-base);
-  font-weight: var(--weight-medium);
-  color: var(--text-secondary);
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-control);
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.server-picker-button:hover {
-  color: var(--text);
-  background: var(--hover);
-}
-
-.server-picker-text {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: flex-start;
-  min-width: 0;
-  text-align: start;
-}
-
-.server-picker-line {
-  display: flex;
-  gap: var(--space-10);
-  align-items: center;
-  width: 100%;
-}
-
-.server-dot {
-  margin: 0 var(--space-4);
-}
-
-.server-uptime > :global(.icon) {
-  flex-shrink: 0;
-  margin: 0 var(--space-4);
-}
-
-.server-picker-button .server-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.server-uptime {
-  composes: text-mono-caption from global;
-  display: inline-flex;
-  gap: var(--space-10);
-  align-items: center;
-  line-height: 1.4;
-  color: var(--text-faint);
-}
-
-.server-picker-button > :global(.icon):last-child {
-  color: var(--text-faint);
+  background: var(--fc-page);
 }
 
 .content {
+  display: flex;
   flex: 1;
+  flex-direction: column;
   min-width: 0;
+  min-height: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
   overscroll-behavior: none;
 }
 
-/* Suspense fallback while a lazily loaded route view is being fetched. */
-.view-loading {
+.view {
   display: flex;
-  justify-content: center;
-  padding: var(--space-48) 0;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  animation: app-view-in 220ms var(--fc-ease-standard) both;
 }
 
-.nav-item:active {
-  background: var(--accent-soft);
+@keyframes app-view-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.view-loading {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: var(--fc-space-48) 0;
 }
 
 .connecting-view {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  gap: var(--space-20);
+  gap: var(--fc-space-16);
   align-items: center;
   justify-content: center;
   min-height: 100%;
-  background: var(--bg);
-}
-
-.connecting-view > * {
-  animation: fade-in var(--transition-medium) both;
-  animation-delay: 0.2s;
-}
-
-.connecting-brand {
-  margin-bottom: 0;
+  background: var(--fc-page);
+  animation: app-view-in var(--fc-duration-slow) var(--fc-ease-standard) both;
 }
 
 .connecting-spinner {
-  width: 21px;
-  height: 21px;
+  width: 22px;
+  height: 22px;
 }
 
-.desktop-connecting-view {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg);
+.error-text {
+  margin: 0;
+  font-size: var(--fc-text-footnote);
+  color: var(--fc-on-surface-variant);
 }
 
-.desktop-root {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.desktop-root .app,
-.desktop-root :global(.setup) {
-  flex: 1;
-  min-height: 0;
-}
-
-.content-column {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.content-column > .content {
-  flex: 1;
-  min-height: 0;
-}
-
-.sidebar-titlebar {
-  display: none;
-  flex-shrink: 0;
-  -webkit-app-region: drag;
-}
-
-:global(body[data-platform="darwin"]) .sidebar-titlebar {
-  display: block;
-  height: 28px;
-}
-
-.reconnect-pill {
-  position: fixed;
-  bottom: 18px;
-  left: 50%;
-  z-index: var(--z-pill);
-  display: flex;
-  gap: var(--space-8);
-  align-items: center;
-  padding: var(--space-8) var(--space-14);
-  font-size: var(--text-sm);
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  box-shadow: var(--shadow-card);
-  transform: translateX(-50%);
-  animation: fade-in var(--transition-medium) both;
-  animation-delay: 0.9s;
-}
-
-[dir="rtl"] .sidebar-brand-version, [dir="rtl"] .server-uptime {
-  direction: ltr;
-  unicode-bidi: isolate;
-}
-
-@media (max-width: 900px) {
-  .app {
-      flex-direction: column;
-    }
-
-  .mobile-topbar {
-      /* iOS tints the status bar from the page's top pixels. */
-      position: relative;
-      z-index: var(--z-topbar);
-      display: flex;
-      flex-shrink: 0;
-      gap: var(--space-8);
-      align-items: center;
-      padding: calc(var(--space-6) + env(safe-area-inset-top)) var(--space-10) var(--space-6);
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-    }
-
-  .mobile-topbar-brand {
-      font-family: var(--font-serif);
-      font-size: var(--text-xl);
-      font-weight: var(--weight-semibold);
-      letter-spacing: -0.015em;
-    }
-
-  .mobile-topbar-actions {
-      display: flex;
-      gap: var(--space-4);
-      align-items: center;
-      margin-inline-start: auto;
-    }
-
-  .sidebar {
-      position: fixed;
-      inset-inline-start: 0;
-      top: 0;
-      bottom: 0;
-      z-index: var(--z-drawer);
-      width: min(78vw, 300px);
-      padding-top: calc(var(--space-20) + env(safe-area-inset-top));
-      padding-bottom: calc(var(--space-14) + env(safe-area-inset-bottom));
-
-      /* Horizontal swipes drive the drawer; vertical scrolling still works. */
-      touch-action: pan-y;
-      transform: translateX(-100%);
-      transition: transform var(--transition-slow);
-    }
-
-  [dir="rtl"] .sidebar {
-      transform: translateX(100%);
-    }
-
-  .sidebar.open {
-      box-shadow: var(--shadow-overlay);
-      transform: translateX(0);
-    }
-
-  .sidebar-scrim {
-      position: fixed;
-      inset: 0;
-      z-index: var(--z-scrim);
-      display: block;
-      padding: 0;
-      background: transparent;
-      border: 0;
-      animation: fade-in var(--transition-medium);
-    }
-
-  .sidebar-scrim::before {
-      position: absolute;
-      inset: 0;
-      content: "";
-      background: var(--scrim);
-    }
-
-  .nav-item {
-      padding: var(--space-10);
-      font-size: var(--text-md);
-    }
-
-  .server-picker-button {
-      padding: var(--space-10);
-      font-size: var(--text-md);
-    }
-
+/* Phone: the bottom nav overlays the scroll area. */
+@media (max-width: 600px) {
   .content {
-      min-height: 0;
-    }
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
 }
 
-/* DracPanel web shell */
-.web-app .sidebar-brand {
-  display: none;
-}
-
-.web-column {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-
-  /* In the ≤900px column layout the app root is the fixed-height ancestor;
-     without this the flex item's min-height:auto lets the page content push
-     the column past the viewport and .content never becomes scrollable. */
-  min-height: 0;
-}
-
-.web-column > .content {
-  flex: 1;
-  min-height: 0;
-}
-
-/* Phone layout: the bottom navigation bar overlays the scroll area. */
-.with-bottom-nav .content {
-  padding-bottom: calc(76px + env(safe-area-inset-bottom));
-}
-
-.with-bottom-nav .reconnect-pill {
-  bottom: calc(76px + env(safe-area-inset-bottom));
+/* Laptop: the sidebar overlays with a scrim when expanded. */
+@media (max-width: 840px) and (min-width: 601px) {
+  .sidebar-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-drawer) - 1);
+    background: var(--fc-scrim);
+    border: 0;
+    animation: app-view-in var(--fc-duration-fast) ease;
+  }
 }

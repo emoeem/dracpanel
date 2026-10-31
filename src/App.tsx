@@ -1,9 +1,9 @@
 import {
+  Component,
   lazy,
   Suspense,
   useEffect,
   useMemo,
-  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -12,14 +12,12 @@ import {
 import {
   loadServersState,
   saveServersState,
-  serverDisplayName,
   type Server,
   type ServersState,
 } from "./api/config";
 import { DaemonApi } from "./api/daemon";
-import { formatDateTime, formatUptime, isHttpUrl } from "./api/format";
 import { isTerminalCode, useStream } from "./api/stream";
-import { ServiceStatus_Type, type DeprecatedWarning } from "./gen/daemon/started_service_pb";
+import { ServiceStatus_Type } from "./gen/daemon/started_service_pb";
 import {
   ApiContext,
   applyAppearance,
@@ -28,113 +26,137 @@ import {
   loadPalettePreference,
   loadThemePreference,
   navigate,
+  useApi,
   saveAccentPreference,
   saveAmoledPreference,
   savePalettePreference,
   saveThemePreference,
-  useApi,
-  useIsMobile,
-  useIsPhone,
-  useNow,
   watchSystemTheme,
   type AccentPreference,
   type PalettePreference,
   type ThemePreference,
 } from "./app/context";
-import { loadDisableDeprecatedWarnings } from "./app/deprecatedWarnings";
-import { dismissError, showError, useCurrentError } from "./app/errorStore";
-import {
-  AUTO_TEST_EVENT,
-  loadAutoTestInterval,
-  type AutoTestInterval,
-} from "./app/groupPreferences";
-import { useDismiss, useStreamOutage, useUnaryOnce } from "./app/hooks";
-import { I18nProvider, useI18n, type MessageKey } from "./app/i18n";
-import { ErrorBoundary } from "./components/ErrorBoundary";
-import { Icon, type IconName } from "./components/Icon";
-import { CommandPalette, type Command } from "./components/CommandPalette";
-import { BottomNav } from "./components/BottomNav";;
-import { WebTopbar } from "./components/WebTopbar";
-import { ToastProvider } from "./components/Toast";
-import { AppearanceMenuContent, Brand, Button, Dialog, IconButton, Spinner, StateDot } from "./components/ui";
-import { notify } from "./lib/notifier";
-import { useDrawerGestures } from "./app/useDrawerGestures";
+import { dismissError, useCurrentError } from "./app/errorStore";
+import { useI18n, I18nProvider } from "./app/i18n";
 import { useHealthMonitor } from "./app/useHealthMonitor";
-import { useLatestRef } from "./app/useLatest";
+import { AUTO_TEST_EVENT, loadAutoTestInterval } from "./app/groupPreferences";
+import { openLogsEnabled } from "./app/logToggle";
+import { FixtureDaemonApi, installFixtureFetch } from "./lib/fixture/fixtureApi";
+import { CommandPalette, type Command } from "./components/CommandPalette";
+import { MobileNav } from "./components/MobileNav";
+import { Sidebar, useSidebarExpanded, type SidebarItem } from "./components/Sidebar";
+import type { IconName } from "./components/Icon";
+import { Button, Dialog, Spinner } from "./components/ui";
+import { ToastProvider } from "./components/Toast";
 import { PanelGate } from "./panel/PanelGate";
 import { ConnectionErrorView } from "./views/ConnectionErrorView";
 import { SetupView } from "./views/SetupView";
 import styles from "./App.module.css";
-import { cx } from "./lib/cx";
 
-// Route views are code-split: a session that only watches the dashboard should
-// not have to download the settings editors or the config tools.
-const OverviewView = lazy(() =>
-  import("./views/OverviewView").then((m) => ({ default: m.OverviewView })),
+/* Development-only fixture backend (?fixture=1 on a dev build) so the rebuilt
+   pages can be exercised without a running core. Production builds drop it. */
+const FIXTURE_MODE =
+  import.meta.env.DEV &&
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).has("fixture");
+
+if (FIXTURE_MODE) {
+  installFixtureFetch();
+  localStorage.setItem("panel_token", "fixture");
+  localStorage.setItem(
+    "sing-box-dashboard.servers",
+    JSON.stringify({
+      servers: [{ id: "fixture", name: "Fixture Server", url: "127.0.0.1:1", secret: "" }],
+      activeId: "fixture",
+    }),
+  );
+}
+
+/* Route views are code-split: a session that only watches the dashboard should
+   not have to download the settings editors or the config tools. */
+const DashboardView = lazy(() =>
+  import("./views/dashboard/DashboardView").then((m) => ({ default: m.DashboardView })),
 );
-const GroupsView = lazy(() => import("./views/GroupsView").then((m) => ({ default: m.GroupsView })));
+const ProxiesView = lazy(() =>
+  import("./views/proxies/ProxiesView").then((m) => ({ default: m.ProxiesView })),
+);
 const ProfilesView = lazy(() =>
-  import("./views/ProfilesView").then((m) => ({ default: m.ProfilesView })),
+  import("./views/profiles/ProfilesView").then((m) => ({ default: m.ProfilesView })),
 );
 const ConnectionsView = lazy(() =>
-  import("./views/ConnectionsView").then((m) => ({ default: m.ConnectionsView })),
+  import("./views/records/RecordsView").then((m) => ({ default: m.ConnectionsView })),
 );
 const RequestsView = lazy(() =>
-  import("./views/RequestsView").then((m) => ({ default: m.RequestsView })),
+  import("./views/records/RecordsView").then((m) => ({ default: m.RequestsView })),
+);
+const DnsView = lazy(() =>
+  import("./views/records/RecordsView").then((m) => ({ default: m.DnsView })),
 );
 const LogsView = lazy(() => import("./views/LogsView").then((m) => ({ default: m.LogsView })));
-const RulesView = lazy(() => import("./views/RulesView").then((m) => ({ default: m.RulesView })));
-const SpeedTestView = lazy(() =>
-  import("./views/SpeedTestView").then((m) => ({ default: m.SpeedTestView })),
+const ToolsView = lazy(() => import("./views/tools/ToolsView").then((m) => ({ default: m.ToolsView })));
+const ThemeView = lazy(() => import("./views/tools/ThemeView").then((m) => ({ default: m.ThemeView })));
+const ResourcesView = lazy(() =>
+  import("./views/tools/ResourcesView").then((m) => ({ default: m.ResourcesView })),
+);
+const BackupView = lazy(() => import("./views/tools/BackupView").then((m) => ({ default: m.BackupView })));
+const GeneralView = lazy(() =>
+  import("./views/tools/GeneralView").then((m) => ({ default: m.GeneralView })),
+);
+const AdvancedView = lazy(() =>
+  import("./views/tools/AdvancedView").then((m) => ({ default: m.AdvancedView })),
+);
+const RulesView = lazy(() => import("./views/tools/RulesView").then((m) => ({ default: m.RulesView })));
+const RuleSetsView = lazy(() =>
+  import("./views/tools/RuleSetsView").then((m) => ({ default: m.RuleSetsView })),
 );
 const ManageView = lazy(() => import("./views/ManageView").then((m) => ({ default: m.ManageView })));
-const ToolsView = lazy(() => import("./views/ToolsView").then((m) => ({ default: m.ToolsView })));
+const ServersView = lazy(() =>
+  import("./views/SettingsView").then((m) => ({ default: m.ServersView })),
+);
 const NetworkQualityView = lazy(() =>
   import("./views/ToolsView").then((m) => ({ default: m.NetworkQualityView })),
 );
 const STUNTestView = lazy(() =>
   import("./views/ToolsView").then((m) => ({ default: m.STUNTestView })),
 );
-const DnsToolsView = lazy(() =>
-  import("./views/DnsToolsView").then((m) => ({ default: m.DnsToolsView })),
-);
 const ConnectivityTestView = lazy(() =>
   import("./views/ConnectivityTestView").then((m) => ({ default: m.ConnectivityTestView })),
-);
-const SettingsView = lazy(() =>
-  import("./views/SettingsView").then((m) => ({ default: m.SettingsView })),
-);
-const PreferencesView = lazy(() =>
-  import("./views/SettingsView").then((m) => ({ default: m.PreferencesView })),
-);
-const ServersView = lazy(() =>
-  import("./views/SettingsView").then((m) => ({ default: m.ServersView })),
 );
 
 export type Route =
   | { page: "dashboard" }
   | { page: "proxies" }
   | { page: "profiles" }
-  | { page: "requests" }
   | { page: "connections" }
-  | { page: "dns" }
   | { page: "logs" }
-  | { page: "rules" }
-  | { page: "speedtest" }
-  | { page: "system" }
   | { page: "tools" }
+  | { page: "tools/requests" }
+  | { page: "tools/dns" }
+  | { page: "tools/resources" }
+  | { page: "tools/theme" }
+  | { page: "tools/backup" }
+  | { page: "tools/general" }
+  | { page: "tools/advanced" }
+  | { page: "tools/rules" }
+  | { page: "tools/rulesets" }
+  | { page: "tools/config" }
+  | { page: "tools/servers" }
   | { page: "tools/network-quality" }
   | { page: "tools/stun" }
-  | { page: "tools/connectivity" }
-  | { page: "settings" }
-  | { page: "settings/preferences" }
-  | { page: "settings/servers" };
+  | { page: "tools/connectivity" };
 
 /** Pre-rename hashes kept working as aliases. */
 const ROUTE_ALIASES: Record<string, Route["page"]> = {
   overview: "dashboard",
   groups: "proxies",
-  manage: "system",
+  manage: "tools/config",
+  system: "tools/config",
+  settings: "tools",
+  requests: "tools/requests",
+  dns: "tools/dns",
+  rules: "tools/rules",
+  speedtest: "proxies",
+  "tools/rules": "tools/rules",
 };
 
 function routeFromHash(locationHash: string): Route {
@@ -149,49 +171,30 @@ function routeFromHash(locationHash: string): Route {
         return segment;
       }
     });
-  const aliased = ROUTE_ALIASES[segments[0]] ?? segments[0];
+  const joined = segments.join("/");
+  const aliased = ROUTE_ALIASES[joined] ?? (joined as Route["page"]);
   switch (aliased) {
+    case "dashboard":
     case "proxies":
-      return { page: "proxies" };
     case "profiles":
-      return { page: "profiles" };
-    case "requests":
-      return { page: "requests" };
-    case "dns":
-      return { page: "dns" };
     case "connections":
-      return { page: "connections" };
     case "logs":
-      return { page: "logs" };
-    case "rules":
-      return { page: "rules" };
-    case "speedtest":
-      return { page: "speedtest" };
-    case "system":
-      return { page: "system" };
     case "tools":
-      switch (segments[1]) {
-        case "network-quality":
-          return { page: "tools/network-quality" };
-        case "stun":
-          return { page: "tools/stun" };
-        case "dns":
-          // DNS was promoted to a top-level page; keep the old hash working.
-          return { page: "dns" };
-        case "connectivity":
-          return { page: "tools/connectivity" };
-        default:
-          return { page: "tools" };
-      }
-    case "settings":
-      switch (segments[1]) {
-        case "preferences":
-          return { page: "settings/preferences" };
-        case "servers":
-          return { page: "settings/servers" };
-        default:
-          return { page: "settings" };
-      }
+    case "tools/requests":
+    case "tools/dns":
+    case "tools/resources":
+    case "tools/theme":
+    case "tools/backup":
+    case "tools/general":
+    case "tools/advanced":
+    case "tools/rules":
+    case "tools/rulesets":
+    case "tools/config":
+    case "tools/servers":
+    case "tools/network-quality":
+    case "tools/stun":
+    case "tools/connectivity":
+      return { page: aliased };
     default:
       return { page: "dashboard" };
   }
@@ -207,6 +210,17 @@ function locationHashSnapshot(): string {
 }
 
 export function App() {
+  if (FIXTURE_MODE) {
+    // The fixture has no real panel/native API behind the gate, so skip it.
+    return (
+      <I18nProvider>
+        <ToastProvider>
+          <WebApp />
+          <GlobalErrorDialog />
+        </ToastProvider>
+      </I18nProvider>
+    );
+  }
   return (
     <I18nProvider>
       <ToastProvider>
@@ -236,14 +250,15 @@ function useAppState() {
     applyAppearance(theme, accent, palette, amoled);
   }, [theme, accent, palette, amoled]);
 
-  const appearanceRef = useRef({ theme, accent, palette, amoled });
-  appearanceRef.current = { theme, accent, palette, amoled };
-
   useEffect(
     () =>
       watchSystemTheme(() => {
-        const current = appearanceRef.current;
-        applyAppearance(current.theme, current.accent, current.palette, current.amoled);
+        applyAppearance(
+          loadThemePreference(),
+          loadAccentPreference(),
+          loadPalettePreference(),
+          loadAmoledPreference(),
+        );
       }),
     [],
   );
@@ -288,79 +303,6 @@ function useAppState() {
   };
 }
 
-function WebApp() {
-  const state = useAppState();
-
-  const activeServer =
-    state.serversState.servers.find((server) => server.id === state.serversState.activeId) ?? null;
-
-  useEffect(() => {
-    if (location.hash !== "") {
-      return;
-    }
-    const last = localStorage.getItem("panel-last-route");
-    if (
-      last !== null &&
-      ["dashboard", "proxies", "connections", "logs", "rules", "speedtest", "settings", "system"].includes(last)
-    ) {
-      navigate(last);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!activeServer) {
-      return;
-    }
-    localStorage.setItem("panel-last-route", state.route.page.split("/")[0]);
-  }, [activeServer, state.route.page]);
-
-  useEffect(() => {
-    if (!activeServer && location.hash !== "") {
-      history.replaceState(null, "", location.pathname + location.search);
-    }
-  }, [activeServer]);
-
-  if (!activeServer) {
-    return (
-      <SetupView
-        onCreate={(server) => {
-          state.updateServers({
-            servers: [...state.serversState.servers, server],
-            activeId: server.id,
-          });
-          navigate("dashboard");
-        }}
-        theme={state.theme}
-        onThemeChange={state.updateTheme}
-        accent={state.accent}
-        onAccentChange={state.updateAccent}
-        palette={state.palette}
-        onPaletteChange={state.updatePalette}
-        amoled={state.amoled}
-        onAmoledChange={state.updateAmoled}
-      />
-    );
-  }
-
-  return (
-    <Shell
-      key={activeServer.id}
-      server={activeServer}
-      serversState={state.serversState}
-      onServersChange={state.updateServers}
-      route={state.route}
-      theme={state.theme}
-      onThemeChange={state.updateTheme}
-      accent={state.accent}
-      onAccentChange={state.updateAccent}
-      palette={state.palette}
-      onPaletteChange={state.updatePalette}
-      amoled={state.amoled}
-      onAmoledChange={state.updateAmoled}
-    />
-  );
-}
-
 function GlobalErrorDialog() {
   const { t } = useI18n();
   const message = useCurrentError();
@@ -370,9 +312,7 @@ function GlobalErrorDialog() {
   return (
     <Dialog onClose={dismissError}>
       <h3>{t("Error")}</h3>
-      {/* Error strings are raised as English text; translate the ones we know
-          about and pass anything else (backend messages) through unchanged. */}
-      <p className="dialog-message">{t(message as MessageKey)}</p>
+      <p className="dialog-message">{message}</p>
       <div className="row-actions dialog-actions">
         <Button
           onClick={() => {
@@ -407,11 +347,13 @@ interface ShellProps {
 function Shell(props: ShellProps) {
   const { language } = useI18n();
   const [generation, setGeneration] = useState(0);
-  const api = useMemo(
-    () => new DaemonApi(props.server, language),
+  const api = useMemo(() => {
+    if (FIXTURE_MODE) {
+      return new FixtureDaemonApi() as unknown as DaemonApi;
+    }
+    return new DaemonApi(props.server, language);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [props.server, language, generation],
-  );
+  }, [props.server, language, generation]);
   return (
     <ApiContext.Provider value={api}>
       <ShellContent {...props} onRetry={() => setGeneration(generation + 1)} />
@@ -421,29 +363,15 @@ function Shell(props: ShellProps) {
 
 function ShellContent(props: ShellProps & { onRetry: () => void }) {
   const api = useApi();
-  const { t } = useI18n();
-  const translateRef = useLatestRef(t);
   const route = props.route;
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const serviceStatus = useStream(api.serviceStatus);
   const groups = useStream(api.groups);
-  const [autoTestInterval, setAutoTestInterval] = useState<AutoTestInterval>(() =>
+  const [autoTestInterval, setAutoTestInterval] = useState(() =>
     loadAutoTestInterval(api.config.id),
   );
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const [appearanceOpen, setAppearanceOpen] = useState(false);
-  const appearanceRef = useRef<HTMLDivElement>(null);
-  useDismiss(appearanceRef, appearanceOpen, () => setAppearanceOpen(false));
-  const reportedFatalError = useRef<string | null>(null);
-  const sidebarRef = useRef<HTMLElement | null>(null);
-  const isMobile = useIsMobile();
-  const isPhone = useIsPhone();
-  const drawerGestures = useDrawerGestures({
-    open: menuOpen,
-    enabled: isMobile,
-    drawerRef: sidebarRef,
-    onOpenChange: setMenuOpen,
-  });
+  const [logsVisible, setLogsVisible] = useState(openLogsEnabled);
+  const [sidebarExpanded, toggleSidebar] = useSidebarExpanded();
 
   useEffect(() => {
     const refresh = () => setAutoTestInterval(loadAutoTestInterval(api.config.id));
@@ -451,27 +379,24 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
     return () => window.removeEventListener(AUTO_TEST_EVENT, refresh);
   }, [api.config.id]);
 
-  const serviceStatusType = serviceStatus.data.status?.status;
-  const fatalError =
-    serviceStatusType === ServiceStatus_Type.FATAL
-      ? serviceStatus.data.status?.errorMessage || t("Service failed to start")
-      : null;
   useEffect(() => {
-    if (fatalError === null) {
-      reportedFatalError.current = null;
-      return;
-    }
-    if (reportedFatalError.current !== fatalError) {
-      reportedFatalError.current = fatalError;
-      showError(fatalError);
-      notify("service", translateRef.current("Fatal sing-box core error"), fatalError);
-    }
-  }, [fatalError, translateRef]);
+    const refresh = () => setLogsVisible(openLogsEnabled());
+    window.addEventListener("open-logs-changed", refresh);
+    return () => window.removeEventListener("open-logs-changed", refresh);
+  }, []);
 
-  const lostError = useStreamOutage(
-    serviceStatus,
-    isTerminalCode(serviceStatus.errorCode) || serviceStatus.data.status === null,
-  );
+  const statusType = serviceStatus.data.status?.status;
+  const started = statusType === ServiceStatus_Type.STARTED;
+  const hasProxies = started && groups.data.loaded && groups.data.groups.length > 0;
+
+  useHealthMonitor({
+    api,
+    serverId: api.config.id,
+    intervalMs: autoTestInterval === "off" ? 0 : Number(autoTestInterval) * 60_000,
+    active: started,
+    groups: groups.data.groups,
+    histories: groups.data.latencyHistory,
+  });
 
   useEffect(() => {
     const kick = () => {
@@ -489,49 +414,58 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
     };
   }, [api]);
 
-  const reachable = serviceStatus.phase === "active";
-  const serverInfo = useUnaryOnce(() => api.serverInfo(), reachable);
-
+  // ⌘K / Ctrl+K toggles the command palette from anywhere.
   useEffect(() => {
-    setMenuOpen(false);
-  }, [route]);
+    const handler = (event: KeyboardEvent) => {
+      if (event.key !== "k" && event.key !== "K") {
+        return;
+      }
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) {
+        return;
+      }
+      event.preventDefault();
+      setPaletteOpen((open) => !open);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
-  const started = serviceStatusType === ServiceStatus_Type.STARTED;
-  const hasGroups = started && groups.data.loaded && groups.data.groups.length > 0;
-
-  const health = useHealthMonitor({
-    api,
-    serverId: api.config.id,
-    intervalMs: autoTestInterval === "off" ? 0 : Number(autoTestInterval) * 60_000,
-    active: started,
-    groups: groups.data.groups,
-    histories: groups.data.latencyHistory,
-  });
-  const known = serviceStatus.phase !== "connecting" || serviceStatus.data.status !== null;
-
-  const groupsKnown = groups.data.loaded || groups.phase === "error";
-  useEffect(() => {
-    if (!known) {
-      return;
-    }
-    const invisible =
-      (route.page === "proxies" && (!started || (groupsKnown && !hasGroups))) ||
-      (route.page === "connections" && !started);
-    if (invisible) {
-      navigate("dashboard");
-    }
-  }, [known, started, groupsKnown, hasGroups, route]);
+  const commands = useMemo<Command[]>(() => {
+    let seq = 0;
+    const go = (label: string, page: string, icon: IconName, hint?: string): Command => ({
+      id: `nav-${seq++}`,
+      label,
+      group: "页面",
+      icon,
+      hint,
+      run: () => navigate(page),
+    });
+    return [
+      go("仪表盘", "dashboard", "dashboard", "Ctrl+1"),
+      go("代理", "proxies", "public", "Ctrl+2"),
+      go("配置", "profiles", "description", "Ctrl+3"),
+      go("实时连接", "connections", "hub", "Ctrl+4"),
+      go("日志", "logs", "text_snippet"),
+      go("工具", "tools", "handyman"),
+      go("最近请求", "tools/requests", "swap_vert"),
+      go("DNS 查询", "tools/dns", "dns"),
+      go("资源", "tools/resources", "memory"),
+      go("主题", "tools/theme", "palette"),
+      go("备份与恢复", "tools/backup", "backup"),
+      go("常规", "tools/general", "settings"),
+      go("进阶配置", "tools/advanced", "handyman"),
+      go("附加规则", "tools/rules", "rule"),
+      go("自定义资源", "tools/rulesets", "rule"),
+      go("配置文件", "tools/config", "code"),
+    ];
+  }, []);
 
   useEffect(() => {
     const pages: Record<string, string> = {
       "1": "dashboard",
       "2": "proxies",
-      "3": "connections",
-      "4": "logs",
-      "5": "rules",
-      "6": "speedtest",
-      "7": "settings",
-      "8": "system",
+      "3": "profiles",
+      "4": "connections",
     };
     const handler = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) {
@@ -557,69 +491,12 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // ⌘K / Ctrl+K toggles the command palette from anywhere, including text fields,
-  // where the Ctrl+1…8 page shortcuts deliberately do not fire.
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (event.key !== "k" && event.key !== "K") {
-        return;
-      }
-      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) {
-        return;
-      }
-      event.preventDefault();
-      setPaletteOpen((open) => !open);
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+  const lostError =
+    serviceStatus.phase === "error" && isTerminalCode(serviceStatus.errorCode)
+      ? (serviceStatus.error ?? "连接已断开")
+      : null;
 
-  // Declared before the early returns below so the hook order stays stable.
-  const commands = useMemo<Command[]>(() => {
-    const go = (id: string, label: string, page: string, icon: IconName, hint?: string) => ({
-      id,
-      label,
-      group: t("Navigate"),
-      icon,
-      hint,
-      keywords: page,
-      run: () => {
-        setMenuOpen(false);
-        navigate(page);
-      },
-    });
-    const items: Command[] = [
-      go("nav-dashboard", t("Dashboard"), "dashboard", "dashboard", "Ctrl+1"),
-      go("nav-proxies", t("Proxies"), "proxies", "folder", "Ctrl+2"),
-      go("nav-profiles", t("Profiles"), "profiles", "cloud_sync"),
-      go("nav-requests", t("Requests"), "requests", "swap_vert"),
-      go("nav-connections", t("Connections"), "connections", "swap_vert", "Ctrl+3"),
-      go("nav-logs", t("Logs"), "logs", "text_snippet", "Ctrl+4"),
-      go("nav-rules", t("Rules"), "rules", "filter_list", "Ctrl+5"),
-      go("nav-speedtest", t("Speed Test"), "speedtest", "speed", "Ctrl+6"),
-      go("nav-settings", t("Settings"), "settings", "settings", "Ctrl+7"),
-      go("nav-system", t("System"), "system", "tune", "Ctrl+8"),
-      go("nav-tools", t("Tools"), "tools", "terminal"),
-      go("nav-tools-network-quality", t("Network Quality"), "tools/network-quality", "network_check"),
-      go("nav-tools-stun", t("STUN Test"), "tools/stun", "hub"),
-      go("nav-dns", t("DNS"), "dns", "dns"),
-      go("nav-tools-connectivity", t("Connectivity Test"), "tools/connectivity", "cable"),
-    ];
-    if (started) {
-      items.push({
-        id: "action-clear-logs",
-        label: t("Clear Logs"),
-        group: t("Actions"),
-        icon: "delete",
-        run: () => {
-          void api.clearLogs().catch(showError);
-        },
-      });
-    }
-    return items;
-  }, [api, started, t]);
-
-  if (lostError !== null && route.page !== "system") {
+  if (lostError !== null) {
     return (
       <ConnectionErrorView
         server={props.server}
@@ -632,364 +509,190 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
     );
   }
 
-  if (serviceStatus.data.status === null && route.page !== "system") {
+  if (serviceStatus.data.status === null && route.page !== "tools/config") {
     return (
       <div className={styles.connectingView}>
-        <Brand className={styles.connectingBrand} />
         <Spinner className={styles.connectingSpinner} />
       </div>
     );
   }
 
-  const navItem = (
-    page: string,
-    title: string,
-    icon: IconName,
-    active: boolean,
-    accessory?: ReactNode,
-  ) => (
-    <button
-      type="button"
-      key={page}
-      className={cx(styles.navItem, active && styles.active)}
-      onClick={() => {
-        setMenuOpen(false);
-        navigate(page);
-      }}
-    >
-      <Icon name={icon} />
-      {title}
-      {accessory}
-    </button>
-  );
-
-  const mainPages = (
-    <>
-      {navItem("logs", t("Logs"), "text_snippet", route.page === "logs")}
-      {navItem("rules", t("Rules"), "filter_list", route.page === "rules")}
-      {started && navItem("speedtest", t("Speed Test"), "speed", route.page === "speedtest")}
-      {navItem("tools", t("Tools"), "terminal", route.page.startsWith("tools"))}
-      {navItem("settings", t("Settings"), "settings", route.page.startsWith("settings"))}
-      {navItem("system", t("System"), "tune", route.page === "system")}
-    </>
-  );
-
-  const skipToContent = (event: { preventDefault: () => void }) => {
-    // preventDefault keeps the hash router out of it; #main is not a route.
-    event.preventDefault();
-    document.getElementById("main")?.focus();
-  };
-
-  const mainContent = (
-    <>
-      <a className="sr-only skip-link" href="#main" onClick={skipToContent}>
-        {t("Skip to content")}
-      </a>
-      <main id="main" tabIndex={-1} className={styles.content}>
-      <ErrorBoundary key={route.page}>
-        <Suspense
-          fallback={
-            <div className={styles.viewLoading}>
-              <Spinner />
-            </div>
-          }
-        >
-          {route.page === "dashboard" && <OverviewView />}
-          {route.page === "proxies" && <GroupsView />}
-          {route.page === "profiles" && <ProfilesView />}
-          {route.page === "requests" && <RequestsView />}
-          {route.page === "connections" && <ConnectionsView />}
-          {route.page === "dns" && <DnsToolsView />}
-          {route.page === "logs" && <LogsView />}
-          {route.page === "rules" && <RulesView />}
-          {route.page === "speedtest" && <SpeedTestView />}
-          {route.page === "system" && <ManageView />}
-          {route.page === "tools" && <ToolsView />}
-          {route.page === "tools/network-quality" && <NetworkQualityView />}
-          {route.page === "tools/stun" && <STUNTestView />}
-          {route.page === "tools/connectivity" && <ConnectivityTestView />}
-          {route.page === "settings" && <SettingsView />}
-          {route.page === "settings/preferences" && (
-            <PreferencesView
-              theme={props.theme}
-              onThemeChange={props.onThemeChange}
-              accent={props.accent}
-              onAccentChange={props.onAccentChange}
-              palette={props.palette}
-              onPaletteChange={props.onPaletteChange}
-              amoled={props.amoled}
-              onAmoledChange={props.onAmoledChange}
-            />
-          )}
-          {route.page === "settings/servers" && (
-            <ServersView serversState={props.serversState} onServersChange={props.onServersChange} />
-          )}
-        </Suspense>
-      </ErrorBoundary>
-      </main>
-    </>
+  const items: SidebarItem[] = [
+    { key: "dashboard", label: "仪表盘", icon: "dashboard", page: "dashboard" },
+    {
+      key: "proxies",
+      label: "代理",
+      icon: "public",
+      page: "proxies",
+      hidden: !hasProxies,
+    },
+    { key: "profiles", label: "配置", icon: "description", page: "profiles" },
+    { key: "connections", label: "实时连接", icon: "hub", page: "connections", hidden: !started },
+    { key: "logs", label: "日志", icon: "text_snippet", page: "logs", hidden: !logsVisible || !started },
+    { key: "tools", label: "工具", icon: "handyman", page: "tools" },
+  ];
+  const visibleItems = items.filter((item) => !item.hidden);
+  const mobileItems = visibleItems.filter(
+    (item) => item.key === "logs" || ["dashboard", "proxies", "profiles", "tools"].includes(item.key),
   );
 
   return (
-    <div
-      className={cx(styles.app, styles.webApp, isPhone && styles.withBottomNav)}
-      {...(isMobile ? drawerGestures : {})}
-    >
+    <div className={styles.app}>
+      <Sidebar
+        items={items}
+        activePage={route.page}
+        expanded={sidebarExpanded}
+        onToggle={toggleSidebar}
+      />
+      <main id="main" tabIndex={-1} className={styles.content}>
+        <ErrorBoundaryKeyed routeKey={route.page}>
+          <Suspense
+            fallback={
+              <div className={styles.viewLoading}>
+                <Spinner />
+              </div>
+            }
+          >
+            <div className={styles.view} key={route.page}>
+              {route.page === "dashboard" && <DashboardView />}
+              {route.page === "proxies" && <ProxiesView />}
+              {route.page === "profiles" && <ProfilesView />}
+              {route.page === "connections" && <ConnectionsView />}
+              {route.page === "logs" && <LogsView />}
+              {route.page === "tools" && <ToolsView />}
+              {route.page === "tools/requests" && <RequestsView />}
+              {route.page === "tools/dns" && <DnsView />}
+              {route.page === "tools/resources" && <ResourcesView />}
+              {route.page === "tools/theme" && <ThemeView />}
+              {route.page === "tools/backup" && <BackupView />}
+              {route.page === "tools/general" && <GeneralView />}
+              {route.page === "tools/advanced" && <AdvancedView />}
+              {route.page === "tools/rules" && <RulesView />}
+              {route.page === "tools/rulesets" && <RuleSetsView />}
+              {route.page === "tools/config" && <ManageView />}
+              {route.page === "tools/servers" && (
+                <ServersView
+                  serversState={props.serversState}
+                  onServersChange={props.onServersChange}
+                />
+              )}
+              {route.page === "tools/network-quality" && <NetworkQualityView />}
+              {route.page === "tools/stun" && <STUNTestView />}
+              {route.page === "tools/connectivity" && <ConnectivityTestView />}
+            </div>
+          </Suspense>
+        </ErrorBoundaryKeyed>
+      </main>
       {paletteOpen && (
         <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />
       )}
-      <header className={styles.mobileTopbar}>
-        {!isPhone && (
-          <IconButton
-            aria-label={t("Toggle navigation")}
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen(!menuOpen)}
-          >
-            <Icon name={menuOpen ? "close" : "menu"} size={18} />
-          </IconButton>
-        )}
-        <div className={styles.mobileTopbarBrand}>DracPanel</div>
-        <div className={styles.mobileTopbarActions}>
-          <div className="menu-anchor" ref={appearanceRef}>
-            <IconButton
-              aria-label={t("Appearance")}
-              aria-expanded={appearanceOpen}
-              onClick={() => setAppearanceOpen(!appearanceOpen)}
-            >
-              <Icon name="palette" size={18} />
-            </IconButton>
-            {appearanceOpen && (
-              <div className="menu align-right accent-menu">
-                <AppearanceMenuContent
-                  theme={props.theme}
-                  onThemeChange={props.onThemeChange}
-                  accent={props.accent}
-                  onChangeAccent={(accent) => props.onAccentChange(accent)}
-                  palette={props.palette}
-                  onPaletteChange={props.onPaletteChange}
-                  amoled={props.amoled}
-                  onAmoledChange={props.onAmoledChange}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-      {menuOpen && (
-        <button
-          type="button"
-          className={styles.sidebarScrim}
-          aria-label={t("Close")}
-          onClick={() => setMenuOpen(false)}
-        />
-      )}
-      <nav ref={sidebarRef} className={cx(styles.sidebar, menuOpen && styles.open)}>
-        <div className={styles.sidebarBrand}>
-          DracPanel
-          {serverInfo && <span className={styles.sidebarBrandVersion}>{serverInfo.version}</span>}
-        </div>
-        {navItem("dashboard", t("Dashboard"), "dashboard", route.page === "dashboard")}
-        {hasGroups && navItem("proxies", t("Proxies"), "folder", route.page === "proxies")}
-        {navItem("profiles", t("Profiles"), "cloud_sync", route.page === "profiles")}
-        {started && navItem("requests", t("Requests"), "swap_vert", route.page === "requests")}
-        {started && navItem("connections", t("Connections"), "swap_vert", route.page === "connections")}
-        {started && navItem("dns", t("DNS"), "dns", route.page === "dns")}
-        {mainPages}
-        {health.summary.down > 0 && (
-          <div className={styles.healthAlert} role="status">
-            <Icon name="warning_amber" size={14} />
-            {t("{count} nodes unavailable", { count: health.summary.down })}
-          </div>
-        )}
-        <ServerPicker
-          serversState={props.serversState}
-          onServersChange={props.onServersChange}
-          connected={reachable}
-          started={started}
-        />
-      </nav>
-      <div className={styles.webColumn}>
-        <WebTopbar
-          version={serverInfo?.version ?? null}
-          theme={props.theme}
-          onThemeChange={props.onThemeChange}
-          accent={props.accent}
-          onAccentChange={props.onAccentChange}
-          palette={props.palette}
-          onPaletteChange={props.onPaletteChange}
-          amoled={props.amoled}
-          onAmoledChange={props.onAmoledChange}
-        />
-        {mainContent}
-      </div>
-      {serviceStatus.phase !== "active" && (
-        <div className={styles.reconnectPill} role="status">
-          <Spinner />
-          {t("Reconnecting...")}
-        </div>
-      )}
-      {started && <DeprecatedWarningsGate />}
-      {isPhone && (
-        <BottomNav
-          active={
-            route.page === "dashboard"
-              ? "dashboard"
-              : route.page === "proxies"
-                ? "proxies"
-                : route.page === "connections"
-                  ? "connections"
-                  : route.page === "logs"
-                    ? "logs"
-                    : "more"
-          }
-          onSelect={(target) => {
-            if (target === "more") {
-              setMenuOpen(true);
-              return;
-            }
-            navigate(target);
-          }}
-        />
-      )}
+      <MobileNav items={mobileItems} activePage={route.page} />
     </div>
   );
 }
 
-function ServerPicker(props: {
-  serversState: ServersState;
-  onServersChange: (state: ServersState) => void;
-  connected: boolean;
-  started: boolean;
-}) {
-  const { t } = useI18n();
-  const { servers, activeId } = props.serversState;
-  const active = servers.find((server) => server.id === activeId);
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useDismiss(ref, open, () => setOpen(false));
+/* Route-scoped error boundary: a crash in one page does not take the shell down,
+   and navigating away remounts a fresh view. */
+class ErrorBoundaryKeyed extends Component<{ routeKey: string; children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
 
-  if (!active) {
-    return null;
+  static getDerivedStateFromError(error: Error) {
+    return { error };
   }
 
-  return (
-    <div className={styles.serverPicker} ref={ref}>
-      <button type="button" className={styles.serverPickerButton} aria-expanded={open} onClick={() => setOpen(!open)}>
-        <span className={styles.serverPickerText}>
-          <span className={styles.serverPickerLine}>
-            <StateDot tone={props.connected ? "good" : undefined} className={styles.serverDot} />
-            <span className={styles.serverName}>{serverDisplayName(active)}</span>
-          </span>
-          {props.started && <ServerUptime />}
-        </span>
-        <Icon name="unfold_more" size={13} />
-      </button>
-      {open && (
-        <div className="menu open-up">
-          {servers.map((server) => (
-            <button
-              type="button"
-              key={server.id}
-              className="menu-item"
-              onClick={() => {
-                setOpen(false);
-                if (server.id !== activeId) {
-                  props.onServersChange({ ...props.serversState, activeId: server.id });
-                }
-              }}
-            >
-              <span className="menu-check">{server.id === activeId && <Icon name="check" size={13} />}</span>
-              {serverDisplayName(server)}
-            </button>
-          ))}
-          <div className="menu-divider" />
-          <button
-            type="button"
-            className="menu-item"
-            onClick={() => {
-              setOpen(false);
-              navigate("settings/servers");
-            }}
-          >
-            <span className="menu-check">
-              <Icon name="settings" size={13} />
-            </span>
-            {t("Manage servers...")}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ServerUptime() {
-  const api = useApi();
-  const { t, language } = useI18n();
-  const now = useNow();
-  const startedAt = useUnaryOnce(() => api.getStartedAt());
-
-  if (startedAt === null) {
-    return null;
-  }
-  return (
-    <span className={styles.serverUptime} title={`${t("Uptime")} — ${formatDateTime(startedAt, language)}`}>
-      <Icon name="power_settings_new" size={10} />
-      {formatUptime(startedAt, now)}
-    </span>
-  );
-}
-
-function DeprecatedWarningsGate() {
-  const api = useApi();
-  const warnings = useUnaryOnce(() => api.getDeprecatedWarnings());
-  const [index, setIndex] = useState(0);
-  const [visible, setVisible] = useState(true);
-
-  if (loadDisableDeprecatedWarnings()) {
-    return null;
+  componentDidUpdate(prevProps: { routeKey: string }) {
+    if (prevProps.routeKey !== this.props.routeKey && this.state.error !== null) {
+      this.setState({ error: null });
+    }
   }
 
-  const current = warnings?.[index];
-  if (!current || !visible) {
-    return null;
-  }
-
-  return (
-    <DeprecatedWarningDialog
-      warning={current}
-      onDismiss={() => {
-        setVisible(false);
-        setTimeout(() => {
-          setIndex((value) => value + 1);
-          setVisible(true);
-        }, 300);
-      }}
-    />
-  );
-}
-
-function DeprecatedWarningDialog(props: { warning: DeprecatedWarning; onDismiss: () => void }) {
-  const { t } = useI18n();
-  return (
-    <Dialog onClose={props.onDismiss}>
-      <h3>{t("Deprecated Warning")}</h3>
-      <p className="dialog-message">{props.warning.message}</p>
-      <div className="row-actions dialog-actions">
-        <Button onClick={props.onDismiss}>
-          {t("Ok")}
-        </Button>
-        {isHttpUrl(props.warning.migrationLink) && (
-          <Button
-            variant="primary"
-            href={props.warning.migrationLink}
-            target="_blank"
-            rel="noreferrer"
-            onClick={props.onDismiss}
-          >
-            {t("Documentation")}
+  render() {
+    if (this.state.error !== null) {
+      return (
+        <div className={styles.connectingView}>
+          <p className={styles.errorText}>页面出现错误</p>
+          <Button variant="primary" onClick={() => this.setState({ error: null })}>
+            重试
           </Button>
-        )}
-      </div>
-    </Dialog>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function WebApp() {
+  const state = useAppState();
+
+  const activeServer =
+    state.serversState.servers.find((server) => server.id === state.serversState.activeId) ?? null;
+
+  useEffect(() => {
+    if (location.hash !== "") {
+      return;
+    }
+    const last = localStorage.getItem("panel-last-route");
+    if (last !== null && ["dashboard", "proxies", "profiles", "connections"].includes(last)) {
+      navigate(last);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!activeServer) {
+      return;
+    }
+    localStorage.setItem("panel-last-route", state.route.page.split("/")[0]);
+  }, [activeServer, state.route.page]);
+
+  useEffect(() => {
+    if (!activeServer && location.hash !== "") {
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+  }, [activeServer]);
+
+  if (!activeServer) {
+    return (
+      <>
+        <SetupView
+          onCreate={(server) => {
+            state.updateServers({
+              servers: [...state.serversState.servers, server],
+              activeId: server.id,
+            });
+            navigate("dashboard");
+          }}
+          theme={state.theme}
+          onThemeChange={state.updateTheme}
+          accent={state.accent}
+          onAccentChange={state.updateAccent}
+          palette={state.palette}
+          onPaletteChange={state.updatePalette}
+          amoled={state.amoled}
+          onAmoledChange={state.updateAmoled}
+        />
+        <GlobalErrorDialog />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Shell
+        key={activeServer.id}
+        server={activeServer}
+        serversState={state.serversState}
+        onServersChange={state.updateServers}
+        route={state.route}
+        theme={state.theme}
+        onThemeChange={state.updateTheme}
+        accent={state.accent}
+        onAccentChange={state.updateAccent}
+        palette={state.palette}
+        onPaletteChange={state.updatePalette}
+        amoled={state.amoled}
+        onAmoledChange={state.updateAmoled}
+      />
+      <GlobalErrorDialog />
+    </>
   );
 }

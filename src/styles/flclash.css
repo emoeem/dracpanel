@@ -1,0 +1,173 @@
+/*
+ * FlClash layout primitives that are shared across views. Component-specific
+ * geometry lives in CSS modules; this file only carries the page frame, menu
+ * skin and a handful of typography helpers used by every rebuilt page.
+ */
+
+.fc-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 0 var(--fc-page-inline-end) var(--fc-page-block-end) var(--fc-page-inline-start);
+  color: var(--fc-on-surface);
+}
+
+.fc-page.fc-page-flush {
+  padding: 0;
+}
+
+.fc-page-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--fc-gap-desktop);
+  min-height: 0;
+}
+
+.fc-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-8);
+  min-width: 0;
+}
+
+.fc-row {
+  display: flex;
+  gap: var(--fc-space-8);
+  align-items: center;
+  min-width: 0;
+}
+
+.fc-row-between {
+  justify-content: space-between;
+}
+
+.fc-grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.fc-muted {
+  color: var(--fc-on-surface-variant);
+}
+
+.fc-faint {
+  color: var(--fc-on-surface-faint);
+}
+
+.fc-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.fc-truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fc-title {
+  margin: 0;
+  font-size: var(--fc-text-headline);
+  font-weight: var(--fc-weight-semibold);
+  line-height: var(--fc-leading-headline);
+  letter-spacing: -0.005em;
+}
+
+.fc-caption {
+  font-size: var(--fc-text-caption1);
+  font-weight: var(--fc-weight-semibold);
+  line-height: var(--fc-leading-caption1);
+}
+
+.fc-footnote {
+  font-size: var(--fc-text-footnote);
+  line-height: var(--fc-leading-footnote);
+}
+
+.fc-label {
+  font-size: var(--fc-text-caption1);
+  font-weight: var(--fc-weight-semibold);
+  color: var(--fc-on-surface-variant);
+  letter-spacing: 0.01em;
+}
+
+.fc-section-label {
+  padding: var(--fc-space-8) var(--fc-space-4) var(--fc-space-4);
+  font-size: var(--fc-text-caption1);
+  font-weight: var(--fc-weight-semibold);
+  color: var(--fc-on-surface-faint);
+}
+
+/* Shared menu skin: the existing useContextMenu portal uses .menu/.menu-item,
+   so restyling those two global classes keeps every popup consistent. */
+.menu {
+  padding: var(--fc-space-6);
+  background: var(--fc-card);
+  border: 0;
+  border-radius: var(--fc-radius-md);
+  box-shadow: var(--fc-shadow-e2);
+}
+
+.menu-item {
+  gap: var(--fc-space-10);
+  padding: var(--fc-space-10) var(--fc-space-12);
+  font-size: var(--fc-text-footnote);
+  font-weight: var(--fc-weight-medium);
+  border-radius: var(--fc-radius-sm);
+}
+
+.menu-item:hover {
+  color: var(--fc-on-surface);
+  background: var(--fc-block);
+}
+
+.menu-divider {
+  margin: var(--fc-space-6) var(--fc-space-4);
+  border-top-color: var(--fc-divider);
+}
+
+.menu-label {
+  padding: var(--fc-space-8) var(--fc-space-12) var(--fc-space-4);
+  font-size: var(--fc-text-caption2);
+  font-weight: var(--fc-weight-semibold);
+  color: var(--fc-on-surface-faint);
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+.menu .icon {
+  color: var(--fc-on-surface-variant);
+}
+
+/* Legacy page frames reused inside tools subpages. */
+.page {
+  padding: var(--fc-page-block-start) var(--fc-page-inline-end) var(--fc-page-block-end) var(--fc-page-inline-start);
+}
+
+.page-header {
+  margin-bottom: var(--fc-space-20);
+}
+
+.page-title {
+  font-size: var(--fc-text-page-title);
+  font-weight: var(--fc-weight-semibold);
+  line-height: var(--fc-leading-page-title);
+}
+
+.fc-view-enter {
+  animation: fc-view-in var(--fc-duration-page) var(--fc-ease-emphasized) both;
+}
+
+@keyframes fc-view-in {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+}
+
+@media (max-width: 600px) {
+  .fc-page {
+    padding-bottom: calc(var(--fc-page-block-end) + 76px + env(safe-area-inset-bottom));
+  }
+}

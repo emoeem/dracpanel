@@ -1,6 +1,6 @@
 # Architecture & kernel adapter boundary
 
-DracPanel is a single-page React application. It ships no backend of its own;
+FlClash Web Panel (package name `@emoeem/dracpanel`) is a single-page React application. It ships no backend of its own;
 instead it speaks to three services that own the privileged work. This document
 records which client talks to which service, what each layer may do, and how
 capability degradation works — the contract every view must go through.
@@ -74,7 +74,7 @@ RPCs the same way.
 ## Theme system
 
 Design tokens live in `src/styles/globals.css` as CSS custom properties with
-a `data-palette` (flclash | dracula) × `data-theme` (light | dark) matrix plus
+a `data-palette` (dracula default; flclash/nord/catppuccin alternates kept) × `data-theme` (light | dark) matrix plus
 an AMOLED variant (`data-amoled`). Accent colors are preset blocks or a seed
 color expanded by `src/lib/tonalPalette.ts` (OKLCH-based, M3-style tones).
 `applyAppearance` in `app/context.tsx` is the single entry point; the

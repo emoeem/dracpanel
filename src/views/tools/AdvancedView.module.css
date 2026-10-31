@@ -1,0 +1,110 @@
+.card {
+  padding: var(--fc-space-16) var(--fc-space-20);
+}
+
+.card-title {
+  margin: 0 0 var(--fc-space-4);
+  font-size: var(--fc-text-headline);
+  font-weight: var(--fc-weight-semibold);
+  color: var(--fc-on-surface);
+}
+
+.row {
+  display: flex;
+  gap: var(--fc-space-12);
+  align-items: center;
+  width: 100%;
+  min-height: 56px;
+  padding: var(--fc-space-4) 0;
+  color: var(--fc-on-surface);
+  text-align: start;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--fc-divider);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.row-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  color: var(--fc-on-surface-variant);
+  background: var(--fc-block);
+  border-radius: var(--fc-radius-sm);
+}
+
+.row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.row-label {
+  font-size: var(--fc-text-footnote);
+  font-weight: var(--fc-weight-medium);
+}
+
+.row-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-on-surface-faint);
+  white-space: nowrap;
+}
+
+.row > svg:last-child {
+  color: var(--fc-on-surface-faint);
+}
+
+.hint {
+  padding: var(--fc-space-8) var(--fc-space-12);
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-on-surface-faint);
+  background: var(--fc-warning-container);
+  border-radius: var(--fc-radius-md);
+}
+
+.confirm-text {
+  margin: 0;
+  font-size: var(--fc-text-footnote);
+  line-height: var(--fc-leading-footnote);
+  color: var(--fc-on-surface);
+}
+
+.cancel-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 var(--fc-space-20);
+  font-size: var(--fc-text-footnote);
+  font-weight: var(--fc-weight-semibold);
+  color: var(--fc-on-surface);
+  cursor: pointer;
+  background: var(--fc-block);
+  border: 0;
+  border-radius: var(--fc-radius-pill);
+}
+
+.primary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 var(--fc-space-20);
+  font-size: var(--fc-text-footnote);
+  font-weight: var(--fc-weight-semibold);
+  color: var(--fc-on-primary);
+  cursor: pointer;
+  background: var(--fc-primary);
+  border: 0;
+  border-radius: var(--fc-radius-pill);
+}

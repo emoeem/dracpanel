@@ -1,0 +1,87 @@
+.wrap {
+  display: flex;
+  gap: var(--fc-space-16);
+  align-items: center;
+  min-width: 0;
+}
+
+.chart {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.chart svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.track {
+  stroke: var(--fc-track);
+}
+
+.center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  font-size: var(--fc-text-callout);
+  font-weight: var(--fc-weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-on-surface);
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+}
+
+.legend {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.legend li {
+  display: flex;
+  gap: var(--fc-space-6);
+  align-items: center;
+  min-width: 0;
+  padding: var(--fc-space-4) 0;
+  font-size: var(--fc-text-caption1);
+}
+
+.legend i {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legend-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fc-on-surface);
+  white-space: nowrap;
+}
+
+.legend-value {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-on-surface-variant);
+}
+
+.legend-percent {
+  flex-shrink: 0;
+  min-width: 34px;
+  font-weight: var(--fc-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-on-surface-variant);
+  text-align: end;
+}
+
+.empty {
+  color: var(--fc-on-surface-faint);
+}

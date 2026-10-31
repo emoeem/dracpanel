@@ -1,0 +1,29 @@
+.skeleton {
+  display: block;
+  flex-shrink: 0;
+  background: var(--fc-block);
+  animation: fc-pulse 1600ms ease-in-out infinite;
+}
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+@keyframes fc-pulse {
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    opacity: 0.85;
+  }
+}

@@ -61,9 +61,9 @@ export function SettingsView() {
             />
           </div>
           <p className="hint" style={{ padding: "10px 14px 0", lineHeight: 1.6 }}>
-            {t(
-              "An unofficial DracPanel build, not affiliated with the SagerNet or sing-box projects. Source and documentation live in the project repository.",
-            )}
+            {
+              "DracPanel — an unofficial FlClash-style web panel build, not affiliated with the FlClash or SagerNet projects. Source and documentation live in the project repository."
+            }
           </p>
           <p className="hint" style={{ padding: "10px 14px 0" }}>
             {t("UI build {build}", { build: buildLabel() })}

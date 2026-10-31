@@ -21,8 +21,11 @@
      toolbars) from this plus the canvas background, not from theme-color. */
   color-scheme: light;
 
-  --font-sans: "Schibsted Grotesk Variable", "Apple Color Emoji", "Noto Color Emoji", -apple-system, blinkmacsystemfont, "Segoe UI", sans-serif;
-  --font-serif: "Source Serif 4 Variable", "Apple Color Emoji", "Noto Color Emoji", ui-serif, georgia, serif;
+  --font-sans: -apple-system, blinkmacsystemfont, "Segoe UI Variable", "Segoe UI", "Noto Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+
+  /* FlClash uses the platform sans for page titles; the serif alias is kept
+     only so legacy login/setup styles do not need a second rewrite. */
+  --font-serif: var(--font-sans);
   --font-mono: "IBM Plex Mono", "Apple Color Emoji", "Noto Color Emoji", ui-monospace, "SF Mono", menlo, consolas, monospace;
 
   /* FlClash light: warm-neutral Material surfaces. */
@@ -133,6 +136,137 @@
   --z-scrim: 400;
   --z-topbar: 410;
   --z-drawer: 500;
+
+  /* ── FlClash v0.9.2 layer (Dracula surfaces) ──
+     Additive tokens: legacy login/setup/dialog styles keep --bg/--card/--accent,
+     while the rebuilt shell and pages consume --fc-*. */
+  --fc-font-sans: var(--font-sans);
+  --fc-font-mono: var(--font-mono);
+  --fc-page: var(--bg);
+  --fc-card: var(--card);
+  --fc-block: color-mix(in srgb, var(--card), var(--text) 7%);
+  --fc-inset: var(--inset);
+  --fc-sidebar: var(--surface);
+  --fc-outline: var(--border);
+  --fc-outline-strong: var(--border-strong);
+  --fc-divider: color-mix(in srgb, var(--text) 14%, transparent);
+  --fc-on-surface: var(--text);
+  --fc-on-surface-variant: var(--text-secondary);
+  --fc-on-surface-faint: var(--text-faint);
+  --fc-primary: var(--accent);
+  --fc-on-primary: var(--on-accent);
+  --fc-primary-container: var(--accent-soft);
+  --fc-primary-container-text: var(--accent-strong);
+  --fc-series-2: color-mix(in srgb, var(--accent) 45%, var(--card));
+  --fc-success: var(--good);
+  --fc-success-container: var(--good-soft);
+  --fc-warning: var(--medium);
+  --fc-warning-container: var(--medium-soft);
+  --fc-error: var(--danger);
+  --fc-error-container: var(--danger-soft);
+  --fc-track: color-mix(in srgb, var(--card), var(--text) 12%);
+  --fc-thumb: var(--text-faint);
+  --fc-scrim: var(--scrim);
+
+  --fc-space-2: 2px;
+  --fc-space-4: 4px;
+  --fc-space-6: 6px;
+  --fc-space-8: 8px;
+  --fc-space-10: 10px;
+  --fc-space-12: 12px;
+  --fc-space-14: 14px;
+  --fc-space-16: 16px;
+  --fc-space-18: 18px;
+  --fc-space-20: 20px;
+  --fc-space-22: 22px;
+  --fc-space-24: 24px;
+  --fc-space-26: 26px;
+  --fc-space-28: 28px;
+  --fc-space-32: 32px;
+  --fc-space-36: 36px;
+  --fc-space-40: 40px;
+  --fc-space-48: 48px;
+  --fc-space-56: 56px;
+  --fc-space-64: 64px;
+  --fc-space-72: 72px;
+
+  --fc-radius-xs: 4px;
+  --fc-radius-sm: 8px;
+  --fc-radius-md: 16px;
+  --fc-radius-block: 20px;
+  --fc-radius-block-mobile: 22px;
+  --fc-radius-card: 32px;
+  --fc-radius-card-mobile: 34px;
+  --fc-radius-tab: 16px;
+  --fc-radius-badge: 14px;
+  --fc-radius-profile: 24px;
+  --fc-radius-proxy: 20px;
+  --fc-radius-sheet: 28px;
+  --fc-radius-pill: 999px;
+
+  --fc-text-display: 40px;
+  --fc-leading-display: 44px;
+  --fc-text-large-title: 34px;
+  --fc-leading-large-title: 41px;
+  --fc-text-title1: 28px;
+  --fc-leading-title1: 34px;
+  --fc-text-page-title: 24px;
+  --fc-leading-page-title: 30px;
+  --fc-text-title2: 22px;
+  --fc-leading-title2: 28px;
+  --fc-text-title3: 20px;
+  --fc-leading-title3: 25px;
+  --fc-text-headline: 17px;
+  --fc-leading-headline: 22px;
+  --fc-text-body: 17px;
+  --fc-leading-body: 22px;
+  --fc-text-callout: 16px;
+  --fc-leading-callout: 21px;
+  --fc-text-subheadline: 15px;
+  --fc-leading-subheadline: 20px;
+  --fc-text-footnote: 13px;
+  --fc-leading-footnote: 18px;
+  --fc-text-caption1: 12px;
+  --fc-leading-caption1: 16px;
+  --fc-text-caption2: 11px;
+  --fc-leading-caption2: 13px;
+
+  --fc-weight-regular: 400;
+  --fc-weight-medium: 500;
+  --fc-weight-semibold: 600;
+  --fc-weight-bold: 700;
+
+  --fc-gap-desktop: 16px;
+  --fc-gap-laptop: 12px;
+  --fc-gap-mobile: 8px;
+  --fc-page-inline-start: 16px;
+  --fc-page-inline-end: 24px;
+  --fc-page-block-start: 0;
+  --fc-page-block-end: 24px;
+  --fc-toolbar-height: 72px;
+  --fc-sidebar-collapsed: 48px;
+  --fc-sidebar-expanded: 220px;
+  --fc-nav-item-height: 40px;
+
+  --fc-shadow-e1:
+    0 0.5px 1px rgb(0 0 0 / 5%),
+    0 2px 6px rgb(0 0 0 / 4%),
+    0 12px 32px -6px rgb(0 0 0 / 9%);
+  --fc-shadow-e2:
+    0 1px 3px rgb(0 0 0 / 6%),
+    0 10px 24px rgb(0 0 0 / 8%),
+    0 32px 64px -12px rgb(0 0 0 / 22%);
+
+  --fc-ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --fc-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --fc-ease-out-cubic: cubic-bezier(0.33, 1, 0.68, 1);
+  --fc-ease-out-back: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --fc-duration-fast: 150ms;
+  --fc-duration-medium: 240ms;
+  --fc-duration-slow: 300ms;
+  --fc-duration-page: 450ms;
+  --fc-transition-control: var(--fc-duration-medium) var(--fc-ease-out-cubic);
+  --fc-transition-surface: var(--fc-duration-slow) var(--fc-ease-standard);
 }
 
 [data-theme="dark"] {
@@ -175,6 +309,14 @@
 
   --scrollbar-thumb: var(--scrollbar-thumb-on-dark);
   --scrollbar-thumb-hover: var(--scrollbar-thumb-hover-on-dark);
+
+  /* FlClash layer: dark shadow elevation (deeper than light). */
+  --fc-shadow-e1:
+    0 1px 2px rgb(0 0 0 / 50%),
+    0 10px 28px -6px rgb(0 0 0 / 55%);
+  --fc-shadow-e2:
+    0 2px 6px rgb(0 0 0 / 50%),
+    0 32px 64px -12px rgb(0 0 0 / 70%);
 }
 
 /* Dracula palette: the original scheme, kept as a selectable alternative. */
@@ -402,6 +544,7 @@
   --surface: #0b0b0c;
   --card: #131315;
   --inset: #000;
+  --fc-block: color-mix(in srgb, var(--card), var(--text) 6%);
 
   --shadow-card: 0 1px 2px rgb(0 0 0 / 40%);
   --shadow-card-hover: 0 2px 4px rgb(0 0 0 / 45%), 0 10px 28px rgb(0 0 0 / 45%);
@@ -835,4 +978,66 @@ a:hover {
   :root {
       --control-height: 44px;
     }
+}
+
+/* ── FlClash layer: legacy base classes ──
+   Reused login/setup/tool pages pick up the FlClash geometry without each
+   module rewriting its own card/page styles. */
+
+.page {
+  max-width: none;
+  padding: var(--fc-page-block-start) var(--fc-page-inline-end) var(--fc-page-block-end)
+    var(--fc-page-inline-start);
+  margin-inline: 0;
+}
+
+.page-title,
+.text-large-title {
+  font-size: var(--fc-text-page-title);
+  font-weight: var(--fc-weight-semibold);
+  line-height: var(--fc-leading-page-title);
+  letter-spacing: -0.01em;
+}
+
+.card {
+  background: var(--fc-card);
+  border: 0;
+  border-radius: var(--fc-radius-card);
+  box-shadow: var(--fc-shadow-e1);
+}
+
+.card:hover {
+  border-color: transparent;
+  box-shadow: var(--fc-shadow-e1);
+  transform: none;
+}
+
+.nav-list,
+.detail-card,
+.setup-panel {
+  background: var(--fc-card);
+  border: 0;
+  box-shadow: var(--fc-shadow-e1);
+}
+
+.nav-list,
+.detail-card {
+  border-radius: var(--fc-radius-block);
+}
+
+@media (max-width: 840px) {
+  :root {
+    --fc-page-inline-start: 16px;
+    --fc-page-inline-end: 16px;
+    --fc-radius-card: 28px;
+  }
+}
+
+@media (max-width: 600px) {
+  :root {
+    --fc-gap-desktop: 8px;
+    --fc-radius-card: var(--fc-radius-card-mobile);
+    --fc-radius-block: var(--fc-radius-block-mobile);
+    --fc-page-block-end: calc(24px + env(safe-area-inset-bottom));
+  }
 }

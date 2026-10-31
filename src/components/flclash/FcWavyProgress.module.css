@@ -1,0 +1,46 @@
+.wrap {
+  position: relative;
+  width: 100%;
+  height: 12px;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: 12px;
+  overflow: visible;
+}
+
+.track,
+.fill {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.track {
+  stroke: var(--fc-track);
+}
+
+.fill {
+  stroke: var(--fc-primary);
+}
+
+.warning .fill {
+  stroke: var(--fc-warning);
+}
+
+.dot {
+  position: absolute;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  background: var(--fc-primary);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.warning .dot {
+  background: var(--fc-warning);
+}

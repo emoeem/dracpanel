@@ -1,0 +1,121 @@
+.layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-drawer);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: var(--fc-space-16);
+  background: var(--fc-scrim);
+  animation: fc-sheet-fade var(--fc-duration-fast) ease both;
+}
+
+.sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  max-height: min(86vh, 760px);
+  overflow: hidden;
+  color: var(--fc-on-surface);
+  background: var(--fc-card);
+  border-radius: var(--fc-radius-sheet) var(--fc-radius-sheet) 0 0;
+  box-shadow: var(--fc-shadow-e2);
+  animation: fc-sheet-up var(--fc-duration-slow) var(--fc-ease-emphasized) both;
+}
+
+.wide {
+  width: min(760px, 100%);
+}
+
+.header {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--fc-space-12);
+  align-items: flex-start;
+  padding: var(--fc-space-20) var(--fc-space-20) var(--fc-space-12);
+}
+
+.titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--fc-text-title2);
+  font-weight: var(--fc-weight-semibold);
+  line-height: var(--fc-leading-title2);
+}
+
+.subtitle {
+  margin-top: var(--fc-space-2);
+  font-size: var(--fc-text-footnote);
+  color: var(--fc-on-surface-variant);
+}
+
+.close {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: calc(var(--fc-space-8) * -1) calc(var(--fc-space-8) * -1) 0 0;
+  color: var(--fc-on-surface-variant);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--fc-radius-pill);
+}
+
+.close:hover {
+  color: var(--fc-on-surface);
+  background: var(--fc-block);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  padding: 0 var(--fc-space-20) var(--fc-space-20);
+  overflow-y: auto;
+}
+
+.footer {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--fc-space-8);
+  justify-content: flex-end;
+  padding: var(--fc-space-12) var(--fc-space-20) var(--fc-space-20);
+}
+
+@keyframes fc-sheet-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes fc-sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+  }
+}
+
+@media (min-width: 601px) {
+  .layer {
+    align-items: center;
+    padding: var(--fc-space-32);
+  }
+
+  .sheet {
+    border-radius: var(--fc-radius-sheet);
+    animation-name: fc-sheet-in;
+  }
+}
+
+@keyframes fc-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+}

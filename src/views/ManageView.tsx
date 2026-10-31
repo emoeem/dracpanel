@@ -375,7 +375,7 @@ function NotificationsTab() {
     const delivered = await sendNotification(
       {
         event: "error",
-        title: t("DracPanel test notification"),
+        title: "测试通知",
         detail: t("Receiving it means the webhook is configured correctly."),
         at: Date.now(),
       },

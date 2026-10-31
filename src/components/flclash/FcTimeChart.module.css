@@ -1,0 +1,18 @@
+.wrap {
+  width: 100%;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+}
+
+.grid {
+  stroke: var(--fc-divider);
+  stroke-dasharray: 3 4;
+}
+
+.labels text {
+  font-size: var(--fc-text-caption2);
+  fill: var(--fc-on-surface-faint);
+}

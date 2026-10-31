@@ -48,6 +48,13 @@ export interface PanelState {
   managed_group?: string;
   managed_urltest?: string;
   egress_ip?: string;
+  /** Optional FlClash-parity fields; absent on the current panel backend. */
+  local_ip?: string;
+  ip_type?: string;
+  ip_quality?: string;
+  memory_app?: number;
+  memory_kernel?: number;
+  cpu_percent?: number;
   token_file?: string;
 }
 
@@ -783,3 +790,125 @@ export function lockPanel(): void {
   removeStoredValue(API_CACHE_NAME);
   saveServersState(removeServer(loadServersState(), MANAGED_SERVER_ID));
 }
+
+/* ── optional FlClash parity endpoints ────────────────────── */
+
+/** The panel did not implement an optional FlClash-parity endpoint. */
+export class PanelFeatureUnavailableError extends Error {
+  constructor(path: string) {
+    super(`The panel does not implement ${path}`);
+    this.name = "PanelFeatureUnavailableError";
+  }
+}
+
+export interface SystemProxyState {
+  enabled: boolean;
+  port?: number;
+}
+
+export interface MemoryBreakdown {
+  app?: number;
+  kernel?: number;
+  total?: number;
+}
+
+export interface LocalIpState {
+  ip: string;
+}
+
+export interface OptionalFeature<T> {
+  supported: boolean;
+  value?: T;
+}
+
+function isMissingEndpoint(error: unknown): boolean {
+  return (
+    error instanceof PanelHttpError &&
+    (error.status === 404 || error.status === 405 || error.status === 501)
+  );
+}
+
+async function optionalRequest<T>(path: string): Promise<OptionalFeature<T>> {
+  try {
+    return { supported: true, value: await request<T>(path) };
+  } catch (error) {
+    if (isMissingEndpoint(error)) {
+      return { supported: false };
+    }
+    throw error;
+  }
+}
+
+export function getSystemProxy(): Promise<OptionalFeature<SystemProxyState>> {
+  return optionalRequest<SystemProxyState>("/system-proxy");
+}
+
+export function setSystemProxy(enabled: boolean): Promise<PanelResult> {
+  return request<PanelResult>("/system-proxy", {
+    method: "POST",
+    body: jsonBody({ enabled }),
+  }).catch((error: unknown) => {
+    if (isMissingEndpoint(error)) {
+      throw new PanelFeatureUnavailableError("/api/system-proxy");
+    }
+    throw error;
+  });
+}
+
+export function getLocalIp(): Promise<OptionalFeature<LocalIpState>> {
+  return optionalRequest<LocalIpState>("/local-ip");
+}
+
+export function getMemoryBreakdown(): Promise<OptionalFeature<MemoryBreakdown>> {
+  return optionalRequest<MemoryBreakdown>("/memory");
+}
+
+/** Upload a local YAML/JSON profile when the panel implements the import API. */
+export async function importProfileFile(file: File): Promise<PanelResult> {
+  const token = getPanelToken();
+  if (token === "") {
+    throw new PanelUnavailableError();
+  }
+  const form = new FormData();
+  form.append("file", file, file.name);
+  let response: Response;
+  try {
+    response = await fetch("/api/profiles/import", {
+      method: "POST",
+      headers: { "X-Panel-Token": token },
+      body: form,
+      signal: requestSignal(null, SUBSCRIPTION_UPDATE_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (isMissingEndpoint(error)) {
+      throw new PanelFeatureUnavailableError("/api/profiles/import");
+    }
+    throw error;
+  }
+  if (response.status === 401) {
+    window.dispatchEvent(new CustomEvent("panel-auth-error"));
+    throw new PanelAuthError();
+  }
+  if (!response.ok) {
+    if (response.status === 404 || response.status === 405 || response.status === 501) {
+      throw new PanelFeatureUnavailableError("/api/profiles/import");
+    }
+    let detail = "";
+    try {
+      const body = (await response.json()) as { message?: unknown; error?: unknown };
+      if (typeof body.message === "string") {
+        detail = body.message;
+      } else if (typeof body.error === "string") {
+        detail = body.error;
+      }
+    } catch {
+      // Fall back to the status line.
+    }
+    throw new PanelHttpError(
+      response.status,
+      detail !== "" ? detail : `Panel returned HTTP ${response.status}`,
+    );
+  }
+  return (await response.json()) as PanelResult;
+}
+

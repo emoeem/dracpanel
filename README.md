@@ -233,6 +233,15 @@ UI 登录后会优先读取 `/api/state.features`（可选，字符串数组）�
 
 ## 环境要求
 
+### 后端选择
+
+面板后端有两种形态，前端完全兼容：
+
+| 后端 | 位置 | 说明 |
+|---|---|---|
+| **Go 版（推荐）** | 本仓库 `backend/`，`make backend` 产出单二进制 | 逐端点移植自 Python 版，并实现全部 FlClash 契约端点（系统代理、本地导入、内存拆分、`/api/local-ip`、`api_version 8` + features）。安装：`make install-backend` 或 `sudo ./deploy/install.sh --backend backend/sing-box-panel`。 |
+| Python 版 | `sing-box-panel` 系统包（0.1.0-8+） | 现有安装继续可用；缺少可选端点时对应开关在 UI 中禁用并提示。 |
+
 - Linux + systemd；基础管理功能在 CachyOS（Arch 系）的
   `sing-box-panel 0.1.0-6` + `sing-box v1.14.3-reF1nd` 上验证；订阅/备份/
   GeoIP 端点来自本地构建的 `sing-box-panel 0.1.0-8`（已通过 dry-run 集成

@@ -359,3 +359,33 @@ This project is an unofficial fork of SagerNet/sing-box-dashboard. The upstream
 license requires that derivative works must not use the upstream name or imply
 official association; this project uses "DracPanel for sing-box" and states
 the non-affiliation explicitly.
+
+
+## Go 后端（sing-box-panel 0.2.0）
+
+`backend/` 目录是 Python 面板的 Go 移植（行为逐端点对齐），并新增：
+
+- `GET/POST /api/system-proxy`（GNOME/KDE）
+- `GET /api/local-ip`、`GET /api/memory`
+- `POST /api/profiles/import`（本地配置文件导入）
+- `/api/state` 返回 `api_version: 8` + `features`（前端跳过能力探测）与
+  `local_ip` / `memory_app` / `memory_kernel`
+- 配置写入的临时文件为 0600（修复 Python 版 0644 的问题，
+  `sing-box-config-perm.path` 守护单元保留无害）
+
+构建与安装：
+
+```sh
+make backend                      # go vet + go test + 构建 backend/sing-box-panel
+sudo ./deploy/install.sh --backend backend/sing-box-panel
+```
+
+回滚：install.sh 自带的 trap 会还原 systemd drop-in 备份；恢复包管理器后端只需
+把 drop-in 的 `ExecStart` 改回 `/usr/bin/sing-box-panel --config …` 并
+`systemctl daemon-reload && systemctl restart sing-box-panel`。
+
+开发态冒烟（不碰 systemd）：
+
+```sh
+go run ./cmd/sing-box-panel --config /etc/sing-box-panel/panel.json   --dry-run --listen 127.0.0.1 --port 9097
+```

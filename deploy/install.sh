@@ -1,5 +1,5 @@
 #!/bin/bash
-# Deploy DracPanel for sing-box on top of the local sing-box-panel setup.
+# Deploy the FlClash web panel on top of the local sing-box setup.
 #
 # - backs up /etc/sing-box/config.json
 # - adds/updates services[type=api] on 127.0.0.1:9091, keeps an existing
@@ -22,27 +22,47 @@ fi
 
 usage() {
   cat <<'EOF'
-用法: sudo ./deploy/install.sh [--ui-only] [--rotate-secret] [--refresh-geoip]
+用法: sudo ./deploy/install.sh [--ui-only] [--rotate-secret] [--refresh-geoip] [--backend <binary>]
 
-  --ui-only        只替换 UI，不改配置、不重启 sing-box
-  --rotate-secret  为 services.api 生成新的 secret（默认保留已有 secret）
-  --refresh-geoip  重新下载 DB-IP City Lite 数据库
-  -h, --help       显示本帮助
+  --ui-only            只替换 UI，不改配置、不重启 sing-box
+  --rotate-secret      为 services.api 生成新的 secret（默认保留已有 secret）
+  --refresh-geoip      重新下载 DB-IP City Lite 数据库
+  --backend <binary>   安装 Go 版后端到 /usr/local/bin/sing-box-panel 并让
+                       systemd drop-in 指向它（缺省沿用包管理器的
+                       /usr/bin/sing-box-panel，本脚本不改包文件）
+  -h, --help           显示本帮助
 EOF
 }
 
 ROTATE_SECRET=0
 UI_ONLY=0
 REFRESH_GEOIP=0
+BACKEND_BIN=""
+BACKEND_PENDING=0
 for arg in "$@"; do
+  if [ "$BACKEND_PENDING" -eq 1 ]; then
+    BACKEND_BIN="$arg"
+    BACKEND_PENDING=0
+    continue
+  fi
   case "$arg" in
     --ui-only) UI_ONLY=1 ;;
     --rotate-secret) ROTATE_SECRET=1 ;;
     --refresh-geoip) REFRESH_GEOIP=1 ;;
+    --backend) BACKEND_PENDING=1 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "未知参数：$arg" >&2; usage >&2; exit 2 ;;
   esac
 done
+if [ "$BACKEND_PENDING" -eq 1 ]; then
+  echo "--backend 需要一个二进制路径参数" >&2
+  usage >&2
+  exit 2
+fi
+if [ -n "$BACKEND_BIN" ] && [ ! -f "$BACKEND_BIN" ]; then
+  echo "--backend 文件不存在：$BACKEND_BIN" >&2
+  exit 2
+fi
 if [ "$UI_ONLY" -eq 1 ] && [ "$ROTATE_SECRET" -eq 1 ]; then
   echo "--ui-only 不能与 --rotate-secret 同时使用" >&2
   exit 2
@@ -196,7 +216,13 @@ wait_active() {
 command -v python3 >/dev/null || fail "缺少 python3"
 command -v curl >/dev/null || fail "缺少 curl"
 command -v sing-box >/dev/null || fail "缺少 sing-box"
-[ -x /usr/bin/sing-box-panel ] || fail "找不到 /usr/bin/sing-box-panel（本脚本按已验证的包布局假定该路径）"
+if [ -n "$BACKEND_BIN" ]; then
+  echo "== [0/9] 安装 Go 版后端 $BACKEND_BIN"
+  install -Dm755 "$BACKEND_BIN" /usr/local/bin/sing-box-panel
+  : # backend installed above; the drop-in below points at it
+else
+  [ -x /usr/bin/sing-box-panel ] || fail "找不到 /usr/bin/sing-box-panel（本脚本按已验证的包布局假定该路径；或用 --backend 指定 Go 版二进制）"
+fi
 systemctl cat sing-box.service >/dev/null 2>&1 || fail "找不到 sing-box.service"
 systemctl cat sing-box-panel.service >/dev/null 2>&1 || fail "找不到 sing-box-panel.service"
 
@@ -394,10 +420,14 @@ if [ -f "$PANEL_DROPIN" ]; then
   cp -a "$PANEL_DROPIN" "$PANEL_DROPIN_BAK"
 fi
 DROPIN_CHANGED=1
-cat > "$PANEL_DROPIN" <<'EOF'
+BACKEND_EXEC=/usr/bin/sing-box-panel
+if [ -n "$BACKEND_BIN" ]; then
+  BACKEND_EXEC=/usr/local/bin/sing-box-panel
+fi
+cat > "$PANEL_DROPIN" <<EOF
 [Service]
 ExecStart=
-ExecStart=/usr/bin/sing-box-panel --config /etc/sing-box-panel/panel.json
+ExecStart=$BACKEND_EXEC --config /etc/sing-box-panel/panel.json
 EOF
 chmod 644 "$PANEL_DROPIN"
 systemctl daemon-reload

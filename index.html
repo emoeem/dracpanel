@@ -25,13 +25,13 @@
         document.documentElement.dataset.theme = dark ? "dark" : "light";
       })();
       (function () {
-        // Palette must land before first paint: flclash (default for fresh
-        // installs) or one of the alternates; pre-palette users keep dracula.
+        // Palette must land before first paint; fresh installs use the
+        // Dracula surfaces, pre-palette users keep their stored value.
         try {
           var palette = localStorage.getItem("sing-box-dashboard.palette");
           var known = ["flclash", "dracula", "nord", "catppuccin"];
           if (known.indexOf(palette) === -1) {
-            palette = localStorage.getItem("sing-box-dashboard.theme") !== null ? "dracula" : "flclash";
+            palette = "dracula";
           }
           document.documentElement.dataset.palette = palette;
           if (localStorage.getItem("sing-box-dashboard.amoled") === "true") {
@@ -106,7 +106,7 @@
         document.documentElement.dir = lang === "fa" ? "rtl" : "ltr";
       })();
     </script>
-    <title>DracPanel for sing-box</title>
+    <title>DracPanel</title>
   </head>
   <body>
     <!-- iOS 26 Safari samples this fixed element for the status bar tint. -->

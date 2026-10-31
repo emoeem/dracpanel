@@ -1,0 +1,61 @@
+.switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 52px;
+  height: 32px;
+  padding: 0;
+  cursor: pointer;
+  background: var(--fc-track);
+  border: 0;
+  border-radius: var(--fc-radius-pill);
+  transition: background var(--fc-duration-slow) var(--fc-ease-out-cubic);
+}
+
+.thumb {
+  position: absolute;
+  inset-inline-start: 4px;
+  top: 4px;
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+  background: var(--fc-thumb);
+  border-radius: var(--fc-radius-pill);
+  transition:
+    width var(--fc-duration-slow) var(--fc-ease-out-back),
+    height var(--fc-duration-slow) var(--fc-ease-out-back),
+    inset-inline-start var(--fc-duration-slow) var(--fc-ease-out-back),
+    top var(--fc-duration-slow) var(--fc-ease-out-back),
+    background var(--fc-duration-medium) var(--fc-ease-out-cubic);
+}
+
+.on {
+  background: var(--fc-primary);
+}
+
+.on .thumb {
+  inset-inline-start: 8px;
+  top: 5px;
+  width: 40px;
+  height: 22px;
+  background: var(--fc-on-primary);
+}
+
+.switch:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.switch:active .thumb {
+  width: 30px;
+}
+
+.on:active .thumb {
+  width: 34px;
+}
+
+@media (max-width: 600px) {
+  .switch {
+    width: 56px;
+    height: 34px;
+  }
+}
