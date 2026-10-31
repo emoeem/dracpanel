@@ -17,3 +17,6 @@ src/gen/
 
 # ZCode session artifacts
 /.zcode/
+
+# Go backend build artifact
+/backend/sing-box-panel
