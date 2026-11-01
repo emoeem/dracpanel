@@ -10,6 +10,16 @@
 
 export type RuleObject = Record<string, unknown>;
 
+/**
+ * Logical ("combined") rules carry `type: "logical"` and nest their conditions
+ * under `rules[]`. The flat editor cannot represent them, so callers must keep
+ * them out of it — opening one would drop `mode`/`rules` and turn it into a
+ * plain rule.
+ */
+export function isNestedRule(rule: RuleObject): boolean {
+  return Array.isArray(rule.rules) || rule.type === "logical";
+}
+
 /** Keys the editor owns; anything else in a rule is treated as a matcher. */
 const RESERVED_KEYS = new Set(["action", "outbound", "server", "invert", "rules", "mode"]);
 

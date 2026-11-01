@@ -4,70 +4,49 @@ import {
   applyPanelConfig,
   getPanelConfig,
   hasPanelToken,
-  normalizeConfigJson,
   validatePanelConfig,
 } from "../../api/panel";
 import { useApi, navigate } from "../../app/context";
 import { afterConfigChange } from "../../app/configResync";
 import { showError } from "../../app/errorStore";
-import { useI18n } from "../../app/i18n";
-import { Icon } from "../../components/Icon";
-import { ConfirmDialog } from "../../components/ConfirmDialog";
-import { FcCard, FcIconButton } from "../../components/flclash";
+import { FcButton, FcCard, FcTabs } from "../../components/flclash";
 import type { RuleObject } from "../../lib/ruleEditor";
-import { emptyDraft, ruleToDraft } from "../../lib/ruleEditor";
-import { RuleEditorDialog } from "../RuleEditorDialog";
+import { patchConfigTextMany, readConfigValue, type ConfigPath } from "../../lib/configPatch";
+import { DnsRulesTab } from "./rules/DnsRulesTab";
+import { RouteRulesTab } from "./rules/RouteRulesTab";
+import { TraceRulesTab } from "./rules/TraceRulesTab";
 import { ToolsPageHeader } from "./ToolsView";
 import styles from "./RulesView.module.css";
 
-interface ConfigShape {
-  route?: {
-    rules?: RuleObject[];
-  };
+type RulesTab = "route" | "dns" | "trace";
+
+interface RuleSections {
+  route: RuleObject[];
+  dns: RuleObject[];
 }
 
-function ruleSummary(rule: RuleObject): string {
-  const matchers: string[] = [];
-  for (const [key, value] of Object.entries(rule)) {
-    if (key === "action" || key === "outbound" || key === "server" || key === "rules") {
-      continue;
-    }
-    if (typeof value === "boolean") {
-      matchers.push(value ? key : `!${key}`);
-    } else if (Array.isArray(value)) {
-      matchers.push(`${key}: ${value.length}`);
-    } else if (value !== undefined && value !== null) {
-      matchers.push(`${key}: ${String(value)}`);
-    }
-  }
-  return matchers.join(" · ") || "（空规则）";
+const EMPTY_SECTIONS: RuleSections = { route: [], dns: [] };
+
+function sameRules(a: readonly RuleObject[], b: readonly RuleObject[]): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
-function ruleTarget(rule: RuleObject): string {
-  if (typeof rule.outbound === "string") {
-    return `→ ${rule.outbound}`;
-  }
-  if (typeof rule.server === "string") {
-    return `→ DNS ${rule.server}`;
-  }
-  if (typeof rule.action === "string") {
-    return `→ ${rule.action}`;
-  }
-  return "→ 默认";
+function tagList(value: { tag?: unknown }[]): string[] {
+  return value.map((entry) => (typeof entry.tag === "string" ? entry.tag : "")).filter((tag) => tag !== "");
 }
 
 export function RulesView() {
   const api = useApi();
-  const { t } = useI18n();
-  const [rules, setRules] = useState<RuleObject[]>([]);
+  const [tab, setTab] = useState<RulesTab>("route");
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editIndex, setEditIndex] = useState<number | null>(null);
-  const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  // Baseline mirrors the config on disk; route/dns are the staged edits.
+  const [baseline, setBaseline] = useState<RuleSections>(EMPTY_SECTIONS);
+  const [route, setRoute] = useState<RuleObject[]>([]);
+  const [dns, setDns] = useState<RuleObject[]>([]);
+  const [configText, setConfigText] = useState("");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (resetStaged: boolean) => {
     if (!hasPanelToken()) {
       setLoading(false);
       return;
@@ -75,8 +54,21 @@ export function RulesView() {
     setLoading(true);
     try {
       const config = await getPanelConfig();
-      const parsed = JSON.parse(normalizeConfigJson(config.text)) as ConfigShape;
-      setRules(parsed.route?.rules ?? []);
+      if (!config.ok) {
+        throw new Error("读取配置失败");
+      }
+      const next: RuleSections = {
+        route: readConfigValue<RuleObject[]>(config.text, ["route", "rules"], []),
+        dns: readConfigValue<RuleObject[]>(config.text, ["dns", "rules"], []),
+      };
+      setConfigText(config.text);
+      setBaseline(next);
+      // A failed apply re-reads the disk truth but keeps the user's staged
+      // edits; only a fresh page (or successful apply) resets them.
+      if (resetStaged) {
+        setRoute(next.route);
+        setDns(next.dns);
+      }
     } catch (error) {
       showError(error);
     } finally {
@@ -85,65 +77,67 @@ export function RulesView() {
   }, []);
 
   useEffect(() => {
-    void load();
+    void load(true);
   }, [load]);
 
-  const write = useCallback(
-    async (nextRules: RuleObject[]) => {
-      setBusy(true);
-      try {
-        const config = await getPanelConfig();
-        if (!config.ok) {
-          throw new Error("读取配置失败");
-        }
-        let text = config.text;
-        const parsed = JSON.parse(normalizeConfigJson(text)) as ConfigShape;
-        parsed.route = { ...(parsed.route ?? {}), rules: nextRules };
-        text = JSON.stringify(parsed, null, 2);
-        const validation = await validatePanelConfig(text);
-        if (!validation.ok) {
-          throw new Error(validation.message || "配置校验失败，未应用");
-        }
-        const result = await applyPanelConfig(text);
-        if (!result.ok) {
-          throw new Error(result.message || "写入失败");
-        }
-        await afterConfigChange(api);
-        setRules(nextRules);
-      } catch (error) {
-        showError(error);
-        await load();
-      } finally {
-        setBusy(false);
-      }
-    },
-    [api, load],
-  );
+  const routeDirty = !sameRules(route, baseline.route);
+  const dnsDirty = !sameRules(dns, baseline.dns);
+  const dirty = routeDirty || dnsDirty;
 
-  const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (query === "") {
-      return rules.map((rule, index) => ({ rule, index }));
-    }
-    return rules
-      .map((rule, index) => ({ rule, index }))
-      .filter(
-        ({ rule }) =>
-          ruleSummary(rule).toLowerCase().includes(query) ||
-          ruleTarget(rule).toLowerCase().includes(query),
-      );
-  }, [rules, search]);
-
-  const move = (index: number, direction: -1 | 1) => {
-    const target = index + direction;
-    if (target < 0 || target >= rules.length) {
+  const apply = useCallback(async () => {
+    if (!dirty) {
       return;
     }
-    const next = [...rules];
-    const [moved] = next.splice(index, 1);
-    next.splice(target, 0, moved);
-    void write(next);
-  };
+    setBusy(true);
+    try {
+      const config = await getPanelConfig();
+      if (!config.ok) {
+        throw new Error("读取配置失败");
+      }
+      // One write carries both sections; the patch keeps comments intact.
+      const patches: { path: ConfigPath; value: unknown }[] = [];
+      if (routeDirty) {
+        patches.push({ path: ["route", "rules"], value: route });
+      }
+      if (dnsDirty) {
+        patches.push({ path: ["dns", "rules"], value: dns });
+      }
+      const text = patchConfigTextMany(config.text, patches);
+      const validation = await validatePanelConfig(text);
+      if (!validation.ok) {
+        throw new Error(validation.message || "配置校验失败，未应用");
+      }
+      const result = await applyPanelConfig(text, config.mtime);
+      if (!result.ok) {
+        throw new Error(result.message || "写入失败");
+      }
+      await afterConfigChange(api);
+      setBaseline({ route, dns });
+    } catch (error) {
+      showError(error);
+      // Refresh the baseline (the config may have moved under us) but keep
+      // the staged edits so the user can retry after fixing the cause.
+      await load(false);
+    } finally {
+      setBusy(false);
+    }
+  }, [api, dirty, routeDirty, dnsDirty, route, dns, load]);
+
+  const discard = useCallback(() => {
+    setRoute(baseline.route);
+    setDns(baseline.dns);
+  }, [baseline]);
+
+  const meta = useMemo(
+    () => ({
+      outbounds: tagList(readConfigValue<{ tag?: unknown }[]>(configText, ["outbounds"], [])),
+      ruleSetTags: tagList(readConfigValue<{ tag?: unknown }[]>(configText, ["route", "rule_set"], [])),
+      serverTags: tagList(readConfigValue<{ tag?: unknown }[]>(configText, ["dns", "servers"], [])),
+      final: readConfigValue<unknown>(configText, ["route", "final"], ""),
+    }),
+    [configText],
+  );
+  const finalOutbound = typeof meta.final === "string" ? meta.final : "";
 
   if (!hasPanelToken()) {
     return (
@@ -156,112 +150,57 @@ export function RulesView() {
 
   return (
     <div className="fc-page">
-      <ToolsPageHeader
-        title="附加规则"
-        onBack={() => navigate("tools/advanced")}
-        actions={
-          <FcIconButton
-            label="添加规则"
-            onClick={() => {
-              setEditIndex(null);
-              setEditorOpen(true);
-            }}
-          >
-            <Icon name="add" size={20} />
-          </FcIconButton>
-        }
-      />
+      <ToolsPageHeader title="附加规则" onBack={() => navigate("tools/advanced")} />
       <div className="fc-page-body">
-        <label className={styles.search}>
-          <Icon name="search" size={16} />
-          <input
-            value={search}
-            placeholder="搜索规则"
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
-        {loading ? (
-          <div className={styles.empty}>加载中…</div>
-        ) : filtered.length === 0 ? (
-          <div className={styles.empty}>暂无规则</div>
-        ) : (
-          <FcCard className={styles.card}>
-            {filtered.map(({ rule, index }, position) => (
-              <div key={index} className={styles.row}>
-                <span className={styles.order}>{position + 1}</span>
-                <button
-                  type="button"
-                  className={styles.rowMain}
-                  onClick={() => {
-                    setEditIndex(index);
-                    setEditorOpen(true);
-                  }}
-                >
-                  <span className={styles.summary}>{ruleSummary(rule)}</span>
-                  <span className={styles.target}>{ruleTarget(rule)}</span>
-                </button>
-                <span className={styles.rowActions}>
-                  <FcIconButton label="上移" disabled={busy || index === 0} onClick={() => move(index, -1)}>
-                    <span className={styles.upIcon}>
-                      <Icon name="unfold_more" size={14} />
-                    </span>
-                  </FcIconButton>
-                  <FcIconButton
-                    label="下移"
-                    disabled={busy || index === rules.length - 1}
-                    onClick={() => move(index, 1)}
-                  >
-                    <span className={styles.downIcon}>
-                      <Icon name="unfold_more" size={14} />
-                    </span>
-                  </FcIconButton>
-                  <FcIconButton label="删除规则" disabled={busy} onClick={() => setDeleteIndex(index)}>
-                    <Icon name="delete" size={16} />
-                  </FcIconButton>
-                </span>
-              </div>
-            ))}
+        <FcTabs
+          className={styles.tabs}
+          ariaLabel="规则类型"
+          value={tab}
+          onChange={setTab}
+          tabs={[
+            { value: "route", label: "路由规则" },
+            { value: "dns", label: "DNS 规则" },
+            { value: "trace", label: "追踪模拟" },
+          ]}
+        />
+        {dirty && (
+          <FcCard className={styles.applyBar}>
+            <span className={styles.applyText}>
+              有未应用的暂存改动
+              {routeDirty && dnsDirty ? "（路由 + DNS）" : routeDirty ? "（路由规则）" : "（DNS 规则）"}
+              ，应用时会校验配置并热更新内核。
+            </span>
+            <span className={styles.applyActions}>
+              <FcButton size="small" variant="text" disabled={busy} onClick={discard}>
+                放弃
+              </FcButton>
+              <FcButton size="small" variant="primary" disabled={busy} onClick={() => void apply()}>
+                应用
+              </FcButton>
+            </span>
           </FcCard>
         )}
-        <p className={styles.hint}>
-          规则按顺序匹配；修改会立即写回配置并重启内核，失败时自动回滚。DNS 规则请在配置文件中编辑。
-        </p>
+        {loading ? (
+          <div className={styles.empty}>加载中…</div>
+        ) : (
+          <>
+            {tab === "route" && (
+              <RouteRulesTab
+                rules={route}
+                onChange={setRoute}
+                outbounds={meta.outbounds}
+                ruleSetTags={meta.ruleSetTags}
+                finalOutbound={finalOutbound}
+                busy={busy}
+              />
+            )}
+            {tab === "dns" && (
+              <DnsRulesTab rules={dns} onChange={setDns} serverTags={meta.serverTags} busy={busy} />
+            )}
+            {tab === "trace" && <TraceRulesTab rules={route} finalTarget={finalOutbound} />}
+          </>
+        )}
       </div>
-
-      {editorOpen && (
-        <RuleEditorDialog
-          title={editIndex === null ? "添加规则" : "编辑规则"}
-          targetLabel={t("Outbound")}
-          targetKey="outbound"
-          initial={editIndex === null ? emptyDraft() : ruleToDraft(rules[editIndex])}
-          onCancel={() => setEditorOpen(false)}
-          onSubmit={(rule) => {
-            setEditorOpen(false);
-            const next = [...rules];
-            if (editIndex === null) {
-              next.push(rule);
-            } else {
-              next[editIndex] = rule;
-            }
-            void write(next);
-          }}
-        />
-      )}
-      {deleteIndex !== null && (
-        <ConfirmDialog
-          title="删除规则"
-          message={`删除第 ${deleteIndex + 1} 条规则（${ruleSummary(rules[deleteIndex])}）？`}
-          confirmLabel="删除"
-          danger
-          busy={busy}
-          onConfirm={() => {
-            const next = rules.filter((_, current) => current !== deleteIndex);
-            setDeleteIndex(null);
-            void write(next);
-          }}
-          onClose={() => setDeleteIndex(null)}
-        />
-      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import { Button, Dialog, Field, Select, Switch } from "../components/ui";
 import {
@@ -16,14 +16,17 @@ import styles from "./RuleEditorDialog.module.css";
 /**
  * Edits a single sing-box rule as "action + target + matchers".
  *
- * Rules that nest other rules (`rules[]`/`mode`) are not supported here — the
- * dialog refuses to open for them and the caller sends the user to the JSON
- * editor instead.
+ * Logical rules (`type: "logical"` with `rules[]`/`mode`) cannot be expressed
+ * here: the draft model has no place for nested rules, so converting one would
+ * silently drop them. The caller (RulesView) keeps those rules out of this
+ * dialog and points at the JSON config editor instead.
  */
 export function RuleEditorDialog(props: {
   title: string;
   targetLabel: string;
   targetKey: "outbound" | "server";
+  /** Tags offered as autocomplete; e.g. outbounds or dns.servers tags. */
+  targetOptions?: readonly string[];
   initial: RuleDraft;
   onCancel: () => void;
   onSubmit: (rule: RuleObject) => void;
@@ -31,6 +34,7 @@ export function RuleEditorDialog(props: {
   const [draft, setDraft] = useState<RuleDraft>(props.initial);
   const [error, setError] = useState("");
   const { t } = useI18n();
+  const targetListId = useId();
 
   // Keep keys that are not in the known list selectable so opening a rule that
   // uses a newer matcher never silently drops it.
@@ -77,12 +81,22 @@ export function RuleEditorDialog(props: {
         </Field>
         {draft.action === "route" && (
           <Field label={props.targetLabel}>
-            <input
-              className="input"
-              value={draft.target}
-              placeholder={props.targetKey === "server" ? "local" : "proxy"}
-              onChange={(event) => setDraft((current) => ({ ...current, target: event.target.value }))}
-            />
+            <>
+              <input
+                className="input"
+                value={draft.target}
+                list={props.targetOptions && props.targetOptions.length > 0 ? targetListId : undefined}
+                placeholder={props.targetKey === "server" ? "local" : "proxy"}
+                onChange={(event) => setDraft((current) => ({ ...current, target: event.target.value }))}
+              />
+              {props.targetOptions && props.targetOptions.length > 0 && (
+                <datalist id={targetListId}>
+                  {props.targetOptions.map((tag) => (
+                    <option key={tag} value={tag} />
+                  ))}
+                </datalist>
+              )}
+            </>
           </Field>
         )}
         <div className={styles.invert}>

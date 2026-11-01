@@ -4,6 +4,7 @@ import {
   draftIssue,
   draftToRule,
   emptyDraft,
+  isNestedRule,
   ruleToDraft,
   ruleValueToText,
   textToRuleValue,
@@ -13,6 +14,25 @@ import {
 function draft(overrides: Partial<RuleDraft> = {}): RuleDraft {
   return { ...emptyDraft(), ...overrides };
 }
+
+describe("isNestedRule", () => {
+  it("flags logical rules that nest conditions", () => {
+    expect(isNestedRule({ type: "logical", mode: "and", rules: [{ domain: "a" }] })).toBe(true);
+  });
+
+  it("flags any rule carrying a rules[] array", () => {
+    expect(isNestedRule({ action: "reject", rules: [{ protocol: "quic" }] })).toBe(true);
+  });
+
+  it("leaves flat rules alone", () => {
+    expect(isNestedRule({ action: "route", outbound: "direct", domain_suffix: ["a.com"] })).toBe(false);
+    expect(isNestedRule({ action: "sniff" })).toBe(false);
+  });
+
+  it("does not treat a matcher named type as logical", () => {
+    expect(isNestedRule({ action: "route", outbound: "proxy", type: "tcp" })).toBe(false);
+  });
+});
 
 describe("ruleValueToText", () => {
   it("joins arrays with commas", () => {

@@ -513,6 +513,21 @@ export function installFixtureFetch(): void {
               { type: "tun", tag: "tun-in", interface_name: "singbox0" },
               { type: "mixed", tag: "mixed-in", listen: "127.0.0.1", listen_port: 2080 },
             ],
+            outbounds: [
+              { type: "selector", tag: "节点选择", outbounds: ["自动选择", "香港 IEPL 01", "direct"] },
+              { type: "urltest", tag: "自动选择", outbounds: ["香港 IEPL 01"] },
+              { type: "shadowsocks", tag: "香港 IEPL 01" },
+              { type: "direct", tag: "direct" },
+              { type: "block", tag: "block" },
+            ],
+            dns: {
+              servers: [
+                { type: "https", tag: "dns_proxy", server: "8.8.8.8" },
+                { type: "udp", tag: "dns_direct", server: "223.5.5.5" },
+              ],
+              rules: [{ domain_suffix: ["google.com"], server: "dns_proxy" }],
+            },
+            services: [{ type: "api", tag: "api", listen: "127.0.0.1", listen_port: 29090 }],
             route: {
               rule_set: [{ type: "remote", tag: "geosite/cn", format: "binary", url: "https://example.com/geosite-cn.srs" }],
               rules: [
