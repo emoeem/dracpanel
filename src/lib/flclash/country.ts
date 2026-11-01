@@ -284,3 +284,55 @@ export function flagOfText(value: string): string {
   }
   return "";
 }
+
+/** Turns a regional-indicator pair back into its ISO code, or null. */
+function codeOfFlag(flag: string): string | null {
+  const points = [...flag].map((char) => char.codePointAt(0) ?? 0);
+  if (points.length !== 2) {
+    return null;
+  }
+  const letters = points.map((point) => {
+    const offset = point - 0x1f1e6;
+    return offset >= 0 && offset < 26 ? String.fromCharCode(65 + offset) : "";
+  });
+  return letters.every((letter) => letter !== "") ? letters.join("") : null;
+}
+
+/** Every code that appears in the name table; used to spot "hk-03" tokens. */
+const KNOWN_CODES: ReadonlySet<string> = new Set(Object.values(NAME_TO_CODE));
+
+/**
+ * Finds a country code anywhere in a node name ("🇯🇵 日本Z01", "HK-01",
+ * "Hong Kong 03"), unlike `countryCodeOf` which only matches exact values from
+ * a GeoIP field. Used by the policy region chips.
+ */
+export function countryCodeInText(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const exact = countryCodeOf(value);
+  if (exact !== null) {
+    return exact;
+  }
+  const flag = value.match(EXISTING_FLAG);
+  if (flag) {
+    const fromFlag = codeOfFlag(flag[0]);
+    if (fromFlag !== null) {
+      return fromFlag;
+    }
+  }
+  const lower = value.toLowerCase();
+  // A standalone two-letter token ("hk-03", "| jp ", "us02") is a strong hint.
+  for (const token of lower.split(/[^a-z]+/)) {
+    const code = token.toUpperCase();
+    if (token.length === 2 && KNOWN_CODES.has(code)) {
+      return code;
+    }
+  }
+  for (const { word, code } of KEYWORDS) {
+    if (lower.includes(word)) {
+      return code;
+    }
+  }
+  return null;
+}

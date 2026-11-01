@@ -32,7 +32,7 @@ import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
 import { patchConfigText, readConfigValue } from "../../lib/configPatch";
 import { urlTestDelayTone } from "../../api/format";
-import { countryCodeOf, flagOfText } from "../../lib/flclash/country";
+import { countryCodeInText, flagOfText } from "../../lib/flclash/country";
 import { cx } from "../../lib/cx";
 import styles from "./Policies.module.css";
 
@@ -78,7 +78,7 @@ function PolicyGroupCard(props: {
   const regions = useMemo(() => {
     const counts = new Map<string, number>();
     for (const member of group.members) {
-      const code = countryCodeOf(member);
+      const code = countryCodeInText(member);
       if (code !== null) {
         counts.set(code, (counts.get(code) ?? 0) + 1);
       }
@@ -91,7 +91,7 @@ function PolicyGroupCard(props: {
   const shown = useMemo(() => {
     const query = search.trim().toLowerCase();
     return group.members.filter((member) => {
-      if (region !== null && countryCodeOf(member) !== region) {
+      if (region !== null && countryCodeInText(member) !== region) {
         return false;
       }
       if (availableOnly && (delays.get(member)?.delay ?? 0) <= 0) {
@@ -111,7 +111,7 @@ function PolicyGroupCard(props: {
       <div className={styles.head}>
         <span className={styles.name}>{group.tag}</span>
         <span className={styles.badge}>{group.type === "urltest" ? "自动选择" : "手动选择"}</span>
-        {group.managed && <span className={cx(styles.badge, styles["badge-managed"])}>订阅托管</span>}
+        {group.managed && <span className={cx(styles.badge, styles.badgeManaged)}>订阅托管</span>}
         <span className={styles.spacer} />
         <FcIconButton label="编辑" onClick={props.onEdit}>
           <Icon name="edit" size={16} />
@@ -136,10 +136,10 @@ function PolicyGroupCard(props: {
       {group.members.length > 0 && (
         <>
           {regions.length >= 2 && (
-            <div className={styles["region-row"]}>
+            <div className={styles.regionRow}>
               <button
                 type="button"
-                className={cx(styles["region-chip"], region === null && styles["region-chip-active"])}
+                className={cx(styles.regionChip, region === null && styles.regionChipActive)}
                 onClick={() => setRegion(null)}
               >
                 全部
@@ -148,7 +148,7 @@ function PolicyGroupCard(props: {
                 <button
                   key={code}
                   type="button"
-                  className={cx(styles["region-chip"], region === code && styles["region-chip-active"])}
+                  className={cx(styles.regionChip, region === code && styles.regionChipActive)}
                   onClick={() => setRegion(region === code ? null : code)}
                 >
                   {code} {count}
@@ -156,8 +156,8 @@ function PolicyGroupCard(props: {
               ))}
             </div>
           )}
-          <div className={styles["card-tools"]}>
-            <label className={styles["tool-search"]}>
+          <div className={styles.cardTools}>
+            <label className={styles.toolSearch}>
               <Icon name="search" size={14} />
               <input
                 value={search}
@@ -165,7 +165,7 @@ function PolicyGroupCard(props: {
                 onChange={(event) => setSearch(event.target.value)}
               />
             </label>
-            <label className={styles["tool-toggle"]}>
+            <label className={styles.toolToggle}>
               <FcSwitch
                 checked={availableOnly}
                 disabled={live === undefined}
@@ -179,12 +179,12 @@ function PolicyGroupCard(props: {
       )}
       <div className={styles.members}>
         {shown.slice(0, 8).map((member) => (
-          <span key={member} className={cx(styles.member, member === current && styles["member-current"])}>
+          <span key={member} className={cx(styles.member, member === current && styles.memberCurrent)}>
             {member}
           </span>
         ))}
         {shown.length > 8 && <span className={styles.member}>+{shown.length - 8}</span>}
-        {shown.length === 0 && <span className={styles["members-empty"]}>无匹配成员</span>}
+        {shown.length === 0 && <span className={styles.membersEmpty}>无匹配成员</span>}
       </div>
     </FcCard>
   );
@@ -373,27 +373,29 @@ export function PoliciesView() {
     [groups],
   );
 
-  // Approximates doona's "contains all nodes": the group's members cover every
-  // entry visible across all live groups (nodes and nested groups alike).
+  // doona's "contains all nodes": every proxy node in the config is a member
+  // of this group. Computed from the config's outbounds (the authoritative tag
+  // list), never from runtime streams that may lag behind.
   const coversAllNodes = useMemo(() => {
-    const all = new Set<string>();
-    for (const group of runtimeGroups) {
-      for (const item of group.items) {
-        all.add(item.tag);
-      }
-    }
+    const proxyTags = outbounds
+      .filter(
+        (item) =>
+          typeof item.tag === "string" &&
+          item.tag !== "" &&
+          item.tag !== "direct" &&
+          item.tag !== "block" &&
+          !GROUP_TYPES.has(item.type ?? ""),
+      )
+      .map((item) => item.tag as string);
     const map = new Map<string, boolean>();
-    if (all.size === 0) {
+    if (proxyTags.length === 0) {
       return map;
     }
     for (const group of groups) {
-      map.set(
-        group.tag,
-        group.members.length >= all.size && group.members.every((member) => all.has(member)),
-      );
+      map.set(group.tag, proxyTags.every((tag) => group.members.includes(tag)));
     }
     return map;
-  }, [groups, runtimeGroups]);
+  }, [groups, outbounds]);
 
   const persist = useCallback(
     async (nextOutbounds: ConfigOutbound[], overrideUpdates: { tag: string; value: PanelPolicyOverrides }[]) => {
@@ -598,8 +600,8 @@ export function PoliciesView() {
             <FcField label={`成员（${draft.members.length}）`}>
               <div className={styles.form}>
                 {draft.members.map((member, index) => (
-                  <div key={member} className={styles["member-row"]}>
-                    <span className={styles["member-name"]}>{member}</span>
+                  <div key={member} className={styles.memberRow}>
+                    <span className={styles.memberName}>{member}</span>
                     <FcIconButton
                       label="上移"
                       disabled={index === 0}
@@ -637,7 +639,7 @@ export function PoliciesView() {
                     </FcIconButton>
                   </div>
                 ))}
-                <div className={styles["add-row"]}>
+                <div className={styles.addRow}>
                   <FcSelect value={addMember} onChange={setAddMember}>
                     <option value="">选择要添加的节点/组…</option>
                     {available.map((candidate) => (

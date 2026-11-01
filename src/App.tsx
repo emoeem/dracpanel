@@ -181,6 +181,7 @@ const ROUTE_ALIASES: Record<string, Route["page"]> = {
   dns: "dns",
   rules: "rules",
   speedtest: "policies",
+  settings: "tools",
   "tools/rules": "rules",
   "tools/config": "config",
   "tools/dns": "dns",

@@ -80,3 +80,72 @@ a hint instead of pretending it worked.
 - Auth failures keep the existing `X-Panel-Token` + `panel-auth-error` flow.
 - Mutating endpoints must be idempotent and validate before applying, matching
   the existing `/api/config` behaviour (auto backup + rollback on failure).
+
+## DNS statistics (api_version 9)
+
+Three endpoints back the four-tab DNS page. All are read-only and answer `200`
+even when the subsystem cannot produce data, with an explanatory `note`.
+
+### `GET /api/dns`
+
+```json
+{
+  "ok": true,
+  "config_path": "/etc/sing-box/config.json",
+  "servers": [{ "type": "https", "tag": "dns_proxy", "server": "8.8.8.8", "path": "/dns-query" }],
+  "rules": [{ "domain_suffix": ["google.com"], "server": "dns_proxy" }],
+  "final": "",
+  "cache_enabled": true,
+  "cache": { "capacity": 4096 },
+  "cache_file": { "enabled": true, "path": "/var/lib/sing-box/cache.db", "size": 48512, "mtime": 1793600000 },
+  "log_level": "debug",
+  "debug_logging": true
+}
+```
+
+`cache_file` mirrors `experimental.cache_file` plus the file's on-disk size and
+mtime. `debug_logging` tells the UI whether per-query records can exist at all.
+
+### `GET /api/dns/queries?minutes=60&limit=500`
+
+```json
+{
+  "ok": true,
+  "entries": [
+    { "at": 1793600000000, "domain": "www.google.com", "type": "A",
+      "client": "192.168.31.30:51234", "upstream": "tls://1.1.1.1",
+      "status": "ok", "elapsed_ms": 27 }
+  ],
+  "note": "",
+  "source": "journalctl -u sing-box"
+}
+```
+
+Records are parsed from the sing-box journal and only exist at
+`log.level=debug`. Missing fields stay empty rather than being guessed. When
+the list is empty the `note` explains why (dry-run, info level, no journalctl).
+
+### `GET /api/dns/probe[?force=1]`
+
+```json
+{
+  "ok": true,
+  "servers": [
+    { "tag": "dns_proxy", "type": "https", "server": "8.8.8.8:443", "ok": true, "elapsed_ms": 21 },
+    { "tag": "dns_tls", "type": "tls", "server": "1.1.1.1:853", "ok": false, "elapsed_ms": 2002, "error": "i/o timeout" }
+  ]
+}
+```
+
+Each `dns.servers[]` entry is queried with a real DNS packet (UDP, TCP, TLS or
+DoH) and timed; results are cached for 30 s unless `force=1`. `hosts`/`local`
+entries are skipped — they never touch the network.
+
+**Honest limits** (surfaced in the UI, not faked):
+
+- sing-box exposes no cache-entry list or hit counter; the page labels its
+  cache-hit ratio as an estimate and states that entries are unavailable.
+- Failures/queries only exist at debug log level; the page offers a switch that
+  rewrites `log.level` through the standard config transaction.
+
+`GET /api/state.features` includes `dns.stats` from api_version 9.

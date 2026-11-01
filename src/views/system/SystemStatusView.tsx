@@ -12,8 +12,8 @@ import styles from "../ops/ops.module.css";
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className={styles.stat}>
-      <span className={styles["stat-label"]}>{label}</span>
-      <span className={styles["stat-value"]}>{value}</span>
+      <span className={styles.statLabel}>{label}</span>
+      <span className={styles.statValue}>{value}</span>
     </div>
   );
 }
@@ -61,7 +61,7 @@ export function SystemStatusView() {
       <div className="fc-page-body">
         <FcCard>
           <FcCardHeader title="服务" subtitle={active ? "运行中" : "已停止"} />
-          <div className={styles["stat-grid"]}>
+          <div className={styles.statGrid}>
             <Stat label="状态" value={active ? "运行中" : "已停止"} />
             <Stat label="PID" value={state.service?.pid || "—"} />
             <Stat label="启动时间" value={state.service?.since || "—"} />
@@ -86,7 +86,7 @@ export function SystemStatusView() {
 
         <FcCard>
           <FcCardHeader title="资源" />
-          <div className={styles["stat-grid"]}>
+          <div className={styles.statGrid}>
             <Stat
               label="CPU"
               value={
@@ -103,7 +103,7 @@ export function SystemStatusView() {
 
         <FcCard>
           <FcCardHeader title="配置" subtitle={state.dry_run ? "dry-run" : undefined} />
-          <div className={styles["stat-grid"]}>
+          <div className={styles.statGrid}>
             <Stat label="路径" value={state.config_path || "—"} />
             <Stat label="大小" value={formatBytes(state.config_bytes ?? 0)} />
             <Stat

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { countryCodeOf, flagEmoji, flagOfText } from "./country";
+import { countryCodeInText, countryCodeOf, flagEmoji, flagOfText } from "./country";
 
 describe("countryCodeOf", () => {
   it("passes through alpha-2 codes", () => {
@@ -46,5 +46,24 @@ describe("flagOfText", () => {
 
   it("returns empty when nothing matches", () => {
     expect(flagOfText("HomeLab")).toBe("");
+  });
+});
+
+describe("countryCodeInText", () => {
+  it("finds a region inside a node name", () => {
+    expect(countryCodeInText("香港 IEPL 01")).toBe("HK");
+    expect(countryCodeInText("日本Z01 | IEPL")).toBe("JP");
+    expect(countryCodeInText("hk-03")).toBe("HK");
+    expect(countryCodeInText("🇸🇬 新加坡 05 0.5x")).toBe("SG");
+  });
+
+  it("prefers an explicit two-letter code", () => {
+    expect(countryCodeInText("JP")).toBe("JP");
+  });
+
+  it("returns null when no region is present", () => {
+    expect(countryCodeInText("Auto")).toBeNull();
+    expect(countryCodeInText("")).toBeNull();
+    expect(countryCodeInText(null)).toBeNull();
   });
 });

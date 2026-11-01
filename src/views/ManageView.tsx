@@ -292,7 +292,7 @@ export function ManageView() {
   return (
     <div className="page">
       <PageHeader
-        title={t("System")}
+        title={t("Configuration")}
         actions={
           <Button
             onClick={() => {

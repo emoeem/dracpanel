@@ -14,12 +14,12 @@ type SeverityFilter = "" | "warn" | "error";
 
 function severityClass(severity: string): string {
   if (severity === "error") {
-    return styles["dot-error"];
+    return styles.dotError;
   }
   if (severity === "warn") {
-    return styles["dot-warn"];
+    return styles.dotWarn;
   }
-  return styles["dot-info"];
+  return styles.dotInfo;
 }
 
 function clock(t: number): string {
@@ -133,7 +133,7 @@ export function EventsView() {
           <FcCard className={styles.card}>
             {groups.map((group) => (
               <div key={group.key}>
-                <div className={styles["day-label"]}>{group.label}</div>
+                <div className={styles.dayLabel}>{group.label}</div>
                 {group.items.map((entry, index) => (
                   <div key={`${entry.t}-${index}`} className={styles.event}>
                     <span className={styles.time}>{clock(entry.t)}</span>

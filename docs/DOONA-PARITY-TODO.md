@@ -1,6 +1,6 @@
 # Doona 对齐：交接与剩余工作清单
 
-> 最后更新：2026-11-01（§3.1 规则页三标签已完成）
+> 最后更新：2026-11-01（§3.1 规则、§3.2 DNS 四标签、§3.3 分流拓扑、§3.6 连接列表/策略筛选 已完成）
 > 适用对象：接手继续开发的人
 > 前置阅读：`docs/AUDIT.md`（功能审计与证据）、`docs/COMPLETION-PLAN.md`（早期 P0–P3 计划）、`docs/HANDOFF.md`（原始维护交接）
 
@@ -8,7 +8,7 @@
 
 ## 0. 一句话现状
 
-控制台已按 doona 的 IA 重排（活动/观测/路由/设置），**策略、节点、连接（流量视图）、事件、系统状态、分流、规则（三标签）**已完成到可用；**DNS、配置、设置、日志直方图、活动部件化**仍是半成品或缺失。三项 sing-box 无法原生对应的功能按已批准方案做近似。
+控制台已按 doona 的 IA 重排（活动/观测/路由/设置）。**策略、节点、连接（流量+列表）、事件、系统状态、分流（路径拓扑）、规则（三标签）、DNS（四标签）**已完成到可用；**配置四标签、设置两标签、日志直方图、活动部件化**仍是半成品或缺失。三项 sing-box 无法原生对应的功能按已批准方案做近似。
 
 ---
 
@@ -34,9 +34,9 @@
 |---|---|---|
 | 活动 `#/activity` | 🟡 基础完成 | 仍是原仪表盘；缺「编辑仪表盘」与 6 个 doona 小部件 |
 | 系统状态 `#/overview` | 🟡 部分 | 服务/资源/配置/能力/控制完成；缺 导出 JSON、暂停、重载、数据路径、未开启功能 |
-| 连接 `#/connections` | ✅ 流量视图完成 | 流量/列表双标签、散点、P50/P90、深链；列表缺导出与分组 |
-| 分流 `#/flows` | 🟡 基础 | 概览三列 + 记录；缺按设备维度、路径高亮/清除 |
-| DNS `#/dns` | ❌ 仅查询 | 缺 统计/解析记录/缓存 三标签 |
+| 连接 `#/connections` | ✅ 完成 | 流量视图（散点/P50/P90/深链）+ 列表（状态/TCP·UDP 筛选、分组、排序、CSV·JSON 导出、偏好持久化） |
+| 分流 `#/flows` | ✅ 完成 | 规则/设备 → 出站 → 节点 路径拓扑、点击筛选+清除、SVG 连线；记录表含时间/规则/出站 |
+| DNS `#/dns` | ✅ 四标签完成 | 统计（中位/P95/失败率/缓存估算 + 上游延迟条 + 响应方格 + 排行 + 探测）、解析记录（含采集开关）、缓存、查询 |
 | 日志 `#/logs` | 🟡 | 修了宽度；缺模块过滤、级别直方图、流式指示 |
 | 事件 `#/events` | ✅ 基本完成 | 事件/操作记录双标签、级别筛选、导出 JSON；缺「排除运行状态更新」 |
 | 策略 `#/policies` | ✅ 完成 | 组 CRUD、成员排序、类型/参数、托管覆盖、筛选与计数 |
@@ -79,16 +79,15 @@
 - 模板不可编辑参数（如自定义域名集合），只能生成后到高级模式改；
 - 追踪模拟无「按暂存前基线对比」视图。
 
-### 3.2 DNS 四标签
+### 3.2 DNS 四标签（✅ 已完成，2026-11-01）
 
-**现状**：`src/views/records/RecordsView.tsx` 的 `DnsView` 只有查询台账 + 清缓存。
+**已交付**：
+- 后端 `internal/dnslog`：按需 `journalctl` 读取并宽容解析 debug 级 `dns:` 行（domain/type/client/upstream/status/elapsed），15s 缓存；`internal/dnsprobe` 对 `dns.servers[]` 做真实 UDP/TCP/TLS/DoH 探测，2s 超时、30s 缓存。
+- 端点：`GET /api/dns`、`GET /api/dns/queries?minutes&limit`、`GET /api/dns/probe[?force=1]`；`api_version` 8→9，Features 增 `dns.stats`；三路由进装配级路由矩阵，dnslog 5 例 / dnsprobe 8 例单测。
+- 前端 `src/views/dns/DnsView.tsx` 四标签：统计（四指标卡、按上游 log 轴延迟条、响应结果方格、域名/设备排行、探测上游）、解析记录（表 + 搜索 + 采集开关）、缓存（配置/文件足迹 + 清 DNS/FakeIP）、查询（原工具内联）。
+- `src/lib/dnsStats.ts` 纯函数 + 7 例单测。
 
-**要做**（按已批准近似方案）：
-- 后端新增 `internal/dnslog`：从 sing-box 日志流解析 `dns:` 行（**仅 `log.level=debug` 有数据**）。数据来源建议用 daemon `subscribeLog` 流或 journalctl。
-- 后端新增 `internal/dnsprobe`：对 `dns.servers[]` 逐个探测（DoH/UDP/TCP）计时 → `GET /api/dns/stats`。
-- 端点：`GET /api/dns`（结构化配置）、`GET /api/dns/queries`、`GET /api/dns/cache`（配置/文件大小/mtime + flush）。
-- 前端四标签：统计（上游延迟/响应结果/查询排行/缓存状态）、解析记录、缓存（**条目列表标注 sing-box 不提供**）、查询（现有）。
-- 提供「开启 DNS 记录采集」开关（改 `log.level`，提示日志噪音与开销）。
+**如实标注（不伪造）**：缓存命中率为估算（无上游归属的应答）；缓存条目列表 sing-box 不提供；记录仅 debug 级存在，页面提供改 `log.level` 的开关并提示日志噪音。
 
 ### 3.3 活动页部件化 + 编辑仪表盘
 
@@ -122,11 +121,11 @@
 - **日志页**：模块前缀过滤、级别时间直方图（错误/警告/信息）、「流式接收中」指示、记录设置面板。
 - **事件页**：「排除运行状态更新」开关；健康监控掉线/恢复时调用 `POST /api/journal`（目前只 toast/webhook）。
 - **节点页**：按订阅来源分组（含 +N 折叠）、协议化编辑表单（现在只能改 JSON）。
-- **连接列表**：CSV/JSON 导出、按主机/进程/出站/规则分组（`lib/connectionTools.ts` 已实现，未接入）。
-- **分流**：按设备维度、点击路径高亮/清除筛选、记录表补时间/规则/出站列。
+- ~~**连接列表**：CSV/JSON 导出、按主机/进程/出站/规则分组~~（✅ 已接入，含设备分组与表头排序）。
+- ~~**分流**：按设备维度、点击路径高亮/清除筛选、记录表补时间/规则/出站列~~（✅ 已完成）。
 - **系统状态**：导出状态 JSON、暂停轮询、重载核心、数据路径段、未开启功能段。
-- **配置页标题**：`ManageView` 页头仍是「系统」，与导航「配置」不一致，需改。
-- **能力与版本**：`APIVersion` 8 → 9；`Features` 增加 `policies.edit`、`nodes.edit`、`journal` 之外的 `dns.edit`、`rules.edit`、`flows`；同步 `src/api/panelCapabilities.ts` 与 `docs/PANEL_API_CONTRACT.md`。
+- ~~**配置页标题**：`ManageView` 页头仍是「系统」~~（✅ 已改为「配置」）。
+- **能力与版本**：`APIVersion` 已 8 → 9，Features 增 `dns.stats`（前端 capabilities 与 API 契约已同步）；`rules.edit`/`flows` 等尚未声明，按需再补。
 
 ---
 
@@ -142,7 +141,7 @@
 | 6 | 规则追踪模拟不覆盖 `rule_set` | 模拟结果可能比内核宽松 | UI 明示「rule_set 需内核判定」 |
 | 7 | 策略组不支持 TCP/UDP 分选 | 与 doona 有可见差异 | 已在 UI 标注 sing-box 限制 |
 | 8 | 节点编辑仅支持 JSON | 易用性不如 doona 的协议表单 | 后续按协议补结构化表单 |
-| 9 | `ManageView` 标题「系统」与导航「配置」不一致 | IA 观感问题 | 3.4 拆页时一并修 |
+| 9 | ~~`ManageView` 标题与导航不一致~~ | 已修：页头改为「配置」 | — |
 | 10 | 会话期内的健康告警只到 toast/webhook | 事件页看不到掉线/恢复 | 见 3.6，接 `POST /api/journal` |
 
 ---
@@ -191,6 +190,10 @@ src/lib/configPatch.ts                         JSONC 补丁（所有编辑器共
 src/lib/ruleEditor.ts                          规则/匹配器模型（含 DNS 匹配器）
 src/lib/ruleTrace.ts                           追踪模拟静态求值（纯函数）
 src/lib/ruleTemplates.ts                       简易模式服务模板（rule_set 优先）
+src/lib/dnsStats.ts                            DNS 统计聚合（纯函数）
+src/views/dns/DnsView.tsx                      DNS 四标签页
+backend/internal/dnslog/                       journal DNS 行解析
+backend/internal/dnsprobe/                     上游延迟探测
 src/views/tools/RulesView.tsx                  规则页外壳（三标签 + 暂存应用）
 src/views/tools/rules/                         RouteRulesTab / DnsRulesTab / TraceRulesTab / RuleEditorList
 src/components/flclash/                        UI 原语
@@ -220,6 +223,6 @@ src/views/tools/*                              设置域（待整合两标签）
 
 1. ~~先修 §4 的 1–3（部署与资源），否则任何前端改动都可能"看不见"。~~（已按 rsync -a 执行）
 2. ~~做 §3.1 规则三标签（用户感知最强、纯前端 + 现有补丁链路）。~~（✅ 2026-11-01 完成）
-3. 做 §3.4 配置四标签（把 ManageView 拆开，顺带修标题与默认标签）。
-4. 做 §3.2 DNS（需要新增后端包，工作量最大）。
-5. 最后做 §3.3 活动部件化、§3.5 设置、§3.6 收口。
+3. ~~做 §3.2 DNS~~（✅ 已完成，含 dnslog/dnsprobe 后端）。
+4. ~~§3.3 分流路径拓扑、§3.6 连接列表/策略筛选/标题收口~~（✅ 已完成）。
+5. 剩余：§3.4 配置四标签、§3.3 活动部件化、§3.5 设置两标签、§3.6 日志直方图。

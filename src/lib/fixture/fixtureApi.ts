@@ -556,6 +556,69 @@ export function installFixtureFetch(): void {
     if (path === "/api/logs") {
       return json({ ok: true, lines: "oct 31 11:00:00 sing-box[4242]: started" });
     }
+    // Policy groups and nodes (read-only views; the editors write config).
+    if (path === "/api/policies") {
+      return json({
+        ok: true,
+        groups: [
+          {
+            tag: "节点选择",
+            type: "selector",
+            members: [
+              "🇯🇵 日本Z01 | IEPL", "🇭🇰 香港Z04 | IEPL", "🇸🇬 新加坡 05 0.5x",
+              "🇹🇼 台湾 04 流媒体", "🇰🇷 韩国 01 2x", "🇺🇸 美国 02 IEPL", "自动选择", "direct",
+            ],
+            managed: true,
+          },
+          {
+            tag: "自动选择",
+            type: "urltest",
+            members: ["🇯🇵 日本Z01 | IEPL", "🇭🇰 香港Z04 | IEPL", "🇸🇬 新加坡 05 0.5x"],
+            managed: true,
+            url: "https://www.gstatic.com/generate_204",
+            interval: "10m",
+            tolerance: 50,
+          },
+          {
+            tag: "下载",
+            type: "selector",
+            members: ["direct", "节点选择"],
+            managed: false,
+          },
+        ],
+      });
+    }
+    if (path === "/api/nodes") {
+      return json({
+        ok: true,
+        nodes: [
+          { tag: "🇯🇵 日本Z01 | IEPL", type: "shadowsocks", server: "jp1.example.com", server_port: 8388, origin: "managed" },
+          { tag: "🇭🇰 香港Z04 | IEPL", type: "shadowsocks", server: "hk4.example.com", server_port: 8388, origin: "managed" },
+          { tag: "🇸🇬 新加坡 05 0.5x", type: "vmess", server: "sg5.example.com", server_port: 443, origin: "managed" },
+          { tag: "🇹🇼 台湾 04 流媒体", type: "trojan", server: "tw4.example.com", server_port: 443, origin: "managed" },
+          { tag: "🇰🇷 韩国 01 2x", type: "hysteria2", server: "kr1.example.com", server_port: 443, origin: "managed" },
+          { tag: "🇺🇸 美国 02 IEPL", type: "vless", server: "us2.example.com", server_port: 443, origin: "managed" },
+        ],
+      });
+    }
+    if (path.startsWith("/api/nodes/")) {
+      return json({ ok: true, node: { tag: "fixture", type: "shadowsocks", server: "example.com", server_port: 8388 } });
+    }
+    // Journal: operation + event history behind the events page.
+    if (path.startsWith("/api/journal")) {
+      if (init?.method === "POST") {
+        return json({ ok: true });
+      }
+      const now = Date.now();
+      const entries = [
+        { t: now - 60_000, kind: "service", severity: "info", category: "operation", source: "browser", title: "服务控制（restart）", detail: "[fixture] systemctl restart sing-box", ok: true },
+        { t: now - 240_000, kind: "config", severity: "info", category: "operation", source: "panel", title: "应用配置（manual edit）", detail: "reload-first：热重载成功", ok: true },
+        { t: now - 420_000, kind: "health", severity: "warn", category: "event", source: "health-monitor", title: "节点不可用", detail: "🇯🇵 日本Z01 | IEPL 探测超时", ok: false },
+        { t: now - 900_000, kind: "health", severity: "info", category: "event", source: "health-monitor", title: "节点恢复", detail: "🇯🇵 日本Z01 | IEPL 已恢复", ok: true },
+        { t: now - 1_800_000, kind: "subs", severity: "error", category: "event", source: "scheduler", title: "订阅更新失败", detail: "HTTP 502 from example.com", ok: false },
+      ];
+      return json({ ok: true, entries });
+    }
     // DNS statistics (api_version 9): config, parsed journal records, probes.
     if (path === "/api/dns") {
       return json({
