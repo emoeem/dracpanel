@@ -173,6 +173,7 @@ function StatusCard({
   onStartStop,
   panelAvailable,
   configError,
+  egressConfigured,
 }: {
   className?: string;
   statusType: ServiceStatus_Type | null;
@@ -189,8 +190,11 @@ function StatusCard({
   onStartStop: () => void;
   panelAvailable: boolean;
   configError: string | null;
+  /** False when panel.json sets neither egress_ip nor egress_ip_probe_url. */
+  egressConfigured: boolean;
 }) {
   const tone = statusToneOf(statusType);
+  const ipMissing = ip === null || ip === "";
   return (
     <FcCard className={cx(styles.statusCard, className)}>
       <CookieBlob running={started} />
@@ -210,17 +214,31 @@ function StatusCard({
             type="button"
             className={styles.countryBadge}
             onClick={onReprobe}
-            title="重新检测出口 IP"
-            aria-label="重新检测出口 IP"
+            title={ipMissing && !egressConfigured ? "未配置出口 IP 探测" : "重新检测出口 IP"}
+            aria-label={ipMissing && !egressConfigured ? "未配置出口 IP 探测" : "重新检测出口 IP"}
           >
             {probing ? <span className={styles.miniSpinner} /> : countryCode || "—"}
           </button>
-          <span className={styles.ipText}>{ip || "—"}</span>
+          {ipMissing ? (
+            <span className={styles.ipText} title="面板不会主动联网；配置 egress_ip_probe_url 后自动探测">
+              {egressConfigured ? "探测失败" : "未配置探测"}
+            </span>
+          ) : (
+            <span className={styles.ipText}>{ip}</span>
+          )}
         </div>
-        <div className={styles.statusChips}>
-          <span className={styles.chip}>{ipType}</span>
-          <span className={styles.chip}>{ipQuality ? `质量 ${ipQuality}` : "质量未知"}</span>
-        </div>
+        {ipMissing && !egressConfigured ? (
+          <div className={styles.statusChips}>
+            <span className={styles.chip}>在 panel.json 配置 egress_ip_probe_url</span>
+          </div>
+        ) : (
+          <div className={styles.statusChips}>
+            <span className={styles.chip}>{ipType}</span>
+            <span className={styles.chip}>
+              {ipQuality ? `质量 ${ipQuality}` : ipMissing ? "待探测" : "质量未知"}
+            </span>
+          </div>
+        )}
         <div className={styles.statusMeta}>
           <div className={styles.metaCell}>
             <span className={styles.metaLabel}>运行时长</span>
@@ -1291,8 +1309,11 @@ export function DashboardView() {
     egress.geo?.organization ??
     egress.geo?.org ??
     (egress.geo?.asn ? `AS${egress.geo.asn}` : "—");
-  const ipType = panel.state?.ip_type ?? "类型未知";
+  const egressIpMissing = egress.ip === null || egress.ip === "";
+  const ipType = panel.state?.ip_type ?? (egressIpMissing ? "待探测" : "类型未知");
   const ipQuality = panel.state?.ip_quality ?? null;
+  // Old panels omit the field; only an explicit false means "not configured".
+  const egressConfigured = panel.state?.egress_probe_configured !== false;
   const appMemory = panel.state?.memory_app ?? null;
   const kernelMemory = panel.state?.memory_kernel ?? null;
   const uptime =
@@ -1377,6 +1398,7 @@ export function DashboardView() {
             onStartStop={runCore}
             panelAvailable={hasPanelToken()}
             configError={panel.state?.config_error ?? null}
+            egressConfigured={egressConfigured}
           />
           <SpeedCard
             direction="upload"

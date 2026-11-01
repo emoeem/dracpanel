@@ -445,6 +445,7 @@ export function installFixtureFetch(): void {
         clash_api: "http://127.0.0.1:9090",
         clash_secret: "fixture",
         egress_ip: "103.151.172.34",
+        egress_probe_configured: true,
         local_ip: "192.168.31.30",
         ip_type: "机房",
         ip_quality: "普通",

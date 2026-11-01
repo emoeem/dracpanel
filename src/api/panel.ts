@@ -52,6 +52,8 @@ export interface PanelState {
   local_ip?: string;
   ip_type?: string;
   ip_quality?: string;
+  /** Optional (api_version 9): true when egress_ip or its probe URL is set. */
+  egress_probe_configured?: boolean;
   memory_app?: number;
   memory_kernel?: number;
   /** Present only once the sampler has taken its first /proc/stat sample. */

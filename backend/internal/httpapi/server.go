@@ -422,6 +422,11 @@ func (h *Handler) handleState(w http.ResponseWriter, r *http.Request) {
 	applyCapability.Set("reload_supported", h.Deps.Service.ReloadSupported())
 	out.Set("apply_capability", applyCapability)
 	out.Set("egress_ip", s.EgressIP())
+	// Whether a static egress IP or a probe URL is configured at all. An empty
+	// egress_ip with this false means "not configured" (the panel never makes
+	// an unsolicited request), which the dashboard states explicitly instead of
+	// showing a bare dash.
+	out.Set("egress_probe_configured", s.EgressConfigured())
 	out.Set("local_ip", localip.Detect())
 	if mem, ok := h.Deps.Mem.Get().Get("app"); ok {
 		out.Set("memory_app", mem)

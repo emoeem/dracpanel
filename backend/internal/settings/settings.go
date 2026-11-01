@@ -266,6 +266,16 @@ func (s *Settings) ClashSecret() string {
 	return value
 }
 
+// EgressConfigured reports whether egress_ip or egress_ip_probe_url is set, so
+// the panel can distinguish "not configured" from "probe failed" without
+// issuing a request.
+func (s *Settings) EgressConfigured() bool {
+	if configured := strings.TrimSpace(s.String("egress_ip")); configured != "" && net.ParseIP(configured) != nil {
+		return true
+	}
+	return strings.TrimSpace(s.String("egress_ip_probe_url")) != ""
+}
+
 // EgressIP returns the configured egress IP or probes egress_ip_probe_url
 // (cached: 6h on success, 300s on failure). No request without config.
 func (s *Settings) EgressIP() string {
