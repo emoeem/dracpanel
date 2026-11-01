@@ -59,6 +59,7 @@ import {
   ObsRankingCard,
   ObsTrafficCard,
 } from "./ObservabilityCards";
+import { attribution, statusChips } from "./statusChips";
 import styles from "./Dashboard.module.css";
 
 function splitRate(value: number): { amount: string; unit: string } {
@@ -174,6 +175,7 @@ function StatusCard({
   panelAvailable,
   configError,
   egressConfigured,
+  geoLocation,
 }: {
   className?: string;
   statusType: ServiceStatus_Type | null;
@@ -192,9 +194,12 @@ function StatusCard({
   configError: string | null;
   /** False when panel.json sets neither egress_ip nor egress_ip_probe_url. */
   egressConfigured: boolean;
+  /** "SG · Singapore" from the GeoIP lookup of the exit IP; empty without one. */
+  geoLocation: string;
 }) {
   const tone = statusToneOf(statusType);
   const ipMissing = ip === null || ip === "";
+  const chips = statusChips({ ip, ipType, ipQuality, geoLocation, egressConfigured });
   return (
     <FcCard className={cx(styles.statusCard, className)}>
       <CookieBlob running={started} />
@@ -227,16 +232,13 @@ function StatusCard({
             <span className={styles.ipText}>{ip}</span>
           )}
         </div>
-        {ipMissing && !egressConfigured ? (
+        {chips.length > 0 && (
           <div className={styles.statusChips}>
-            <span className={styles.chip}>在 panel.json 配置 egress_ip_probe_url</span>
-          </div>
-        ) : (
-          <div className={styles.statusChips}>
-            <span className={styles.chip}>{ipType}</span>
-            <span className={styles.chip}>
-              {ipQuality ? `质量 ${ipQuality}` : ipMissing ? "待探测" : "质量未知"}
-            </span>
+            {chips.map((chip) => (
+              <span key={chip} className={styles.chip}>
+                {chip}
+              </span>
+            ))}
           </div>
         )}
         <div className={styles.statusMeta}>
@@ -245,9 +247,9 @@ function StatusCard({
             <span className={styles.metaValue}>{uptime}</span>
           </div>
           <div className={styles.metaCell}>
-            <span className={styles.metaLabel}>组织</span>
-            <span className={styles.metaValue} title={organization}>
-              {organization}
+            <span className={styles.metaLabel}>归属</span>
+            <span className={styles.metaValue} title={attribution(organization, geoLocation)}>
+              {attribution(organization, geoLocation)}
             </span>
           </div>
         </div>
@@ -1309,8 +1311,8 @@ export function DashboardView() {
     egress.geo?.organization ??
     egress.geo?.org ??
     (egress.geo?.asn ? `AS${egress.geo.asn}` : "—");
-  const egressIpMissing = egress.ip === null || egress.ip === "";
-  const ipType = panel.state?.ip_type ?? (egressIpMissing ? "待探测" : "类型未知");
+  const ipType = panel.state?.ip_type ?? "";
+  const geoLocation = [egress.geo?.country, egress.geo?.city].filter(Boolean).join(" · ");
   const ipQuality = panel.state?.ip_quality ?? null;
   // Old panels omit the field; only an explicit false means "not configured".
   const egressConfigured = panel.state?.egress_probe_configured !== false;
@@ -1399,6 +1401,7 @@ export function DashboardView() {
             panelAvailable={hasPanelToken()}
             configError={panel.state?.config_error ?? null}
             egressConfigured={egressConfigured}
+            geoLocation={geoLocation}
           />
           <SpeedCard
             direction="upload"
