@@ -226,3 +226,24 @@ src/views/tools/*                              设置域（待整合两标签）
 3. ~~做 §3.2 DNS~~（✅ 已完成，含 dnslog/dnsprobe 后端）。
 4. ~~§3.3 分流路径拓扑、§3.6 连接列表/策略筛选/标题收口~~（✅ 已完成）。
 5. 剩余：§3.4 配置四标签、§3.3 活动部件化、§3.5 设置两标签、§3.6 日志直方图。
+
+---
+
+## 9. 验证记录（2026-11-01，fixture + 生产只读）
+
+### 9.1 fixture 全量（`?fixture=1`，无核心）
+- 23 条路由逐页检查：h1 正确、无错误文案（唯一问题是 fixture 缺 `/api/journal`，已补齐）
+- 新控件实测：连接列表分组展开 6 行 + 表头排序；分流点选后节点 11→3 且「清除路径筛选」出现、按设备切换生效；策略 JP chip 过滤 + 只显示可用 13→5；规则 10 个模板（QUIC/私有地址显示「固定匹配器」）；DNS 四标签 + 探测三态（21ms/12ms/失败）
+- 该轮抓到并修复 3 个真实缺陷：`countryCodeOf` 只精确匹配导致地区 chips 必空；`styles["a-b"]` 在 `camelCaseOnly` 下为 undefined 静默丢样式（4 个文件）；`#/settings` 死路由与配置页标题不一致
+- 前端 369 用例、`tsc`、`eslint`、全仓 `stylelint` 全绿；后端 13 包 `go vet`/`go test` 全绿
+
+### 9.2 生产 9096 只读
+- 部署校验：二进制 md5 一致、服务 active、`/api/dns*` 返回 401（非 404）、前端 `index.html` 与 `dist` 同哈希、`DnsView-*.js/css` 200
+- `/api/state`：`api_version=9`、`features` 含 `dns.stats`、`cpu_percent=9.29`、`cpu_ready=true`、`local_ip=192.168.31.30`、`mode=ebpf`
+- `/api/dns`：7 个 servers（4 个 https + 2 group + 1 hosts）、11 条规则、`log_level=info`、`cache_file` 131.1 KB
+- `/api/dns/queries`：0 条 + 如实提示「仅 debug 级别输出」；`/api/dns/probe`：4 个 DoH 上游实测 111–1428ms 全部成功
+- 页面实测：DNS 四标签（统计空态如实、探测 chip、缓存足迹与两条清除按钮、记录采集开关 off 且副标题说明）；分流 9 节点/34 连线、点选筛选与清除；连接列表 24 行、按出口分组带流量合计、CSV/JSON 导出可用；策略 9 组、地区 chips 识别真实节点名（JP 6 / HK 5 / SG 3）并过滤生效；规则 14 条、第 3/8 条 logical 明确引导、12 条可编辑
+- 生产 20 条路由全扫：全部 h1 正确、无错误文案；事件页显示真实 journal 记录
+
+### 9.3 生产验收发现并修复
+- 「包含所有节点」对所有组误显：`Map.has()` 被当成取值判断，改为 `get(tag) === true`（提交 `d18e3e7`），需前端重新 rsync 后生效
