@@ -529,7 +529,7 @@ export function PoliciesView() {
                 key={group.tag}
                 group={group}
                 live={runtimeByTag.get(group.tag)}
-                coversAllNodes={coversAllNodes.has(group.tag)}
+                coversAllNodes={coversAllNodes.get(group.tag) === true}
                 onEdit={() => setDraft(draftOf(group))}
                 onDelete={() => setDeleteTarget(group)}
               />
