@@ -48,13 +48,18 @@ export interface PanelState {
   managed_group?: string;
   managed_urltest?: string;
   egress_ip?: string;
-  /** Optional FlClash-parity fields; absent on the current panel backend. */
+  /** Optional FlClash-parity fields; the panel backend fills them in. */
   local_ip?: string;
   ip_type?: string;
   ip_quality?: string;
   memory_app?: number;
   memory_kernel?: number;
+  /** Present only once the sampler has taken its first /proc/stat sample. */
   cpu_percent?: number;
+  /** True when cpu_percent is a real sample rather than "not sampled yet". */
+  cpu_ready?: boolean;
+  /** How config changes are applied (reload-first vs restart). */
+  apply_capability?: { strategy?: string; reload_supported?: boolean };
   token_file?: string;
 }
 
@@ -79,6 +84,8 @@ export interface PanelConfig {
   ok: boolean;
   path: string;
   text: string;
+  /** Unix mtime of the file this text was read from (optimistic concurrency). */
+  mtime?: number;
   backups: PanelBackup[];
 }
 
@@ -371,6 +378,93 @@ export function getPanelLogs(lines = 200): Promise<{ ok: boolean; lines: string 
   );
 }
 
+/* ── dns stats (api_version 9) ────────────────────────────── */
+
+export interface PanelDnsServer {
+  type?: string;
+  tag?: string;
+  server?: string;
+  server_port?: number;
+  path?: string;
+  [key: string]: unknown;
+}
+
+export interface PanelDnsCacheFile {
+  enabled?: boolean;
+  path?: string;
+  size?: number;
+  mtime?: number;
+}
+
+export interface PanelDnsConfig {
+  ok: boolean;
+  message?: string;
+  config_path?: string;
+  servers: PanelDnsServer[];
+  rules: Record<string, unknown>[];
+  final?: string;
+  cache_enabled?: boolean;
+  cache?: Record<string, unknown>;
+  cache_file?: PanelDnsCacheFile;
+  log_level?: string;
+  debug_logging?: boolean;
+}
+
+export interface PanelDnsQueryEntry {
+  at: number;
+  domain: string;
+  type?: string;
+  client?: string;
+  upstream?: string;
+  /** ok | nxdomain | failed */
+  status: string;
+  elapsed_ms?: number;
+}
+
+export interface PanelDnsQueryList {
+  ok: boolean;
+  entries: PanelDnsQueryEntry[];
+  /** Why the list may be empty (dry-run, info log level, …). */
+  note?: string;
+  source?: string;
+}
+
+export interface PanelDnsProbeResult {
+  tag: string;
+  type: string;
+  server: string;
+  ok: boolean;
+  elapsed_ms: number;
+  error?: string;
+}
+
+export interface PanelDnsProbeList {
+  ok: boolean;
+  servers: PanelDnsProbeResult[];
+  note?: string;
+  message?: string;
+}
+
+export function getDnsConfig(): Promise<PanelDnsConfig> {
+  return request<PanelDnsConfig>("/dns");
+}
+
+export function getDnsQueries(minutes = 60, limit = 500): Promise<PanelDnsQueryList> {
+  return request<PanelDnsQueryList>(
+    `/dns/queries?minutes=${minutes}&limit=${limit}`,
+    {},
+    LONG_REQUEST_TIMEOUT_MS,
+  );
+}
+
+export function getDnsProbe(force = false): Promise<PanelDnsProbeList> {
+  return request<PanelDnsProbeList>(
+    `/dns/probe${force ? "?force=1" : ""}`,
+    {},
+    LONG_REQUEST_TIMEOUT_MS,
+  );
+}
+
 export async function getGeoIp(ip: string): Promise<GeoIpInfo | null> {
   try {
     return await request<GeoIpInfo>(`/geoip?ip=${encodeURIComponent(ip)}`);
@@ -442,12 +536,16 @@ export function validatePanelConfig(text: string): Promise<PanelResult> {
   );
 }
 
-export function applyPanelConfig(text: string): Promise<PanelResult> {
+export function applyPanelConfig(text: string, baseMtime?: number): Promise<PanelResult> {
+  const payload: Record<string, unknown> = { text };
+  if (typeof baseMtime === "number" && baseMtime > 0) {
+    payload.base_mtime = baseMtime;
+  }
   return request<PanelResult>(
     "/config",
     {
       method: "POST",
-      body: jsonBody({ text }),
+      body: jsonBody(payload),
     },
     APPLY_TIMEOUT_MS,
   );
@@ -912,3 +1010,135 @@ export async function importProfileFile(file: File): Promise<PanelResult> {
   return (await response.json()) as PanelResult;
 }
 
+
+/* ── journal (activity / events) ──────────────────────────── */
+
+export interface PanelJournalEntry {
+  t: number;
+  kind: string;
+  severity: string;
+  category: string;
+  source?: string;
+  title: string;
+  detail?: string;
+  ok: boolean;
+}
+
+export interface PanelJournalQuery {
+  category?: string;
+  severity?: string;
+  limit?: number;
+}
+
+export async function getJournal(query: PanelJournalQuery = {}): Promise<PanelJournalEntry[]> {
+  const params = new URLSearchParams();
+  if (query.category) {
+    params.set("category", query.category);
+  }
+  if (query.severity) {
+    params.set("severity", query.severity);
+  }
+  if (typeof query.limit === "number" && query.limit > 0) {
+    params.set("limit", String(query.limit));
+  }
+  const suffix = params.toString();
+  const body = await request<{ ok: boolean; entries?: PanelJournalEntry[] }>(
+    `/journal${suffix ? `?${suffix}` : ""}`,
+  );
+  return body.entries ?? [];
+}
+
+export interface PanelJournalAppend {
+  kind: string;
+  severity: "info" | "warn" | "error";
+  category: "operation" | "event";
+  source?: string;
+  title: string;
+  detail?: string;
+  ok: boolean;
+}
+
+export async function appendJournal(entry: PanelJournalAppend): Promise<void> {
+  await request<PanelResult>("/journal", { method: "POST", body: jsonBody(entry) });
+}
+
+/* ── policies / nodes ─────────────────────────────────────── */
+
+export interface PanelPolicyGroup {
+  tag: string;
+  type: string;
+  members: string[];
+  managed: boolean;
+  url?: string;
+  interval?: string;
+  tolerance?: number;
+}
+
+export interface PanelPolicyOverrides {
+  exclude?: string[];
+  order?: string[];
+}
+
+export interface PanelPoliciesResult {
+  ok: boolean;
+  message?: string;
+  groups?: PanelPolicyGroup[];
+  overrides?: Record<string, PanelPolicyOverrides>;
+}
+
+export function getPolicies(): Promise<PanelPoliciesResult> {
+  return request<PanelPoliciesResult>("/policies");
+}
+
+export function savePolicyOverrides(tag: string, overrides: PanelPolicyOverrides): Promise<PanelResult> {
+  return request<PanelResult>(`/policies/${encodeURIComponent(tag)}/overrides`, {
+    method: "POST",
+    body: jsonBody(overrides),
+  });
+}
+
+export interface PanelNode {
+  tag: string;
+  type: string;
+  server: string;
+  server_port: number;
+  origin: "managed" | "manual" | string;
+}
+
+export interface PanelNodesResult {
+  ok: boolean;
+  message?: string;
+  nodes?: PanelNode[];
+}
+
+export function getNodes(): Promise<PanelNodesResult> {
+  return request<PanelNodesResult>("/nodes");
+}
+
+export function getNode(tag: string, reveal = false): Promise<{ ok: boolean; node?: Record<string, unknown> }> {
+  const suffix = reveal ? "?reveal=1" : "";
+  return request<{ ok: boolean; node?: Record<string, unknown> }>(
+    `/nodes/${encodeURIComponent(tag)}${suffix}`,
+  );
+}
+
+export interface PanelNodeParseResult {
+  ok: boolean;
+  message?: string;
+  nodes?: Record<string, unknown>[];
+  errors?: string[];
+}
+
+export function parseNodeLinks(links: string): Promise<PanelNodeParseResult> {
+  return request<PanelNodeParseResult>("/nodes/parse", {
+    method: "POST",
+    body: jsonBody({ links }),
+  });
+}
+
+export function setNodeExcluded(tag: string, exclude: boolean): Promise<PanelResult> {
+  return request<PanelResult>(`/nodes/${encodeURIComponent(tag)}/exclude`, {
+    method: "POST",
+    body: jsonBody({ exclude }),
+  });
+}

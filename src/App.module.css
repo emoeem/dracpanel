@@ -78,3 +78,13 @@
     animation: app-view-in var(--fc-duration-fast) ease;
   }
 }
+
+.error-detail {
+  max-width: 640px;
+  padding: 0 var(--space-16);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--fg-muted);
+  text-align: center;
+  overflow-wrap: anywhere;
+}

@@ -14,3 +14,6 @@ export {
   FcAvatar,
   type FcColumn,
 } from "./FcRecordTable";
+export { FcTabs, type FcTabOption } from "./FcTabs";
+export { FcField, FcSelect } from "./FcField";
+export { FcScatter, type ScatterPoint } from "./FcScatter";

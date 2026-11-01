@@ -98,10 +98,23 @@ export function detectLocalIp(timeoutMs = 1500): Promise<string | null> {
   });
 }
 
+/**
+ * Whether the panel reported a usable LAN address. On eBPF/tproxy hosts the
+ * backend used to answer 127.0.0.1, which is never a LAN address — treat it as
+ * absent so the WebRTC probe gets a chance.
+ */
+export function isUsablePanelIp(value: string | null | undefined): value is string {
+  if (!value) {
+    return false;
+  }
+  return value !== "0.0.0.0" && value !== "::1" && !value.startsWith("127.");
+}
+
 export function useLocalIp(panelIp: string | null | undefined): string | null {
+  const usable = isUsablePanelIp(panelIp) ? panelIp : null;
   const [detected, setDetected] = useState<string | null>(null);
   useEffect(() => {
-    if (panelIp) {
+    if (usable) {
       return;
     }
     let active = true;
@@ -113,6 +126,6 @@ export function useLocalIp(panelIp: string | null | undefined): string | null {
     return () => {
       active = false;
     };
-  }, [panelIp]);
-  return panelIp || detected;
+  }, [usable]);
+  return usable || detected;
 }

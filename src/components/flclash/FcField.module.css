@@ -1,0 +1,48 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-6);
+  min-width: 0;
+}
+
+.label {
+  font-size: var(--fc-text-caption2);
+  font-weight: var(--fc-weight-medium);
+  color: var(--fc-on-surface-variant);
+}
+
+.hint {
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-on-surface-faint);
+}
+
+.error {
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-error);
+}
+
+.select,
+.field input,
+.field textarea {
+  width: 100%;
+  height: 38px;
+  padding: 0 var(--fc-space-12);
+  font-size: var(--fc-text-footnote);
+  color: var(--fc-on-surface);
+  outline: none;
+  background: var(--fc-block);
+  border: 1px solid var(--fc-divider);
+  border-radius: var(--fc-radius-sm);
+}
+
+.field textarea {
+  height: auto;
+  padding: var(--fc-space-8) var(--fc-space-12);
+  resize: vertical;
+}
+
+.select:focus,
+.field input:focus,
+.field textarea:focus {
+  border-color: var(--fc-primary);
+}

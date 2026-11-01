@@ -14,6 +14,7 @@ export const PANEL_FEATURES = [
   "logs",
   "clash.version",
   "geoip",
+  "dns.stats",
 ] as const;
 
 export type PanelFeature = (typeof PANEL_FEATURES)[number];
@@ -100,6 +101,7 @@ const FEATURE_PROBES: FeatureProbe[] = [
   { feature: "logs", path: "/logs?n=1" },
   { feature: "clash.version", path: "/clash/version" },
   { feature: "geoip", path: "/geoip?ip=127.0.0.1" },
+  { feature: "dns.stats", path: "/dns/queries?limit=1" },
 ];
 
 /**

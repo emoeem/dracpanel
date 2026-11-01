@@ -556,6 +556,62 @@ export function installFixtureFetch(): void {
     if (path === "/api/logs") {
       return json({ ok: true, lines: "oct 31 11:00:00 sing-box[4242]: started" });
     }
+    // DNS statistics (api_version 9): config, parsed journal records, probes.
+    if (path === "/api/dns") {
+      return json({
+        ok: true,
+        config_path: "/etc/sing-box/config.json",
+        servers: [
+          { type: "https", tag: "dns_proxy", server: "8.8.8.8", path: "/dns-query" },
+          { type: "udp", tag: "dns_direct", server: "223.5.5.5" },
+          { type: "tls", tag: "dns_tls", server: "1.1.1.1", server_port: 853 },
+        ],
+        rules: [{ domain_suffix: ["google.com"], server: "dns_proxy" }],
+        final: "",
+        cache_enabled: true,
+        cache: { capacity: 4096 },
+        cache_file: { enabled: true, path: "/var/lib/sing-box/cache.db", size: 48_512, mtime: Math.floor(Date.now() / 1000) - 600 },
+        log_level: "debug",
+        debug_logging: true,
+      });
+    }
+    if (path.startsWith("/api/dns/queries")) {
+      const upstreams = ["tls://1.1.1.1", "https://dns.google/dns-query", "udp://223.5.5.5"];
+      const domains = [
+        "www.google.com", "cdn.bilibili.com", "api.github.com", "fonts.gstatic.com",
+        "www.youtube.com", "registry.npmjs.org", "a.taobao.com", "nope.invalid",
+      ];
+      const now = Date.now();
+      const entries = Array.from({ length: 68 }, (_, index) => {
+        const upstream = index % 7 === 0 ? "" : upstreams[index % upstreams.length];
+        const status = index === 9 ? "nxdomain" : index === 31 ? "failed" : "ok";
+        return {
+          at: now - (68 - index) * 4000,
+          domain: domains[index % domains.length],
+          type: index % 5 === 0 ? "HTTPS" : "A",
+          client: index % 3 === 0 ? "192.168.31.30:51234" : "10.0.0.20:41822",
+          upstream: status === "ok" ? upstream : upstream,
+          status,
+          elapsed_ms: status === "failed" ? 0 : 5 + ((index * 37) % 260),
+        };
+      });
+      return json({
+        ok: true,
+        entries,
+        note: "",
+        source: "journalctl -u sing-box",
+      });
+    }
+    if (path.startsWith("/api/dns/probe")) {
+      return json({
+        ok: true,
+        servers: [
+          { tag: "dns_proxy", type: "https", server: "8.8.8.8:443", ok: true, elapsed_ms: 21 },
+          { tag: "dns_direct", type: "udp", server: "223.5.5.5:53", ok: true, elapsed_ms: 12 },
+          { tag: "dns_tls", type: "tls", server: "1.1.1.1:853", ok: false, elapsed_ms: 2002, error: "i/o timeout" },
+        ],
+      });
+    }
     if (path.startsWith("/api/subscriptions/")) {
       return json({ ok: true });
     }

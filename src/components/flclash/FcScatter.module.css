@@ -1,0 +1,31 @@
+.chart {
+  width: 100%;
+  height: auto;
+}
+
+.grid {
+  stroke: var(--fc-divider);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+
+.tick {
+  font-size: var(--fc-text-caption2);
+  fill: var(--fc-on-surface-faint);
+}
+
+.diagonal {
+  stroke: var(--fc-on-surface-faint);
+  stroke-width: 1;
+  stroke-dasharray: 5 5;
+}
+
+.dot {
+  cursor: pointer;
+  stroke: var(--fc-surface);
+  stroke-width: 1;
+}
+
+.dot:hover {
+  stroke-width: 3;
+}

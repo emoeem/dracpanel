@@ -308,16 +308,18 @@ export function ObsRankingCard({ rows }: { rows: readonly ConnectionRow[] }) {
 
 /** CPU 使用率卡（面板后端采样）。 */
 export function ObsCpuCard({ panel }: { panel: PanelStateResult }) {
-  const cpu = typeof panel.state?.cpu_percent === "number" ? panel.state.cpu_percent : null;
+  const state = panel.state;
+  const ready = state?.cpu_ready === true;
+  const cpu = typeof state?.cpu_percent === "number" ? state.cpu_percent : null;
   return (
     <FcCard className={styles.card}>
       <FcCardHeader
         icon={<Icon name="memory" size={14} />}
         title="CPU 使用率"
-        subtitle={panel.state ? undefined : "需要面板后端"}
+        subtitle={state ? undefined : "需要面板后端"}
       />
-      {cpu === null ? (
-        <div className={styles.hintBlock}>直接模式下不可用</div>
+      {cpu === null || !ready ? (
+        <div className={styles.hintBlock}>{state ? "采样尚未就绪" : "直接模式下不可用"}</div>
       ) : (
         <>
           <div className={styles.cpuValue}>{cpu.toFixed(1)}%</div>

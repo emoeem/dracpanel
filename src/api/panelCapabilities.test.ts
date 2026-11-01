@@ -63,8 +63,10 @@ describe("detectPanelCapabilities", () => {
       "logs",
       "clash.version",
       "geoip",
+      "dns.stats",
     ]);
     expect(calls.map((call) => call.path)).toContain("/geoip?ip=127.0.0.1");
+    expect(calls.map((call) => call.path)).toContain("/dns/queries?limit=1");
     expect(calls.some((call) => call.init?.method === "POST")).toBe(false);
   });
 

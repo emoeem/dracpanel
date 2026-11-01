@@ -44,7 +44,7 @@ import { openLogsEnabled } from "./app/logToggle";
 import { FixtureDaemonApi, installFixtureFetch } from "./lib/fixture/fixtureApi";
 import { CommandPalette, type Command } from "./components/CommandPalette";
 import { MobileNav } from "./components/MobileNav";
-import { Sidebar, useSidebarExpanded, type SidebarItem } from "./components/Sidebar";
+import { Sidebar, useSidebarExpanded, type SidebarEntry, type SidebarItem } from "./components/Sidebar";
 import type { IconName } from "./components/Icon";
 import { Button, Dialog, Spinner } from "./components/ui";
 import { ToastProvider } from "./components/Toast";
@@ -90,7 +90,7 @@ const RequestsView = lazy(() =>
   import("./views/records/RecordsView").then((m) => ({ default: m.RequestsView })),
 );
 const DnsView = lazy(() =>
-  import("./views/records/RecordsView").then((m) => ({ default: m.DnsView })),
+  import("./views/dns/DnsView").then((m) => ({ default: m.DnsView })),
 );
 const LogsView = lazy(() => import("./views/LogsView").then((m) => ({ default: m.LogsView })));
 const ToolsView = lazy(() => import("./views/tools/ToolsView").then((m) => ({ default: m.ToolsView })));
@@ -122,9 +122,33 @@ const STUNTestView = lazy(() =>
 const ConnectivityTestView = lazy(() =>
   import("./views/ConnectivityTestView").then((m) => ({ default: m.ConnectivityTestView })),
 );
+const EventsView = lazy(() =>
+  import("./views/events/EventsView").then((m) => ({ default: m.EventsView })),
+);
+const FlowsView = lazy(() =>
+  import("./views/flows/FlowsView").then((m) => ({ default: m.FlowsView })),
+);
+const NodesView = lazy(() =>
+  import("./views/nodes/NodesView").then((m) => ({ default: m.NodesView })),
+);
+const PoliciesView = lazy(() =>
+  import("./views/policies/PoliciesView").then((m) => ({ default: m.PoliciesView })),
+);
+const SystemStatusView = lazy(() =>
+  import("./views/system/SystemStatusView").then((m) => ({ default: m.SystemStatusView })),
+);
 
 export type Route =
-  | { page: "dashboard" }
+  | { page: "activity" }
+  | { page: "overview" }
+  | { page: "flows" }
+  | { page: "events" }
+  | { page: "policies" }
+  | { page: "nodes" }
+  | { page: "rules" }
+  | { page: "dns" }
+  | { page: "config" }
+  | { page: "settings" }
   | { page: "proxies" }
   | { page: "profiles" }
   | { page: "connections" }
@@ -147,16 +171,19 @@ export type Route =
 
 /** Pre-rename hashes kept working as aliases. */
 const ROUTE_ALIASES: Record<string, Route["page"]> = {
-  overview: "dashboard",
-  groups: "proxies",
-  manage: "tools/config",
-  system: "tools/config",
-  settings: "tools",
+  dashboard: "activity",
+  overview: "overview",
+  system: "overview",
+  proxies: "policies",
+  groups: "policies",
+  manage: "config",
   requests: "tools/requests",
-  dns: "tools/dns",
-  rules: "tools/rules",
-  speedtest: "proxies",
-  "tools/rules": "tools/rules",
+  dns: "dns",
+  rules: "rules",
+  speedtest: "policies",
+  "tools/rules": "rules",
+  "tools/config": "config",
+  "tools/dns": "dns",
 };
 
 function routeFromHash(locationHash: string): Route {
@@ -174,7 +201,16 @@ function routeFromHash(locationHash: string): Route {
   const joined = segments.join("/");
   const aliased = ROUTE_ALIASES[joined] ?? (joined as Route["page"]);
   switch (aliased) {
-    case "dashboard":
+    case "activity":
+    case "overview":
+    case "flows":
+    case "events":
+    case "policies":
+    case "nodes":
+    case "rules":
+    case "dns":
+    case "config":
+    case "settings":
     case "proxies":
     case "profiles":
     case "connections":
@@ -194,9 +230,9 @@ function routeFromHash(locationHash: string): Route {
     case "tools/network-quality":
     case "tools/stun":
     case "tools/connectivity":
-      return { page: aliased };
+      return { page: aliased } as Route;
     default:
-      return { page: "dashboard" };
+      return { page: "activity" };
   }
 }
 
@@ -441,22 +477,22 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
       run: () => navigate(page),
     });
     return [
-      go("仪表盘", "dashboard", "dashboard", "Ctrl+1"),
-      go("代理", "proxies", "public", "Ctrl+2"),
-      go("配置", "profiles", "description", "Ctrl+3"),
-      go("实时连接", "connections", "hub", "Ctrl+4"),
+      go("活动", "activity", "dashboard", "Ctrl+1"),
+      go("策略", "policies", "layers", "Ctrl+2"),
+      go("订阅", "profiles", "description", "Ctrl+3"),
+      go("连接", "connections", "hub", "Ctrl+4"),
+      go("活动", "activity", "history"),
+      go("系统状态", "overview", "speed"),
+      go("分流", "flows", "route"),
+      go("事件", "events", "notifications"),
+      go("节点", "nodes", "public"),
+      go("规则", "rules", "rule"),
+      go("DNS", "dns", "dns"),
       go("日志", "logs", "text_snippet"),
-      go("工具", "tools", "handyman"),
+      go("设置", "tools", "handyman"),
       go("最近请求", "tools/requests", "swap_vert"),
-      go("DNS 查询", "tools/dns", "dns"),
-      go("资源", "tools/resources", "memory"),
-      go("主题", "tools/theme", "palette"),
-      go("备份与恢复", "tools/backup", "backup"),
-      go("常规", "tools/general", "settings"),
-      go("进阶配置", "tools/advanced", "handyman"),
-      go("附加规则", "tools/rules", "rule"),
       go("自定义资源", "tools/rulesets", "rule"),
-      go("配置文件", "tools/config", "code"),
+      go("配置文件", "config", "code"),
     ];
   }, []);
 
@@ -517,24 +553,59 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
     );
   }
 
-  const items: SidebarItem[] = [
+  const items: SidebarEntry[] = [
     { key: "dashboard", label: "仪表盘", icon: "dashboard", page: "dashboard" },
     {
-      key: "proxies",
-      label: "代理",
-      icon: "public",
-      page: "proxies",
-      hidden: !hasProxies,
+      key: "activity-group",
+      label: "活动",
+      icon: "history",
+      children: [
+        { key: "activity", label: "活动", icon: "dashboard", page: "activity" },
+        { key: "overview", label: "系统状态", icon: "speed", page: "overview" },
+      ],
     },
-    { key: "profiles", label: "配置", icon: "description", page: "profiles" },
-    { key: "connections", label: "实时连接", icon: "hub", page: "connections", hidden: !started },
-    { key: "logs", label: "日志", icon: "text_snippet", page: "logs", hidden: !logsVisible || !started },
-    { key: "tools", label: "工具", icon: "handyman", page: "tools" },
+    {
+      key: "observe-group",
+      label: "观测",
+      icon: "visibility",
+      children: [
+        { key: "connections", label: "连接", icon: "hub", page: "connections", hidden: !started },
+        { key: "flows", label: "分流", icon: "route", page: "flows", hidden: !started },
+        { key: "dns", label: "DNS", icon: "dns", page: "dns" },
+        { key: "logs", label: "日志", icon: "text_snippet", page: "logs", hidden: !logsVisible || !started },
+        { key: "events", label: "事件", icon: "notifications", page: "events" },
+      ],
+    },
+    {
+      key: "route-group",
+      label: "路由",
+      icon: "layers",
+      children: [
+        { key: "policies", label: "策略", icon: "layers", page: "policies", hidden: !hasProxies },
+        { key: "nodes", label: "节点", icon: "public", page: "nodes", hidden: !hasProxies },
+        { key: "profiles", label: "订阅", icon: "description", page: "profiles" },
+        { key: "rules", label: "规则", icon: "rule", page: "rules" },
+      ],
+    },
+    {
+      key: "settings-group",
+      label: "设置",
+      icon: "settings",
+      children: [
+        { key: "config", label: "配置", icon: "code", page: "config" },
+        { key: "settings", label: "设置", icon: "tune", page: "tools" },
+      ],
+    },
   ];
-  const visibleItems = items.filter((item) => !item.hidden);
-  const mobileItems = visibleItems.filter(
-    (item) => item.key === "logs" || ["dashboard", "proxies", "profiles", "tools"].includes(item.key),
-  );
+  const mobileItems: SidebarItem[] = (
+    [
+      { key: "activity", label: "活动", icon: "dashboard", page: "activity" },
+      { key: "policies", label: "策略", icon: "layers", page: "policies", hidden: !hasProxies },
+      { key: "connections", label: "连接", icon: "hub", page: "connections", hidden: !started },
+      { key: "logs", label: "日志", icon: "text_snippet", page: "logs", hidden: !logsVisible || !started },
+      { key: "settings", label: "设置", icon: "settings", page: "tools" },
+    ] as SidebarItem[]
+  ).filter((item) => !item.hidden);
 
   return (
     <div className={styles.app}>
@@ -554,7 +625,15 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
             }
           >
             <div className={styles.view} key={route.page}>
-              {route.page === "dashboard" && <DashboardView />}
+              {route.page === "activity" && <DashboardView />}
+              {route.page === "overview" && <SystemStatusView />}
+              {route.page === "flows" && <FlowsView />}
+              {route.page === "events" && <EventsView />}
+              {route.page === "policies" && <PoliciesView />}
+              {route.page === "nodes" && <NodesView />}
+              {route.page === "rules" && <RulesView />}
+              {route.page === "dns" && <DnsView />}
+              {route.page === "config" && <ManageView />}
               {route.page === "proxies" && <ProxiesView />}
               {route.page === "profiles" && <ProfilesView />}
               {route.page === "connections" && <ConnectionsView />}
@@ -611,6 +690,9 @@ class ErrorBoundaryKeyed extends Component<{ routeKey: string; children: ReactNo
       return (
         <div className={styles.connectingView}>
           <p className={styles.errorText}>页面出现错误</p>
+          {this.state.error?.message ? (
+            <p className={styles.errorDetail}>{this.state.error.message}</p>
+          ) : null}
           <Button variant="primary" onClick={() => this.setState({ error: null })}>
             重试
           </Button>
@@ -632,7 +714,7 @@ function WebApp() {
       return;
     }
     const last = localStorage.getItem("panel-last-route");
-    if (last !== null && ["dashboard", "proxies", "profiles", "connections"].includes(last)) {
+    if (last !== null && ["activity", "overview", "policies", "profiles", "connections", "flows", "events", "nodes", "rules", "dns", "config"].includes(last)) {
       navigate(last);
     }
   }, []);

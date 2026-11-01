@@ -167,7 +167,7 @@ export function ProxiesView() {
     <div className="fc-page">
       <div className={styles.toolbar}>
         <div className={styles.titleRow}>
-          <h1 className={styles.pageTitle}>代理</h1>
+          <h1 className={styles.pageTitle}>策略</h1>
           <div className={styles.actions}>
             <label className={styles.search}>
               <Icon name="search" size={16} />

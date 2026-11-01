@@ -61,6 +61,43 @@
   gap: var(--fc-space-2);
 }
 
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-2);
+}
+
+.children {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-2);
+}
+
+/* Sub-entries sit slightly inset so the hierarchy reads without extra chrome. */
+.subitem {
+  height: calc(var(--fc-nav-item-height) - 6px);
+  padding-inline-start: var(--fc-space-16);
+}
+
+.chevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-inline-start: auto;
+  color: var(--fc-on-surface-faint);
+  opacity: 0;
+  transition:
+    opacity 200ms var(--fc-ease-standard),
+    transform 200ms var(--fc-ease-standard);
+}
+
+.expanded .chevron {
+  opacity: 1;
+}
+
+.chevron-open {
+  transform: rotate(180deg);
+}
+
 .item {
   position: relative;
   display: flex;

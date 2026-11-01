@@ -117,17 +117,17 @@ export function ConnectionsTraffic({
 
   return (
     <div className={styles.stack}>
-      <div className={styles.topRow}>
-        <FcCard className={styles.topCard}>
+      <div className={styles["top-row"]}>
+        <FcCard className={styles["top-card"]}>
           <FcCardHeader title="最高流量连接" />
-          <div className={styles.topHost}>{top.best ? connectionHost(top.best) : "—"}</div>
-          <div className={styles.topMeta}>{top.best ? outboundOf(top.best) : "暂无连接"}</div>
+          <div className={styles["top-host"]}>{top.best ? connectionHost(top.best) : "—"}</div>
+          <div className={styles["top-meta"]}>{top.best ? outboundOf(top.best) : "暂无连接"}</div>
         </FcCard>
-        <FcCard className={styles.statCard}>
+        <FcCard className={styles["stat-card"]}>
           <FcCardHeader title="下载" />
           <div className={styles["stat-value"]}>{formatBytes(top.down)}</div>
         </FcCard>
-        <FcCard className={styles.statCard}>
+        <FcCard className={styles["stat-card"]}>
           <FcCardHeader title="上传" />
           <div className={styles["stat-value"]}>{formatBytes(top.up)}</div>
         </FcCard>
@@ -153,12 +153,12 @@ export function ConnectionsTraffic({
             <button
               key={tag}
               type="button"
-              className={cx(styles.legendItem, selected === tag && styles.legendActive)}
+              className={cx(styles["legend-item"], selected === tag && styles["legend-active"])}
               onClick={() => setSelected((current) => (current === tag ? "" : tag))}
             >
               <span className={styles.swatch} style={{ background: byOutbound.colors.get(tag) }} />
               {tag}
-              <span className={styles.legendCount}>{count}</span>
+              <span className={styles["legend-count"]}>{count}</span>
             </button>
           ))}
         </div>
@@ -166,18 +166,18 @@ export function ConnectionsTraffic({
 
       <FcCard>
         <FcCardHeader title="节点延迟" subtitle={`有延迟的节点 ${latency.withData} · 无数据 ${latency.total - latency.withData}`} />
-        <div className={styles.statRow}>
+        <div className={styles["stat-row"]}>
           <div className={styles.stat}>
             <span className={styles["stat-label"]}>全部节点 P50</span>
-            <span className={styles.statNumber}>{latency.p50 === null ? "—" : `${Math.round(latency.p50)} ms`}</span>
+            <span className={styles["stat-number"]}>{latency.p50 === null ? "—" : `${Math.round(latency.p50)} ms`}</span>
           </div>
           <div className={styles.stat}>
             <span className={styles["stat-label"]}>全部节点 P90</span>
-            <span className={styles.statNumber}>{latency.p90 === null ? "—" : `${Math.round(latency.p90)} ms`}</span>
+            <span className={styles["stat-number"]}>{latency.p90 === null ? "—" : `${Math.round(latency.p90)} ms`}</span>
           </div>
           <div className={styles.stat}>
             <span className={styles["stat-label"]}>按连接数加权 P50</span>
-            <span className={styles.statNumber}>
+            <span className={styles["stat-number"]}>
               {latency.weightedP50 === null ? "—" : `${Math.round(latency.weightedP50)} ms`}
             </span>
           </div>

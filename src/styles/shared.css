@@ -210,6 +210,10 @@ a.menu-item {
 }
 
 .page {
+  /* Fill the flex column: without an explicit width, `margin-inline: auto`
+     makes the page shrink-wrap its content (logs collapsed to 247px). */
+  width: 100%;
+
   /* Ultrawide guard: content columns stop growing past this width. */
   max-width: 1280px;
   padding: var(--space-32) var(--space-36) var(--space-56);
