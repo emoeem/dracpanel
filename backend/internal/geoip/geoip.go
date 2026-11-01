@@ -22,8 +22,10 @@ var defaultPaths = []string{
 type GeoIP struct {
 	S *settings.Settings
 
-	mu     sync.Mutex
-	loaded bool
+	// once also publishes reader/Err/Path to later readers: Lookup reads them
+	// without a lock, which is only safe because sync.Once establishes the
+	// happens-before edge.
+	once   sync.Once
 	reader *maxminddb.Reader
 	Err    string
 	Path   string
@@ -53,35 +55,28 @@ func (g *GeoIP) paths() []string {
 }
 
 func (g *GeoIP) load() {
-	if g.loaded {
-		return
-	}
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	if g.loaded {
-		return
-	}
-	g.loaded = true
-	for _, path := range g.paths() {
-		if path == "" {
-			continue
+	g.once.Do(func() {
+		for _, path := range g.paths() {
+			if path == "" {
+				continue
+			}
+			if _, err := os.Stat(path); err != nil {
+				continue
+			}
+			reader, err := maxminddb.Open(path)
+			if err != nil {
+				g.Err = err.Error()
+				continue
+			}
+			g.reader = reader
+			g.Path = path
+			g.Err = ""
+			return
 		}
-		if _, err := os.Stat(path); err != nil {
-			continue
+		if g.Err == "" {
+			g.Err = "database not found"
 		}
-		reader, err := maxminddb.Open(path)
-		if err != nil {
-			g.Err = err.Error()
-			continue
-		}
-		g.reader = reader
-		g.Path = path
-		g.Err = ""
-		return
-	}
-	if g.Err == "" {
-		g.Err = "database not found"
-	}
+	})
 }
 
 type cityRecord struct {
@@ -99,6 +94,17 @@ type cityRecord struct {
 	} `maxminddb:"location"`
 }
 
+// reservedIPv4 lists documentation and shared-address ranges that are not
+// globally routable; netip's own predicates cover the rest.
+var reservedIPv4 = []netip.Prefix{
+	netip.MustParsePrefix("192.0.2.0/24"),    // TEST-NET-1
+	netip.MustParsePrefix("198.51.100.0/24"), // TEST-NET-2
+	netip.MustParsePrefix("203.0.113.0/24"),  // TEST-NET-3
+	netip.MustParsePrefix("192.88.99.0/24"),  // 6to4 relay anycast
+	netip.MustParsePrefix("198.18.0.0/15"),   // benchmarking
+	netip.MustParsePrefix("100.64.0.0/10"),   // CGNAT shared address space
+}
+
 func isGlobal(addr netip.Addr) bool {
 	if !addr.IsValid() || addr.Zone() != "" {
 		return false
@@ -108,17 +114,12 @@ func isGlobal(addr netip.Addr) bool {
 		addr.IsUnspecified() || addr.IsMulticast() {
 		return false
 	}
-	// Python's is_global also excludes reserved/documentation ranges.
-	if v4 := addr.Unmap().As4(); addr.Is4() || addr.Is4In6() {
-		first := v4[0]
-		if first == 192 && addr.Unmap().As4() == [4]byte{192, 0, 2, 0} {
-			return false
-		}
-		if first == 198 && (v4[1] == 18 || v4[1] == 19) {
-			return false
-		}
-		if first == 100 && v4[1] == 64 {
-			return false
+	if addr.Is4() || addr.Is4In6() {
+		v4 := addr.Unmap()
+		for _, prefix := range reservedIPv4 {
+			if prefix.Contains(v4) {
+				return false
+			}
 		}
 	}
 	return true

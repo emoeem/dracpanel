@@ -58,6 +58,29 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * The fallback link comes from the backend; only http(s) and same-origin paths
+ * are accepted so a tampered payload cannot inject `javascript:` into an href.
+ */
+export function safeFallbackUrl(value: string | undefined): string {
+  if (value === undefined || value.trim() === "") {
+    return "/dash/";
+  }
+  const trimmed = value.trim();
+  if (trimmed.startsWith("/")) {
+    return trimmed.startsWith("//") ? "/dash/" : trimmed;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.toString();
+    }
+  } catch {
+    // Not an absolute URL: fall through to the default.
+  }
+  return "/dash/";
+}
+
 export function PanelGate(props: { children: ReactNode }) {
   const { t } = useI18n();
   const translateRef = useLatestRef(t);
@@ -239,7 +262,7 @@ export function PanelGate(props: { children: ReactNode }) {
     }
   };
 
-  const fallbackUrl = state?.zash_setup_url ?? "/dash/";
+  const fallbackUrl = safeFallbackUrl(state?.zash_setup_url);
   const showFallback = state?.zashboard_available !== false;
 
   if (phase === "ready") {

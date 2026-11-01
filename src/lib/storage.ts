@@ -22,7 +22,13 @@ export function loadStoredString(name: string): string | null {
     const value = preferenceStorage.get(name);
     return typeof value === "string" ? value : null;
   }
-  return localStorage.getItem(browserStorageKey(name));
+  // localStorage throws in Safari private mode (SecurityError) and when a
+  // security policy blocks it; a preference read must never break render.
+  try {
+    return localStorage.getItem(browserStorageKey(name));
+  } catch {
+    return null;
+  }
 }
 
 export function saveStoredString(name: string, value: string): void {
@@ -30,7 +36,11 @@ export function saveStoredString(name: string, value: string): void {
     preferenceStorage.set(name, value);
     return;
   }
-  localStorage.setItem(browserStorageKey(name), value);
+  try {
+    localStorage.setItem(browserStorageKey(name), value);
+  } catch {
+    // Quota exceeded or storage blocked: the preference does not persist.
+  }
 }
 
 export function loadStoredJson(name: string): unknown {
@@ -50,7 +60,11 @@ export function saveStoredJson(name: string, value: unknown): void {
     preferenceStorage.set(name, value);
     return;
   }
-  localStorage.setItem(browserStorageKey(name), JSON.stringify(value));
+  try {
+    localStorage.setItem(browserStorageKey(name), JSON.stringify(value));
+  } catch {
+    // Unserializable value, quota, or blocked storage: skip persistence.
+  }
 }
 
 export function removeStoredValue(name: string): void {
@@ -58,7 +72,11 @@ export function removeStoredValue(name: string): void {
     preferenceStorage.remove(name);
     return;
   }
-  localStorage.removeItem(browserStorageKey(name));
+  try {
+    localStorage.removeItem(browserStorageKey(name));
+  } catch {
+    // Blocked storage: nothing to remove.
+  }
 }
 
 export function watchStoredValues(listener: () => void): () => void {

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/emoeem/dracpanel/backend/internal/bootstrap"
 	"github.com/emoeem/dracpanel/backend/internal/httpapi"
@@ -78,7 +79,14 @@ func run() int {
 	handler := httpapi.New(*deps)
 
 	addr := s.ListenAddr()
-	server := &http.Server{Addr: addr, Handler: handler}
+	// No WriteTimeout: the panel proxies long-lived streams. The header/idle
+	// limits still stop slowloris-style clients from pinning connections.
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
 	logf("sing-box panel %s 监听 http://%s/", version, addr)
 	if s.TokenCreated() {
 		logf("首次运行，已生成访问令牌，请执行： sudo cat %s", s.TokenFile())

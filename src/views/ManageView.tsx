@@ -1160,13 +1160,14 @@ function ConfigTab() {
   }, []);
 
   const undo = () => {
-    setUndoStack((stack) => {
-      const result = undoTop(stack);
-      if (result.text !== null) {
-        applyText(result.text);
-      }
-      return result.stack;
-    });
+    // Read the stack from state instead of computing inside the updater: an
+    // updater must be pure, and applyText() mutates editor state (StrictMode
+    // would invoke it twice).
+    const result = undoTop(undoStack);
+    if (result.text !== null) {
+      applyText(result.text);
+    }
+    setUndoStack(result.stack);
   };
 
   const restoreApplied = () => {

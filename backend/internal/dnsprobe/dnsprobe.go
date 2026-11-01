@@ -25,11 +25,11 @@ import (
 
 // Server is one dns.servers[] entry that can be probed over the network.
 type Server struct {
-	Tag    string
-	Type   string
+	Tag     string
+	Type    string
 	Address string // host (no port)
-	Port   int
-	Path   string // DoH path
+	Port    int
+	Path    string // DoH path
 }
 
 // Result is one probe outcome.
@@ -175,12 +175,18 @@ func New() *Prober {
 
 // Probe queries every server concurrently and returns the results. A cached
 // result younger than 30s is returned unless force is set.
+//
+// The mutex only guards the cache: probes run outside it, so a slow or dead
+// upstream (2s timeout each) never serializes other requests.
 func (p *Prober) Probe(servers []Server, force bool) []Result {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	if !force && !p.cachedAt.IsZero() && time.Since(p.cachedAt) < cacheTTL {
-		return p.results
+		cached := p.results
+		p.mu.Unlock()
+		return cached
 	}
+	p.mu.Unlock()
+
 	results := make([]Result, len(servers))
 	var wg sync.WaitGroup
 	for index, server := range servers {
@@ -191,8 +197,11 @@ func (p *Prober) Probe(servers []Server, force bool) []Result {
 		}(index, server)
 	}
 	wg.Wait()
+
+	p.mu.Lock()
 	p.results = results
 	p.cachedAt = time.Now()
+	p.mu.Unlock()
 	return results
 }
 

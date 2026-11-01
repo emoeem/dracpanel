@@ -29,6 +29,7 @@ import { ansiColorCss, parseAnsi, parseCssColor, stripAnsi, type Rgb } from "../
 import { extractLogType } from "../lib/logTools";
 import { canShare, shareError, shareFile } from "../lib/sharing";
 import { loadStoredJson, saveStoredJson } from "../lib/storage";
+import { downloadTextFile } from "../lib/connectionTools";
 import styles from "./LogsView.module.css";
 
 const MAX_VISIBLE_LOGS = 1000;
@@ -179,12 +180,7 @@ export function LogsView() {
   const sharingAvailable = canShare();
 
   const saveLogs = () => {
-    const url = URL.createObjectURL(new Blob([logsText()], { type: "text/plain" }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = logFileName();
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadTextFile(logFileName(), logsText(), "text/plain");
   };
 
   const shareLogs = () => {

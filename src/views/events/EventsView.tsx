@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getJournal, hasPanelToken, type PanelJournalEntry } from "../../api/panel";
 import { FcCard, FcIconButton, FcPageToolbar, FcSegmented } from "../../components/flclash";
 import { Icon } from "../../components/Icon";
+import { downloadTextFile } from "../../lib/connectionTools";
 import { filterBySeverity, groupJournalByDay, isEventEntry } from "../../lib/journal";
 import { cx } from "../../lib/cx";
 import styles from "../ops/ops.module.css";
@@ -27,13 +28,7 @@ function clock(t: number): string {
 }
 
 function download(entries: PanelJournalEntry[], name: string) {
-  const blob = new Blob([JSON.stringify(entries, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = name;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadTextFile(name, JSON.stringify(entries, null, 2), "application/json");
 }
 
 /** 事件：异常与状态变更；操作记录：配置/服务/订阅/导入的审计时间线。 */

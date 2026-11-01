@@ -65,12 +65,12 @@ func TestSplitAddress(t *testing.T) {
 		host string
 		port int
 	}{
-		"8.8.8.8":            {host: "8.8.8.8", port: 0},
-		"8.8.8.8:53":         {host: "8.8.8.8", port: 53},
-		"https://dns.google": {host: "dns.google", port: 0},
+		"8.8.8.8":                      {host: "8.8.8.8", port: 0},
+		"8.8.8.8:53":                   {host: "8.8.8.8", port: 53},
+		"https://dns.google":           {host: "dns.google", port: 0},
 		"https://dns.google/dns-query": {host: "dns.google", port: 0},
-		"[2001:db8::1]:853":  {host: "2001:db8::1", port: 853},
-		"  1.1.1.1  ":        {host: "1.1.1.1", port: 0},
+		"[2001:db8::1]:853":            {host: "2001:db8::1", port: 853},
+		"  1.1.1.1  ":                  {host: "1.1.1.1", port: 0},
 	}
 	for input, want := range cases {
 		host, port := splitAddress(input)

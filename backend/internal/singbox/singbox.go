@@ -64,6 +64,37 @@ func (m *Manager) BackupDir() string {
 
 var reasonSanitizer = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
 
+// backupNameRe pins a backup to the exact shape Backup() produces:
+// config.<yyyymmdd-hhmmss>.<reason>.json. Restore and download both take a
+// name straight from the request, so anything outside this shape (path
+// separators, "..", absolute paths) is rejected instead of being joined onto
+// the backup directory.
+var backupNameRe = regexp.MustCompile(`^config\.[0-9]{8}-[0-9]{6}\.[A-Za-z0-9_-]{1,64}\.json$`)
+
+// ValidBackupName reports whether name is a backup file name this process
+// could have produced.
+func ValidBackupName(name string) bool {
+	return backupNameRe.MatchString(name)
+}
+
+// ResolveBackupPath joins name onto the backup dir and verifies the result
+// still lives inside it. Returns "" when name is not a plain backup name or
+// escapes the directory.
+func (m *Manager) ResolveBackupPath(name string) string {
+	if !ValidBackupName(name) {
+		return ""
+	}
+	baseAbs, err := filepath.Abs(m.BackupDir())
+	if err != nil {
+		return ""
+	}
+	target := filepath.Clean(filepath.Join(baseAbs, name))
+	if !strings.HasPrefix(target, baseAbs+string(filepath.Separator)) {
+		return ""
+	}
+	return target
+}
+
 // Backup copies the live config to backups/config.<ts>.<reason>.json.
 func (m *Manager) Backup(reason string) string {
 	src := m.S.SingBoxConfigPath()
@@ -197,8 +228,8 @@ func (m *Manager) Check(cfg *jsonx.OrderMap) (bool, string) {
 }
 
 // Apply ports ConfigManager.apply(): check → backup → atomic replace →
-// restart → health check → rollback on failure. The temp file is 0600
-// (fixing the Python build's 0644).
+// restart → health check → rollback on failure. The replacement inherits the
+// live file's mode minus group/other write bits (the Python build wrote 0644).
 func (m *Manager) Apply(newCfg *jsonx.OrderMap, reason string, restart bool) *jsonx.OrderMap {
 	return m.apply(newCfg, m.S.DumpSingBoxConfig(newCfg), reason, restart)
 }
@@ -245,11 +276,14 @@ func (m *Manager) apply(cfg *jsonx.OrderMap, text, reason string, restart bool) 
 	if raw, err := os.ReadFile(target); err == nil {
 		previous = string(raw)
 	}
+	// Keep whatever mode the live config had (sing-box may run as a different
+	// user), but never leave it writable by group or other.
+	mode := fileModeOf(target) &^ 0o022
 	tmp := target + ".panel-tmp"
-	if err := os.WriteFile(tmp, []byte(text), 0o600); err != nil {
+	if err := os.WriteFile(tmp, []byte(text), mode); err != nil {
 		return errResult(err.Error())
 	}
-	_ = os.Chmod(tmp, 0o600)
+	_ = os.Chmod(tmp, mode)
 	if err := os.Rename(tmp, target); err != nil {
 		return errResult(err.Error())
 	}
@@ -283,16 +317,21 @@ func (m *Manager) apply(cfg *jsonx.OrderMap, text, reason string, restart bool) 
 
 func (m *Manager) rollback(previous, why, backupName string) *jsonx.OrderMap {
 	if previous != "" {
-		if err := os.WriteFile(m.S.SingBoxConfigPath(), []byte(previous), 0o600); err == nil {
+		if err := os.WriteFile(m.S.SingBoxConfigPath(), []byte(previous), fileModeOf(m.S.SingBoxConfigPath())&^0o022); err == nil {
 			_, _, _ = sysutil.Run("systemctl", []string{"restart", m.S.String("service")}, 60*time.Second)
 		}
 	}
 	return errResult(fmt.Sprintf("%s；已回滚到应用前的配置（备份 %s）", why, orStr(backupName, "无")))
 }
 
-// Restore applies a backup by name.
+// Restore applies a backup by name. The name is validated first: it is fed to
+// Apply(), so an unvalidated one would let a caller read any file on disk and
+// have it applied as the live sing-box config.
 func (m *Manager) Restore(name string) *jsonx.OrderMap {
-	src := filepath.Join(m.BackupDir(), name)
+	src := m.ResolveBackupPath(name)
+	if src == "" {
+		return errResult(fmt.Sprintf("非法备份名 %s", name))
+	}
 	if _, err := os.Stat(src); err != nil {
 		return errResult(fmt.Sprintf("找不到备份 %s", name))
 	}

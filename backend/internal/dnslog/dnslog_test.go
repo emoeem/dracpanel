@@ -1,6 +1,11 @@
 package dnslog
 
-import "testing"
+import (
+	"testing"
+	"time"
+
+	"github.com/emoeem/dracpanel/backend/internal/settings"
+)
 
 func TestParseLineExtractsDomainAndType(t *testing.T) {
 	line := "2026-11-01T16:20:31+08:00 host sing-box[4242]: dns: exchange domain[www.example.com] type[A] with[tls://1.1.1.1] elapsed[42ms]"
@@ -84,5 +89,61 @@ func TestParseLineToleratesMissingFields(t *testing.T) {
 	}
 	if entry.ElapsedMs != 0 || entry.Type != "" || entry.Upstream != "" {
 		t.Errorf("expected empty optional fields, got %+v", entry)
+	}
+}
+
+func TestQueriesCacheHonoursWindow(t *testing.T) {
+	var calls []time.Duration
+	reader := &Reader{
+		S: &settings.Settings{},
+		readFn: func(window time.Duration) []Entry {
+			calls = append(calls, window)
+			return []Entry{{At: 1, Domain: "a.example", Status: StatusOK}}
+		},
+	}
+	// First request populates the cache.
+	if entries, note := reader.Queries(10*time.Minute, 10); len(entries) != 1 || note != "" {
+		t.Fatalf("first read: entries=%d note=%q", len(entries), note)
+	}
+	// A narrower window is served from the wider cache.
+	reader.Queries(5*time.Minute, 10)
+	if len(calls) != 1 {
+		t.Fatalf("narrower window re-read the journal: %v", calls)
+	}
+	// A wider window must re-read; the old cache was too narrow.
+	reader.Queries(24*time.Hour, 10)
+	if len(calls) != 2 || calls[1] != 24*time.Hour {
+		t.Fatalf("wider window did not re-read: %v", calls)
+	}
+	// The refreshed, wider cache satisfies another narrow request.
+	reader.Queries(time.Minute, 10)
+	if len(calls) != 2 {
+		t.Fatalf("cache after widening was not reused: %v", calls)
+	}
+}
+
+func TestQueriesDryRunSkipsJournal(t *testing.T) {
+	called := false
+	reader := &Reader{
+		S: &settings.Settings{DryRun: true},
+		readFn: func(time.Duration) []Entry {
+			called = true
+			return nil
+		},
+	}
+	entries, note := reader.Queries(time.Hour, 5)
+	if called {
+		t.Errorf("dry-run must not read the journal")
+	}
+	if len(entries) != 0 || note == "" {
+		t.Errorf("dry-run: entries=%d note=%q", len(entries), note)
+	}
+}
+
+func TestNewestIsNewestFirstAndLimited(t *testing.T) {
+	entries := []Entry{{At: 1}, {At: 2}, {At: 3}}
+	out := newest(entries, 2)
+	if len(out) != 2 || out[0].At != 3 || out[1].At != 2 {
+		t.Fatalf("newest = %+v", out)
 	}
 }

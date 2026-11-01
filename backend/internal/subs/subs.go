@@ -614,12 +614,16 @@ func (st *Subscriptions) Apply() *jsonx.OrderMap {
 		}
 	}
 	if okValue, _ := result.Get("ok"); okValue == true {
-		out := jsonx.NewOrderMap()
-		out.Set("outbound_tags", stringSliceToValues(newTags))
-		out.Set("group_members", membersMap)
-		out.Set("updated", time.Now().Unix())
-		out.Set("by_subscription", perSub)
-		_ = st.S.WriteJSON(st.S.ManagedFile(), out)
+		// Merge under the shared managed.json lock: only the keys this apply
+		// owns are replaced, so a policy override or node exclusion saved while
+		// the (slow) config transaction ran is not clobbered.
+		_ = st.S.UpdateManaged(func(managed *jsonx.OrderMap) *jsonx.OrderMap {
+			managed.Set("outbound_tags", stringSliceToValues(newTags))
+			managed.Set("group_members", membersMap)
+			managed.Set("updated", time.Now().Unix())
+			managed.Set("by_subscription", perSub)
+			return managed
+		})
 	}
 	return result
 }
@@ -730,49 +734,54 @@ func (st *Subscriptions) ReconcileManaged(cfg *jsonx.OrderMap) int {
 		}
 	}
 
-	managed := st.S.Managed()
 	pruned := 0
-	cleaned := jsonx.NewOrderMap()
-	for _, key := range managed.Keys() {
-		value, _ := managed.Get(key)
-		switch key {
-		case "outbound_tags":
-			kept := []jsonx.Value{}
-			for _, tag := range toSlice(value) {
-				if present[fmt.Sprintf("%v", tag)] {
-					kept = append(kept, tag)
-				} else {
-					pruned++
-				}
-			}
-			cleaned.Set(key, kept)
-		case "group_members", "by_subscription":
-			groups, ok := value.(*jsonx.OrderMap)
-			if !ok {
-				cleaned.Set(key, value)
-				continue
-			}
-			keptGroups := jsonx.NewOrderMap()
-			for _, group := range groups.Keys() {
-				members, _ := groups.Get(group)
+	// Reconcile under the shared managed.json lock so pruning cannot drop keys
+	// another writer added after this function's earlier read.
+	_ = st.S.UpdateManaged(func(managed *jsonx.OrderMap) *jsonx.OrderMap {
+		pruned = 0
+		cleaned := jsonx.NewOrderMap()
+		for _, key := range managed.Keys() {
+			value, _ := managed.Get(key)
+			switch key {
+			case "outbound_tags":
 				kept := []jsonx.Value{}
-				for _, tag := range toSlice(members) {
+				for _, tag := range toSlice(value) {
 					if present[fmt.Sprintf("%v", tag)] {
 						kept = append(kept, tag)
 					} else {
 						pruned++
 					}
 				}
-				keptGroups.Set(group, kept)
+				cleaned.Set(key, kept)
+			case "group_members", "by_subscription":
+				groups, ok := value.(*jsonx.OrderMap)
+				if !ok {
+					cleaned.Set(key, value)
+					continue
+				}
+				keptGroups := jsonx.NewOrderMap()
+				for _, group := range groups.Keys() {
+					members, _ := groups.Get(group)
+					kept := []jsonx.Value{}
+					for _, tag := range toSlice(members) {
+						if present[fmt.Sprintf("%v", tag)] {
+							kept = append(kept, tag)
+						} else {
+							pruned++
+						}
+					}
+					keptGroups.Set(group, kept)
+				}
+				cleaned.Set(key, keptGroups)
+			default:
+				cleaned.Set(key, value)
 			}
-			cleaned.Set(key, keptGroups)
-		default:
-			cleaned.Set(key, value)
 		}
-	}
-	if pruned > 0 {
-		_ = st.S.WriteJSON(st.S.ManagedFile(), cleaned)
-	}
+		if pruned == 0 {
+			return nil // nothing to prune: skip the write entirely
+		}
+		return cleaned
+	})
 	return pruned
 }
 

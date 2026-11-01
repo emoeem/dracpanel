@@ -404,8 +404,13 @@ export function downloadTextFile(filename: string, text: string, mime: string): 
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
+  // Firefox ignores clicks on detached anchors; attach it for the click and
+  // revoke the object URL only after the download had a chance to start.
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
   anchor.click();
-  URL.revokeObjectURL(url);
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 /** Strips the port from a connection endpoint, including bracketed IPv6. */

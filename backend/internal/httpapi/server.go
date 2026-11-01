@@ -4,6 +4,7 @@
 package httpapi
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,7 +12,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -198,14 +198,7 @@ func (h *Handler) authorized(r *http.Request) bool {
 }
 
 func subtleEqual(a, b string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	var v byte
-	for i := 0; i < len(a); i++ {
-		v |= a[i] ^ b[i]
-	}
-	return v == 0
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
 func writeJSON(w http.ResponseWriter, r *http.Request, code int, body *jsonx.OrderMap) {
@@ -428,10 +421,12 @@ func (h *Handler) handleState(w http.ResponseWriter, r *http.Request) {
 	// showing a bare dash.
 	out.Set("egress_probe_configured", s.EgressConfigured())
 	out.Set("local_ip", localip.Detect())
-	if mem, ok := h.Deps.Mem.Get().Get("app"); ok {
+	// One Mem.Get() per request: each call spawns systemctl show.
+	memory := h.Deps.Mem.Get()
+	if mem, ok := memory.Get("app"); ok {
 		out.Set("memory_app", mem)
 	}
-	if mem, ok := h.Deps.Mem.Get().Get("kernel"); ok {
+	if mem, ok := memory.Get("kernel"); ok {
 		out.Set("memory_kernel", mem)
 	}
 	if h.Deps.Sampler != nil {
@@ -835,8 +830,6 @@ func (h *Handler) handleRestoreConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, 200, result)
 }
 
-var backupNameRe = regexp.MustCompile(`^config\.[0-9]{8}-[0-9]{6}\.[A-Za-z0-9_-]{1,24}\.json$`)
-
 func (h *Handler) handleDownloadBackup(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	found := false
@@ -850,14 +843,10 @@ func (h *Handler) handleDownloadBackup(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, r, 404, errMap("找不到备份"))
 		return
 	}
-	// Path traversal guard, mirroring the resolve+relative_to check.
-	baseAbs, err := filepath.Abs(h.Deps.Configs.BackupDir())
-	if err != nil {
-		writeJSON(w, r, 400, errMap("非法备份路径"))
-		return
-	}
-	target := filepath.Clean(filepath.Join(baseAbs, name))
-	if !strings.HasPrefix(target, baseAbs+string(filepath.Separator)) || !backupNameRe.MatchString(name) {
+	// Path traversal guard, mirroring the resolve+relative_to check. Same
+	// validator Restore uses, so the two paths cannot drift apart.
+	target := h.Deps.Configs.ResolveBackupPath(name)
+	if target == "" {
 		writeJSON(w, r, 400, errMap("非法备份路径"))
 		return
 	}
@@ -1217,16 +1206,18 @@ func (h *Handler) handlePolicyOverrides(w http.ResponseWriter, r *http.Request) 
 	entry.Set("exclude", stringList(body, "exclude"))
 	entry.Set("order", stringList(body, "order"))
 
-	managed := h.Deps.S.Managed()
-	overrides := jsonx.NewOrderMap()
-	if value, ok := managed.Get("group_overrides"); ok {
-		if existing, ok := value.(*jsonx.OrderMap); ok {
-			overrides = existing
+	err := h.Deps.S.UpdateManaged(func(managed *jsonx.OrderMap) *jsonx.OrderMap {
+		overrides := jsonx.NewOrderMap()
+		if value, ok := managed.Get("group_overrides"); ok {
+			if existing, ok := value.(*jsonx.OrderMap); ok {
+				overrides = existing
+			}
 		}
-	}
-	overrides.Set(tag, entry)
-	managed.Set("group_overrides", overrides)
-	if err := h.Deps.S.WriteJSON(h.Deps.S.ManagedFile(), managed); err != nil {
+		overrides.Set(tag, entry)
+		managed.Set("group_overrides", overrides)
+		return managed
+	})
+	if err != nil {
 		writeJSON(w, r, 200, errMap(fmt.Sprintf("保存失败：%v", err)))
 		return
 	}
@@ -1322,26 +1313,28 @@ func (h *Handler) handleNodeExclude(w http.ResponseWriter, r *http.Request) {
 		exclude = truthyAny(value)
 	}
 
-	managed := h.Deps.S.Managed()
-	current := []string{}
-	if value, ok := managed.Get("node_exclude"); ok {
-		if arr, ok := value.([]jsonx.Value); ok {
-			for _, item := range arr {
-				current = append(current, fmt.Sprintf("%v", item))
+	err := h.Deps.S.UpdateManaged(func(managed *jsonx.OrderMap) *jsonx.OrderMap {
+		current := []string{}
+		if value, ok := managed.Get("node_exclude"); ok {
+			if arr, ok := value.([]jsonx.Value); ok {
+				for _, item := range arr {
+					current = append(current, fmt.Sprintf("%v", item))
+				}
 			}
 		}
-	}
-	next := make([]string, 0, len(current)+1)
-	for _, item := range current {
-		if item != tag {
-			next = append(next, item)
+		next := make([]string, 0, len(current)+1)
+		for _, item := range current {
+			if item != tag {
+				next = append(next, item)
+			}
 		}
-	}
-	if exclude {
-		next = append(next, tag)
-	}
-	managed.Set("node_exclude", stringsToAny(next))
-	if err := h.Deps.S.WriteJSON(h.Deps.S.ManagedFile(), managed); err != nil {
+		if exclude {
+			next = append(next, tag)
+		}
+		managed.Set("node_exclude", stringsToAny(next))
+		return managed
+	})
+	if err != nil {
 		writeJSON(w, r, 200, errMap(fmt.Sprintf("保存失败：%v", err)))
 		return
 	}
@@ -1392,6 +1385,10 @@ func (h *Handler) handleProfilesImport(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(64 << 20); err != nil {
 		writeJSON(w, r, 200, errMap(fmt.Sprintf("读取上传失败：%v", err)))
 		return
+	}
+	if r.MultipartForm != nil {
+		// Uploads above the in-memory threshold land in temp files.
+		defer func() { _ = r.MultipartForm.RemoveAll() }()
 	}
 	file, header, err := r.FormFile("file")
 	if err != nil {

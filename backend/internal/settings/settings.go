@@ -63,6 +63,9 @@ type Settings struct {
 	egressAt    time.Time
 	egressValue string
 	egressHave  bool
+
+	// managedMu serializes read-modify-write cycles on managed.json.
+	managedMu sync.Mutex
 }
 
 // Load builds Settings from the optional config path.
@@ -363,6 +366,20 @@ func (s *Settings) Managed() *jsonx.OrderMap {
 	managed.Set("outbound_tags", []jsonx.Value{})
 	managed.Set("group_members", jsonx.NewOrderMap())
 	return managed
+}
+
+// UpdateManaged applies fn to the current managed.json and writes the result
+// while holding a process-wide lock. Every writer (subscription apply, policy
+// overrides, node exclude, restore reconciliation) goes through here so a
+// read-modify-write can never clobber a concurrent one.
+func (s *Settings) UpdateManaged(fn func(current *jsonx.OrderMap) *jsonx.OrderMap) error {
+	s.managedMu.Lock()
+	defer s.managedMu.Unlock()
+	next := fn(s.Managed())
+	if next == nil {
+		return nil
+	}
+	return s.WriteJSON(s.ManagedFile(), next)
 }
 
 func orderListOf(value jsonx.Value) []*jsonx.OrderMap {

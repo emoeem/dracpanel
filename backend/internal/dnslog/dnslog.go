@@ -41,10 +41,15 @@ const (
 
 // Reader reads DNS entries from the sing-box unit journal.
 type Reader struct {
-	S        *settings.Settings
-	mu       sync.Mutex
-	cache    []Entry
-	cachedAt time.Time
+	S  *settings.Settings
+	mu sync.Mutex
+	// cachedWindow records which --since window produced cache; a wider cached
+	// read also satisfies a narrower request.
+	cache        []Entry
+	cachedAt     time.Time
+	cachedWindow time.Duration
+	// readFn overrides the journal read in tests.
+	readFn func(window time.Duration) []Entry
 }
 
 func New(s *settings.Settings) *Reader {
@@ -54,7 +59,7 @@ func New(s *settings.Settings) *Reader {
 // Queries returns the newest entries first, capped at limit. The note explains
 // when and why the list may be empty (dry-run, no journalctl, info log level).
 func (r *Reader) Queries(window time.Duration, limit int) ([]Entry, string) {
-	if r.S.DryRun {
+	if r.S == nil || r.S.DryRun {
 		return []Entry{}, "dry-run 模式不读取系统日志"
 	}
 	if window <= 0 {
@@ -63,20 +68,52 @@ func (r *Reader) Queries(window time.Duration, limit int) ([]Entry, string) {
 	if limit <= 0 {
 		limit = 500
 	}
+
+	// Fast path: a fresh cache that is at least as wide as this request.
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.cachedAt.IsZero() || time.Since(r.cachedAt) > cacheTTL {
-		r.cache = r.read(window)
+	if !r.cachedAt.IsZero() && time.Since(r.cachedAt) <= cacheTTL && r.cachedWindow >= window {
+		cached := r.cache
+		r.mu.Unlock()
+		out := newest(cached, limit)
+		return out, emptyNote(out)
+	}
+	r.mu.Unlock()
+
+	// journalctl can take up to 30s; never hold the lock across it.
+	reader := r.read
+	if r.readFn != nil {
+		reader = r.readFn
+	}
+	entries := reader(window)
+
+	r.mu.Lock()
+	// A concurrent wider read may have landed already; keep the better one.
+	if r.cachedAt.IsZero() || r.cachedWindow < window || time.Since(r.cachedAt) > cacheTTL {
+		r.cache = entries
 		r.cachedAt = time.Now()
+		r.cachedWindow = window
 	}
+	cached := r.cache
+	r.mu.Unlock()
+
+	out := newest(cached, limit)
+	return out, emptyNote(out)
+}
+
+// newest returns up to limit entries, newest first.
+func newest(entries []Entry, limit int) []Entry {
 	out := make([]Entry, 0, limit)
-	for i := len(r.cache) - 1; i >= 0 && len(out) < limit; i-- {
-		out = append(out, r.cache[i])
+	for i := len(entries) - 1; i >= 0 && len(out) < limit; i-- {
+		out = append(out, entries[i])
 	}
-	if len(out) == 0 {
-		return out, "日志中没有 DNS 查询记录；sing-box 仅在 log.level=debug 时输出每条查询，当前配置可能为 info"
+	return out
+}
+
+func emptyNote(entries []Entry) string {
+	if len(entries) == 0 {
+		return "日志中没有 DNS 查询记录；sing-box 仅在 log.level=debug 时输出每条查询，当前配置可能为 info"
 	}
-	return out, ""
+	return ""
 }
 
 func (r *Reader) read(window time.Duration) []Entry {
@@ -180,5 +217,8 @@ func parseElapsed(match []string) int64 {
 
 // Describe explains the reader's data source for the API envelope.
 func (r *Reader) Describe() string {
+	if r.S == nil {
+		return "journalctl"
+	}
 	return fmt.Sprintf("journalctl -u %s", r.S.String("service"))
 }
