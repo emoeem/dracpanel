@@ -67,6 +67,105 @@
   padding: var(--fc-space-12) var(--fc-space-16);
 }
 
+/* List-tab filter row: state/network segments, group & sort selects, exports. */
+.filter-bar {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: var(--fc-space-8);
+  align-items: center;
+}
+
+.filter-field {
+  display: inline-flex;
+  gap: var(--fc-space-4);
+  align-items: center;
+}
+
+.filter-field span {
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-on-surface-faint);
+}
+
+.filter-field select {
+  padding: var(--fc-space-4) var(--fc-space-8);
+  font-size: var(--fc-text-footnote);
+  color: var(--fc-on-surface);
+  background: var(--fc-block);
+  border: 0;
+  border-radius: var(--fc-radius-sm);
+}
+
+.filter-spacer {
+  flex: 1;
+}
+
+.sort-dir-icon {
+  display: inline-flex;
+}
+
+.sort-dir-asc {
+  transform: rotate(180deg);
+}
+
+.group-section {
+  border-bottom: 1px solid var(--fc-divider);
+}
+
+.group-section:last-child {
+  border-bottom: 0;
+}
+
+.group-header {
+  display: flex;
+  gap: var(--fc-space-8);
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: var(--fc-space-4) var(--fc-space-8);
+  text-align: start;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.group-chevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--fc-on-surface-faint);
+  transition: transform var(--transition-fast);
+}
+
+.group-chevron-open {
+  transform: rotate(180deg);
+}
+
+.group-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--fc-text-footnote);
+  font-weight: var(--fc-weight-medium);
+  color: var(--fc-on-surface);
+  white-space: nowrap;
+}
+
+.group-meta {
+  flex-shrink: 0;
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-on-surface-faint);
+}
+
+.empty {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: var(--fc-space-48) 0;
+  font-size: var(--fc-text-footnote);
+  color: var(--fc-on-surface-faint);
+}
+
 .source-cell {
   display: inline-flex;
   gap: var(--fc-space-4);

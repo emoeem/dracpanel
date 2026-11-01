@@ -13,6 +13,7 @@ import {
   FcCard,
   FcIconButton,
   FcRecordTable,
+  FcSegmented,
   FcSheet,
   type FcColumn,
 } from "../../components/flclash";
@@ -20,10 +21,35 @@ import {
   connectionChain,
   connectionHost,
   connectionProcessName,
+  connectionRowsToCSV,
+  connectionRowsToJSON,
+  defaultConnectionSortDirection,
+  downloadTextFile,
+  filterConnectionRows,
+  groupConnectionRows,
+  sortConnectionRows,
+  type ConnectionGroupKey,
+  type ConnectionNetworkFilter,
+  type ConnectionSortDirection,
+  type ConnectionSortKey,
 } from "../../lib/connectionTools";
+import {
+  loadConnectionGroupBy,
+  loadConnectionNetworkFilter,
+  loadConnectionSortDirection,
+  loadConnectionSortKey,
+  loadConnectionStateFilter,
+  saveConnectionGroupBy,
+  saveConnectionNetworkFilter,
+  saveConnectionSortDirection,
+  saveConnectionSortKey,
+  saveConnectionStateFilter,
+  type ConnectionStateFilter,
+} from "../../app/connectionPreferences";
 import { recordDnsQuery, useDnsLedger } from "../../lib/flclash/dnsLedger";
 import { formatRate } from "../../lib/flclash/format";
 import { buildRequestLedger } from "../../lib/requestLedger";
+import { ConnectionsTraffic } from "./ConnectionsTraffic";
 import { cx } from "../../lib/cx";
 import styles from "./RecordsView.module.css";
 
@@ -54,35 +80,173 @@ function Toolbar(props: {
 
 /* ── connections ──────────────────────────────────────────── */
 
+/** Column keys that map directly onto a connection sort key. */
+const COLUMN_SORT_KEY: Record<string, ConnectionSortKey> = {
+  target: "host",
+  process: "process",
+  rule: "rule",
+  outbound: "outbound",
+  downloadTotal: "download",
+  uploadTotal: "upload",
+  downloadRate: "rate",
+  uploadRate: "rate",
+};
+
+const GROUP_LABELS: { value: ConnectionGroupKey; label: string }[] = [
+  { value: "none", label: "不分组" },
+  { value: "host", label: "按主机" },
+  { value: "process", label: "按进程" },
+  { value: "outbound", label: "按出口" },
+  { value: "rule", label: "按规则" },
+  { value: "source", label: "按设备" },
+];
+
+const SORT_LABELS: { value: ConnectionSortKey; label: string }[] = [
+  { value: "date", label: "开始时间" },
+  { value: "host", label: "主机" },
+  { value: "process", label: "进程" },
+  { value: "outbound", label: "出口" },
+  { value: "rule", label: "规则" },
+  { value: "download", label: "下载量" },
+  { value: "upload", label: "上传量" },
+  { value: "total", label: "总流量" },
+  { value: "rate", label: "当前速率" },
+];
+
 export function ConnectionsView() {
   const api = useApi();
   const now = useNow(1000);
   const connections = useStream(api.connections);
+  const groups = useStream(api.groups);
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState<ConnectionRow | null>(null);
   const [closingAll, setClosingAll] = useState(false);
+  // List-tab controls, persisted across sessions via connectionPreferences.
+  const [stateFilter, setStateFilter] = useState<ConnectionStateFilter>(loadConnectionStateFilter);
+  const [network, setNetwork] = useState<ConnectionNetworkFilter>(loadConnectionNetworkFilter);
+  const [groupBy, setGroupBy] = useState<ConnectionGroupKey>(loadConnectionGroupBy);
+  const [sortKey, setSortKey] = useState<ConnectionSortKey>(loadConnectionSortKey);
+  const [sortDirection, setSortDirection] = useState<ConnectionSortDirection>(
+    loadConnectionSortDirection,
+  );
+  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(new Set());
+  // URL carries the view and optional deep-link filters (#/connections?tab=traffic&out=proxy)
+  const params = new URLSearchParams(location.hash.split("?")[1] ?? "");
+  const [tab, setTab] = useState<"traffic" | "list">(
+    params.get("tab") === "list" ? "list" : "traffic",
+  );
+  const deepOut = params.get("out") ?? "";
+  const deepSource = params.get("src") ?? "";
 
-  const query = search.trim().toLowerCase();
-  const rows = useMemo(() => {
-    const all = [...connections.data.rows.values()].filter((row) => row.closedAt === null);
-    const filtered =
-      query === ""
-        ? all
-        : all.filter((row) => {
-            const connection = row.connection;
-            return (
-              connectionHost(row).toLowerCase().includes(query) ||
-              connection.destination.toLowerCase().includes(query) ||
-              connection.source.toLowerCase().includes(query) ||
-              connection.outbound.toLowerCase().includes(query) ||
-              connection.rule.toLowerCase().includes(query) ||
-              connectionProcessName(row).toLowerCase().includes(query)
-            );
-          });
-    return filtered.sort(
-      (left, right) => Number(right.connection.createdAt) - Number(left.connection.createdAt),
-    );
-  }, [connections.data.rows, query]);
+  const allRows = useMemo(() => [...connections.data.rows.values()], [connections.data.rows]);
+
+  // Traffic tab always shows live connections only.
+  const rows = useMemo(
+    () =>
+      sortConnectionRows(
+        filterConnectionRows(allRows, {
+          state: "active",
+          search,
+          source: deepSource,
+          network: "all",
+          hideChain: "",
+        }),
+        "date",
+        "desc",
+      ).filter((row) => {
+        const outbound =
+          row.connection.chainList.length > 1
+            ? row.connection.chainList[row.connection.chainList.length - 1]
+            : row.connection.outbound;
+        return deepOut === "" || outbound === deepOut;
+      }),
+    [allRows, deepOut, deepSource, search],
+  );
+
+  // List tab honours every control.
+  const listRows = useMemo(
+    () =>
+      sortConnectionRows(
+        filterConnectionRows(allRows, {
+          state: stateFilter,
+          search,
+          source: deepSource,
+          network,
+          hideChain: "",
+        }),
+        sortKey,
+        sortDirection,
+      ).filter((row) => {
+        const outbound =
+          row.connection.chainList.length > 1
+            ? row.connection.chainList[row.connection.chainList.length - 1]
+            : row.connection.outbound;
+        return deepOut === "" || outbound === deepOut;
+      }),
+    [allRows, deepOut, deepSource, network, search, sortDirection, sortKey, stateFilter],
+  );
+
+  const listGroups = useMemo(() => groupConnectionRows(listRows, groupBy), [listRows, groupBy]);
+
+  const handleSort = (columnKey: string) => {
+    const mapped = COLUMN_SORT_KEY[columnKey];
+    if (mapped === undefined) {
+      return;
+    }
+    if (sortKey === mapped) {
+      const next = sortDirection === "asc" ? "desc" : "asc";
+      setSortDirection(next);
+      saveConnectionSortDirection(next);
+      return;
+    }
+    setSortKey(mapped);
+    saveConnectionSortKey(mapped);
+    setSortDirection(defaultConnectionSortDirection(mapped));
+    saveConnectionSortDirection(defaultConnectionSortDirection(mapped));
+  };
+
+  const changeStateFilter = (value: ConnectionStateFilter) => {
+    setStateFilter(value);
+    saveConnectionStateFilter(value);
+  };
+  const changeNetwork = (value: ConnectionNetworkFilter) => {
+    setNetwork(value);
+    saveConnectionNetworkFilter(value);
+  };
+  const changeGroupBy = (value: string) => {
+    setGroupBy(value as ConnectionGroupKey);
+    saveConnectionGroupBy(value as ConnectionGroupKey);
+  };
+  const changeSortKey = (value: string) => {
+    setSortKey(value as ConnectionSortKey);
+    saveConnectionSortKey(value as ConnectionSortKey);
+  };
+  const changeSortDirection = () => {
+    const next = sortDirection === "asc" ? "desc" : "asc";
+    setSortDirection(next);
+    saveConnectionSortDirection(next);
+  };
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const exportRows = (format: "csv" | "json") => {
+    const stamp = new Date().toISOString().slice(0, 19).replaceAll(":", "-");
+    if (format === "csv") {
+      downloadTextFile(`connections-${stamp}.csv`, connectionRowsToCSV(listRows), "text/csv");
+    } else {
+      downloadTextFile(`connections-${stamp}.json`, connectionRowsToJSON(listRows), "application/json");
+    }
+  };
 
   const columns: FcColumn<ConnectionRow>[] = useMemo(
     () => [
@@ -90,6 +254,7 @@ export function ConnectionsView() {
         key: "process",
         label: "进程",
         width: 150,
+        sortable: true,
         render: (row) => {
           const name = connectionProcessName(row) || row.connection.inbound || "—";
           return (
@@ -104,6 +269,7 @@ export function ConnectionsView() {
         key: "target",
         label: "目标",
         flex: 1.4,
+        sortable: true,
         render: (row) => (
           <span title={connectionHost(row)}>
             {connectionHost(row) || row.connection.destination || "—"}
@@ -121,12 +287,14 @@ export function ConnectionsView() {
         label: "规则",
         flex: 0.9,
         hideBelow: 1000,
+        sortable: true,
         render: (row) => <span className={styles.muted}>{row.connection.rule || "—"}</span>,
       },
       {
         key: "outbound",
         label: "出口",
         width: 120,
+        sortable: true,
         render: (row) => (
           <span className={styles.truncate} title={connectionChain(row)}>
             {row.connection.outbound || "—"}
@@ -138,6 +306,7 @@ export function ConnectionsView() {
         label: "下载速度",
         width: 88,
         align: "end",
+        sortable: true,
         render: (row) => formatRate(row.downlinkRate),
       },
       {
@@ -145,6 +314,7 @@ export function ConnectionsView() {
         label: "上传速度",
         width: 88,
         align: "end",
+        sortable: true,
         render: (row) => formatRate(row.uplinkRate),
       },
       {
@@ -153,6 +323,7 @@ export function ConnectionsView() {
         width: 84,
         align: "end",
         hideBelow: 1200,
+        sortable: true,
         render: (row) => formatBytes(row.downlinkTotal),
       },
       {
@@ -161,6 +332,7 @@ export function ConnectionsView() {
         width: 84,
         align: "end",
         hideBelow: 1200,
+        sortable: true,
         render: (row) => formatBytes(row.uplinkTotal),
       },
       {
@@ -188,26 +360,148 @@ export function ConnectionsView() {
   return (
     <div className="fc-page">
       <Toolbar
-        title="实时连接"
+        title="连接"
         search={search}
         onSearch={setSearch}
         searchPlaceholder="搜索连接"
         actions={
-          <FcIconButton label="关闭全部连接" disabled={closingAll || rows.length === 0} onClick={() => void closeAll()}>
-            {closingAll ? <span className={styles.spinner} /> : <Icon name="delete_sweep" size={18} />}
-          </FcIconButton>
+          <>
+            <FcSegmented
+              ariaLabel="连接视图"
+              value={tab}
+              onChange={(value: string) => setTab(value as "traffic" | "list")}
+              options={[
+                { value: "traffic", label: "流量" },
+                { value: "list", label: "列表" },
+              ]}
+            />
+            <FcIconButton label="关闭全部连接" disabled={closingAll || rows.length === 0} onClick={() => void closeAll()}>
+              {closingAll ? <span className={styles.spinner} /> : <Icon name="delete_sweep" size={18} />}
+            </FcIconButton>
+          </>
         }
       />
-      <FcCard className={styles.tableCard}>
-        <FcRecordTable
-          columns={columns}
-          rows={rows}
-          getKey={(row) => row.connection.id}
-          onRowClick={setDetail}
-          emptyLabel={connections.data.loaded ? "暂无数据" : "加载中…"}
-          maxRows={300}
-        />
-      </FcCard>
+      {tab === "traffic" ? (
+        <ConnectionsTraffic rows={rows} groups={groups.data} onOpen={setDetail} />
+      ) : (
+        <>
+          <div className={styles.filterBar}>
+            <FcSegmented
+              ariaLabel="连接状态"
+              value={stateFilter}
+              onChange={(value: string) => changeStateFilter(value as ConnectionStateFilter)}
+              options={[
+                { value: "active", label: "活动" },
+                { value: "closed", label: "已关闭" },
+                { value: "all", label: "全部" },
+              ]}
+            />
+            <FcSegmented
+              ariaLabel="网络类型"
+              value={network}
+              onChange={(value: string) => changeNetwork(value as ConnectionNetworkFilter)}
+              options={[
+                { value: "all", label: "全部" },
+                { value: "tcp", label: "TCP" },
+                { value: "udp", label: "UDP" },
+              ]}
+            />
+            <label className={styles.filterField}>
+              <span>分组</span>
+              <select value={groupBy} onChange={(event) => changeGroupBy(event.target.value)}>
+                {GROUP_LABELS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.filterField}>
+              <span>排序</span>
+              <select value={sortKey} onChange={(event) => changeSortKey(event.target.value)}>
+                {SORT_LABELS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <FcIconButton
+              label={sortDirection === "asc" ? "升序" : "降序"}
+              onClick={changeSortDirection}
+            >
+              <span className={cx(styles.sortDirIcon, sortDirection === "asc" && styles.sortDirAsc)}>
+                <Icon name="arrow_downward" size={16} />
+              </span>
+            </FcIconButton>
+            <span className={styles.filterSpacer} />
+            <FcButton size="small" onClick={() => exportRows("csv")}>
+              导出 CSV
+            </FcButton>
+            <FcButton size="small" onClick={() => exportRows("json")}>
+              导出 JSON
+            </FcButton>
+          </div>
+          {groupBy === "none" ? (
+            <FcCard className={styles.tableCard}>
+              <FcRecordTable
+                columns={columns}
+                rows={listRows}
+                getKey={(row) => row.connection.id}
+                onRowClick={setDetail}
+                sortKey={sortKey}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                emptyLabel={connections.data.loaded ? "暂无数据" : "加载中…"}
+                maxRows={300}
+              />
+            </FcCard>
+          ) : (
+            <FcCard className={styles.tableCard}>
+              {listGroups.length === 0 ? (
+                <div className={styles.empty}>
+                  {connections.data.loaded ? "暂无数据" : "加载中…"}
+                </div>
+              ) : (
+                listGroups.map((group) => (
+                  <section key={group.key} className={styles.groupSection}>
+                    <button
+                      type="button"
+                      className={styles.groupHeader}
+                      aria-expanded={expandedGroups.has(group.key)}
+                      onClick={() => toggleGroup(group.key)}
+                    >
+                      <span className={cx(styles.groupChevron, expandedGroups.has(group.key) && styles.groupChevronOpen)}>
+                        <Icon name="expand_more" size={16} />
+                      </span>
+                      <span className={styles.groupName} title={group.key}>
+                        {group.key}
+                      </span>
+                      <span className={styles.groupMeta}>
+                        {group.rows.length} 条 · ↓{formatBytes(group.downlink)} ↑
+                        {formatBytes(group.uplink)}
+                      </span>
+                    </button>
+                    {expandedGroups.has(group.key) && (
+                      <FcRecordTable
+                        columns={columns}
+                        rows={group.rows}
+                        getKey={(row) => row.connection.id}
+                        onRowClick={setDetail}
+                        sortKey={sortKey}
+                        sortDirection={sortDirection}
+                        onSort={handleSort}
+                        dense
+                        maxRows={200}
+                      />
+                    )}
+                  </section>
+                ))
+              )}
+            </FcCard>
+          )}
+        </>
+      )}
       {detail && (
         <ConnectionDetail
           row={detail}
