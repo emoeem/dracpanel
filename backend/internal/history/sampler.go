@@ -32,6 +32,7 @@ type Sampler struct {
 	outSeen     map[string]uint64
 	cpuLast     cpuTimes
 	cpuPercent  float64
+	cpuSeen     bool
 
 	client       *http.Client
 	compactEvery time.Duration
@@ -63,9 +64,23 @@ func NewSampler(s *settings.Settings, store *Store) *Sampler {
 
 // CurrentCPU returns the latest instantaneous CPU percentage.
 func (sp *Sampler) CurrentCPU() float64 {
+	if sp == nil {
+		return 0
+	}
 	sp.mu.Lock()
 	defer sp.mu.Unlock()
 	return sp.cpuPercent
+}
+
+// Ready reports whether at least one CPU sample has been taken, so callers can
+// tell "not sampled yet" apart from a genuine 0%.
+func (sp *Sampler) Ready() bool {
+	if sp == nil {
+		return false
+	}
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+	return sp.cpuSeen
 }
 
 // Start launches the 1s collection goroutine. Dry-run never starts (no
@@ -163,31 +178,35 @@ func (sp *Sampler) maybeRotate(now time.Time) {
 }
 
 // pollTraffic reads GET /traffic → {"up":bps,"down":bps} (bytes/s).
+//
+// /traffic is a streaming endpoint: it emits one object per second and never
+// closes, so a whole-body read would block until the client timeout and lose
+// the sample. Decoding one JSON value returns as soon as the first object is
+// complete.
 func (sp *Sampler) pollTraffic() (uint64, uint64, bool) {
-	body, ok := sp.clashGet("/traffic")
-	if !ok {
-		return 0, 0, false
-	}
 	var parsed struct {
 		Up   uint64 `json:"up"`
 		Down uint64 `json:"down"`
 	}
-	if err := json.Unmarshal(body, &parsed); err != nil {
+	if !sp.clashDecode("/traffic", &parsed) {
 		return 0, 0, false
 	}
 	return parsed.Up, parsed.Down, true
 }
 
 type clashConnection struct {
-	ID            string   `json:"id"`
-	UploadTotal   uint64   `json:"uploadTotal"`
-	DownloadTotal uint64   `json:"downloadTotal"`
-	Chains        []string `json:"chains"`
+	ID string `json:"id"`
+	// sing-box/mihomo expose cumulative per-connection counters as
+	// download/upload; the *Total names only appear on the envelope.
+	Upload   uint64   `json:"upload"`
+	Download uint64   `json:"download"`
+	Chains   []string `json:"chains"`
 }
 
-// pollConnections accumulates download totals per exit outbound (the last
-// chain entry is the exit). Deltas are computed against the previous
-// snapshot so restarts of the Clash counter do not corrupt totals.
+// pollConnections accumulates download totals per exit outbound (chains[0] is
+// the exit; the remaining entries are the groups it passed through). Deltas
+// are computed against the previous snapshot so restarts of the Clash counter
+// do not corrupt totals.
 func (sp *Sampler) pollConnections() {
 	body, ok := sp.clashGet("/connections")
 	if !ok {
@@ -205,14 +224,14 @@ func (sp *Sampler) pollConnections() {
 		if tag == "" {
 			continue
 		}
-		seen[conn.ID] = conn.DownloadTotal
+		seen[conn.ID] = conn.Download
 		sp.mu.Lock()
 		prev, watched := sp.outSeen[conn.ID]
 		switch {
-		case watched && conn.DownloadTotal >= prev:
-			sp.outTotals[tag] += conn.DownloadTotal - prev
+		case watched && conn.Download >= prev:
+			sp.outTotals[tag] += conn.Download - prev
 		case !watched:
-			sp.outTotals[tag] += conn.DownloadTotal
+			sp.outTotals[tag] += conn.Download
 		}
 		sp.mu.Unlock()
 	}
@@ -222,13 +241,38 @@ func (sp *Sampler) pollConnections() {
 }
 
 func exitTag(conn clashConnection) string {
+	// Clash orders chains exit-first: ["node", "group", "group"...].
 	if len(conn.Chains) > 0 {
-		return conn.Chains[len(conn.Chains)-1]
+		return conn.Chains[0]
 	}
 	return ""
 }
 
 func (sp *Sampler) clashGet(path string) ([]byte, bool) {
+	resp, ok := sp.clashRequest(path)
+	if !ok {
+		return nil, false
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return nil, false
+	}
+	return raw, true
+}
+
+// clashDecode reads exactly one JSON value, which is what streaming endpoints
+// like /traffic need: the connection stays open, so reading to EOF blocks.
+func (sp *Sampler) clashDecode(path string, target any) bool {
+	resp, ok := sp.clashRequest(path)
+	if !ok {
+		return false
+	}
+	defer resp.Body.Close()
+	return json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(target) == nil
+}
+
+func (sp *Sampler) clashRequest(path string) (*http.Response, bool) {
 	base := strings.TrimRight(sp.S.String("clash_api"), "/")
 	req, err := http.NewRequest(http.MethodGet, base+path, nil)
 	if err != nil {
@@ -238,18 +282,13 @@ func (sp *Sampler) clashGet(path string) ([]byte, bool) {
 		req.Header.Set("Authorization", "Bearer "+secret)
 	}
 	resp, err := sp.client.Do(req)
-	if err != nil {
+	if err != nil || resp.StatusCode >= 400 {
+		if resp != nil {
+			resp.Body.Close()
+		}
 		return nil, false
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		return nil, false
-	}
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if err != nil {
-		return nil, false
-	}
-	return raw, true
+	return resp, true
 }
 
 // sampleCPU reads /proc/stat deltas (best-effort; 0 when unreadable).
@@ -291,4 +330,5 @@ func (sp *Sampler) sampleCPU() {
 		}
 	}
 	sp.cpuLast = cpuTimes{idle: idle, total: total, valid: true}
+	sp.cpuSeen = true
 }

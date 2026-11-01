@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/emoeem/dracpanel/backend/internal/jsonx"
+	"github.com/emoeem/dracpanel/backend/internal/policy"
 	"github.com/emoeem/dracpanel/backend/internal/settings"
 	"github.com/emoeem/dracpanel/backend/internal/singbox"
 	"github.com/emoeem/dracpanel/backend/internal/sysutil"
@@ -452,10 +453,24 @@ func (st *Subscriptions) Apply() *jsonx.OrderMap {
 		return errMap(err.Error())
 	}
 	managed := st.S.Managed()
+	excludedNodes := stringSetOf(managed, "node_exclude")
 	oldTags := map[string]bool{}
-	if value, ok := managed.Get("outbound_tags"); ok {
+	recordTags := func(value jsonx.Value) {
 		for _, tag := range toSlice(value) {
 			oldTags[fmt.Sprintf("%v", tag)] = true
+		}
+	}
+	if value, ok := managed.Get("outbound_tags"); ok {
+		recordTags(value)
+	}
+	// by_subscription is written alongside outbound_tags; folding it in means a
+	// partially lost managed.json cannot leave stale outbounds behind.
+	if value, ok := managed.Get("by_subscription"); ok {
+		if perSub, ok := value.(*jsonx.OrderMap); ok {
+			for _, subID := range perSub.Keys() {
+				members, _ := perSub.Get(subID)
+				recordTags(members)
+			}
 		}
 	}
 
@@ -473,15 +488,19 @@ func (st *Subscriptions) Apply() *jsonx.OrderMap {
 		keptOutbounds = append(keptOutbounds, item)
 	}
 	newTags := []string{}
+	excluded := 0
 	perSub := jsonx.NewOrderMap()
 
 	existing := map[string]bool{}
+	existingByTag := map[string]*jsonx.OrderMap{}
 	for _, item := range keptOutbounds {
 		if obj, ok := item.(*jsonx.OrderMap); ok {
 			tag, _ := obj.Get("tag")
 			existing[fmt.Sprintf("%v", tag)] = true
+			existingByTag[fmt.Sprintf("%v", tag)] = obj
 		}
 	}
+	skipped := 0
 	for _, sub := range enabledSubs {
 		tags := []string{}
 		subID, _ := sub.Get("id")
@@ -497,11 +516,29 @@ func (st *Subscriptions) Apply() *jsonx.OrderMap {
 			if tagStr == "" || tagStr == "<nil>" {
 				tagStr = "node"
 			}
+			if excludedNodes[tagStr] {
+				excluded++
+				continue
+			}
 			base := tagStr
 			i := 2
+			duplicate := false
 			for existing[tagStr] || containsStr(newTags, tagStr) {
+				// Re-applying the same subscription with a lost managed.json
+				// must stay idempotent: an identical outbound is reused instead
+				// of being cloned as "tag #2".
+				if current, ok := existingByTag[tagStr]; ok && sameOutbound(current, node) {
+					duplicate = true
+					break
+				}
 				tagStr = fmt.Sprintf("%s #%d", base, i)
 				i++
+			}
+			if duplicate {
+				skipped++
+				newTags = append(newTags, tagStr)
+				tags = append(tags, tagStr)
+				continue
 			}
 			node.Set("tag", tagStr)
 			keptOutbounds = append(keptOutbounds, node)
@@ -552,7 +589,12 @@ func (st *Subscriptions) Apply() *jsonx.OrderMap {
 				kept = append(kept, member)
 			}
 		}
-		kept = append(kept, toSlice(membersValue)...)
+		// Manual removals and ordering recorded on the Policies page survive
+		// the rebuild.
+		members := policy.ApplyMembers(toStrings(toSlice(membersValue)), groupOverrides(managed, groupTag))
+		for _, member := range members {
+			kept = append(kept, member)
+		}
 		node.Set("outbounds", kept)
 	}
 
@@ -562,6 +604,15 @@ func (st *Subscriptions) Apply() *jsonx.OrderMap {
 		apply = st.Configs.Apply
 	}
 	result := apply(cfg, "subscriptions-apply", true)
+	if excluded > 0 {
+		result.Set("excluded", excluded)
+	}
+	if skipped > 0 {
+		result.Set("reused", skipped)
+		if message, ok := result.Get("message"); ok {
+			result.Set("message", fmt.Sprintf("%v（复用 %d 个同构节点）", message, skipped))
+		}
+	}
 	if okValue, _ := result.Get("ok"); okValue == true {
 		out := jsonx.NewOrderMap()
 		out.Set("outbound_tags", stringSliceToValues(newTags))
@@ -573,11 +624,156 @@ func (st *Subscriptions) Apply() *jsonx.OrderMap {
 	return result
 }
 
+// stringSetOf reads a string array field into a set.
+func stringSetOf(obj *jsonx.OrderMap, key string) map[string]bool {
+	out := map[string]bool{}
+	if value, ok := obj.Get(key); ok {
+		for _, item := range toSlice(value) {
+			out[fmt.Sprintf("%v", item)] = true
+		}
+	}
+	return out
+}
+
+func toStrings(values []jsonx.Value) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, fmt.Sprintf("%v", value))
+	}
+	return out
+}
+
+// groupOverrides reads managed.json group_overrides[tag].
+func groupOverrides(managed *jsonx.OrderMap, tag string) policy.Overrides {
+	var result policy.Overrides
+	value, ok := managed.Get("group_overrides")
+	if !ok {
+		return result
+	}
+	groups, ok := value.(*jsonx.OrderMap)
+	if !ok {
+		return result
+	}
+	entryValue, ok := groups.Get(tag)
+	if !ok {
+		return result
+	}
+	entry, ok := entryValue.(*jsonx.OrderMap)
+	if !ok {
+		return result
+	}
+	if value, ok := entry.Get("exclude"); ok {
+		result.Exclude = toStrings(toSlice(value))
+	}
+	if value, ok := entry.Get("order"); ok {
+		result.Order = toStrings(toSlice(value))
+	}
+	return result
+}
+
 func toSlice(value jsonx.Value) []jsonx.Value {
 	if arr, ok := value.([]jsonx.Value); ok {
 		return arr
 	}
 	return nil
+}
+
+// sameOutbound reports whether two outbounds are identical apart from their
+// tag. Canonical JSON is used so key order and formatting do not matter.
+func sameOutbound(left, right *jsonx.OrderMap) bool {
+	if left == nil || right == nil {
+		return false
+	}
+	leftRaw := canonicalJSON(withoutTag(left))
+	rightRaw := canonicalJSON(withoutTag(right))
+	return leftRaw != "" && leftRaw == rightRaw
+}
+
+func withoutTag(node *jsonx.OrderMap) *jsonx.OrderMap {
+	clone := node.Clone()
+	clone.Delete("tag")
+	return clone
+}
+
+func canonicalJSON(value jsonx.Value) string {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return ""
+	}
+	var generic any
+	if err := json.Unmarshal(raw, &generic); err != nil {
+		return ""
+	}
+	canonical, err := json.Marshal(generic)
+	if err != nil {
+		return ""
+	}
+	return string(canonical)
+}
+
+// ReconcileManaged drops bookkeeping for tags the config no longer contains,
+// returning how many entries were pruned. Restoring a backup can leave
+// managed.json pointing at outbounds that no longer exist; without this the
+// next apply would treat them as still-owned.
+func (st *Subscriptions) ReconcileManaged(cfg *jsonx.OrderMap) int {
+	if cfg == nil {
+		return 0
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	present := map[string]bool{}
+	for _, item := range arrField(cfg, "outbounds") {
+		if obj, ok := item.(*jsonx.OrderMap); ok {
+			tag, _ := obj.Get("tag")
+			present[fmt.Sprintf("%v", tag)] = true
+		}
+	}
+
+	managed := st.S.Managed()
+	pruned := 0
+	cleaned := jsonx.NewOrderMap()
+	for _, key := range managed.Keys() {
+		value, _ := managed.Get(key)
+		switch key {
+		case "outbound_tags":
+			kept := []jsonx.Value{}
+			for _, tag := range toSlice(value) {
+				if present[fmt.Sprintf("%v", tag)] {
+					kept = append(kept, tag)
+				} else {
+					pruned++
+				}
+			}
+			cleaned.Set(key, kept)
+		case "group_members", "by_subscription":
+			groups, ok := value.(*jsonx.OrderMap)
+			if !ok {
+				cleaned.Set(key, value)
+				continue
+			}
+			keptGroups := jsonx.NewOrderMap()
+			for _, group := range groups.Keys() {
+				members, _ := groups.Get(group)
+				kept := []jsonx.Value{}
+				for _, tag := range toSlice(members) {
+					if present[fmt.Sprintf("%v", tag)] {
+						kept = append(kept, tag)
+					} else {
+						pruned++
+					}
+				}
+				keptGroups.Set(group, kept)
+			}
+			cleaned.Set(key, keptGroups)
+		default:
+			cleaned.Set(key, value)
+		}
+	}
+	if pruned > 0 {
+		_ = st.S.WriteJSON(st.S.ManagedFile(), cleaned)
+	}
+	return pruned
 }
 
 func orderArrayOf(items []*jsonx.OrderMap) jsonx.Value {

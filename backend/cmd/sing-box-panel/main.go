@@ -11,18 +11,10 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/emoeem/dracpanel/backend/internal/clashapi"
-	"github.com/emoeem/dracpanel/backend/internal/ebpf"
-	"github.com/emoeem/dracpanel/backend/internal/geoip"
+	"github.com/emoeem/dracpanel/backend/internal/bootstrap"
 	"github.com/emoeem/dracpanel/backend/internal/httpapi"
-	"github.com/emoeem/dracpanel/backend/internal/jsonx"
-	"github.com/emoeem/dracpanel/backend/internal/meminfo"
-	"github.com/emoeem/dracpanel/backend/internal/profiles"
 	"github.com/emoeem/dracpanel/backend/internal/settings"
-	"github.com/emoeem/dracpanel/backend/internal/singbox"
 	"github.com/emoeem/dracpanel/backend/internal/subs"
-	"github.com/emoeem/dracpanel/backend/internal/sysproxy"
-	"github.com/emoeem/dracpanel/backend/internal/systemd"
 	"github.com/emoeem/dracpanel/backend/internal/sysutil"
 )
 
@@ -34,6 +26,12 @@ func logf(format string, args ...any) {
 }
 
 func main() {
+	os.Exit(run())
+}
+
+// run owns the whole lifecycle so deferred cleanup happens; os.Exit in main
+// would skip it.
+func run() int {
 	configPath := flag.String("config", "", "面板配置文件（默认 /etc/sing-box/panel.json）")
 	port := flag.Int("port", 0, "覆盖监听端口")
 	listen := flag.String("listen", "", "覆盖监听地址")
@@ -44,13 +42,13 @@ func main() {
 
 	if *showVersion {
 		fmt.Printf("sing-box-panel %s\n", version)
-		return
+		return 0
 	}
 
 	s, err := settings.Load(*configPath, *dryRun)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
+		return 1
 	}
 	if *port != 0 {
 		s.Data["port"] = float64(*port)
@@ -59,41 +57,25 @@ func main() {
 		s.Data["listen"] = *listen
 	}
 
-	service := systemd.New(s)
-	configs := singbox.New(s, service)
-	subsStore := subs.New(s, configs)
-	ebpfSystem := ebpf.New(s, func(cfg *jsonx.OrderMap, reason string, restart bool) *jsonx.OrderMap {
-		return configs.Apply(cfg, reason, restart)
-	})
-
-	deps := httpapi.Deps{
-		S:        s,
-		Service:  service,
-		Configs:  configs,
-		Subs:     subsStore,
-		Ebpf:     ebpfSystem,
-		Clash:    &clashapi.Clash{S: s},
-		GeoIP:    geoip.New(s),
-		SysProxy: sysproxy.New(s, service),
-		Mem:      &meminfo.Controller{S: s, Service: service},
-		Profiles: &profiles.Importer{S: s, Subs: subsStore},
-	}
-	handler := httpapi.New(deps)
-
+	// Token init also creates the state dir, which the notify feed and the
+	// history sampler write into.
 	if *printToken {
 		token, err := s.Token()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
+			return 1
 		}
 		fmt.Println(token)
-		return
+		return 0
 	}
-
 	if _, err := s.Token(); err != nil {
 		fmt.Fprintf(os.Stderr, "token 初始化失败：%v\n", err)
-		os.Exit(1)
+		return 1
 	}
+
+	deps, cleanup := bootstrap.Build(s)
+	defer cleanup()
+	handler := httpapi.New(*deps)
 
 	addr := s.ListenAddr()
 	server := &http.Server{Addr: addr, Handler: handler}
@@ -107,11 +89,12 @@ func main() {
 		logf("dry-run 模式：不调用 systemctl，配置写到 /tmp")
 	}
 
-	scheduler := &subs.Scheduler{Subs: subsStore, S: s}
+	scheduler := &subs.Scheduler{Subs: deps.Subs, S: s}
 	scheduler.Start()
 
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logf("退出：%v", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }

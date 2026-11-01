@@ -299,6 +299,8 @@ func writeValue(sb *strings.Builder, value Value, depth int) {
 		sb.WriteString(strconv.Itoa(v))
 	case int64:
 		sb.WriteString(strconv.FormatInt(v, 10))
+	case uint64:
+		sb.WriteString(strconv.FormatUint(v, 10))
 	case string:
 		writeString(sb, v)
 	case []Value:

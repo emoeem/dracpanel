@@ -2,6 +2,7 @@ package singbox
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -253,5 +254,120 @@ func strValue(value jsonx.Value) string {
 		return v
 	default:
 		return ""
+	}
+}
+
+// stubSystemctl records every invocation and answers the queries Apply makes.
+// reloadExit controls whether `systemctl reload` succeeds.
+func stubSystemctl(t *testing.T, dir, reloadExit string) string {
+	t.Helper()
+	calls := filepath.Join(dir, "systemctl.calls")
+	script := fmt.Sprintf(`echo "$@" >> %s
+case "$1" in
+  show) echo "ExecReload=/bin/kill -HUP 4242" ;;
+  is-active) echo "active" ;;
+  is-enabled) echo "enabled" ;;
+esac
+if [ "$1" = "reload" ]; then exit %s; fi
+exit 0`, calls, reloadExit)
+	stubBin(t, map[string]string{
+		"sing-box":  "exit 0",
+		"systemctl": script,
+	})
+	return calls
+}
+
+func applyTwice(t *testing.T, m *Manager) *jsonx.OrderMap {
+	t.Helper()
+	cfg, err := jsonx.ParseObject(`{"inbounds":[],"outbounds":[]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m.Apply(cfg, "test", true)
+}
+
+func TestApplyPrefersReloadWhenSupported(t *testing.T) {
+	m, _, _ := newTestManager(t)
+	calls := stubSystemctl(t, t.TempDir(), "0")
+
+	result := applyTwice(t, m)
+	if ok, _ := result.Get("ok"); ok != true {
+		t.Fatalf("apply failed: %v", result.Keys())
+	}
+	recorded, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := string(recorded)
+	if !strings.Contains(log, "reload sing-box-stub") {
+		t.Fatalf("expected a reload call, got:\n%s", log)
+	}
+	if strings.Contains(log, "restart sing-box-stub") {
+		t.Fatalf("reload-first must not restart:\n%s", log)
+	}
+}
+
+func TestApplyFallsBackToRestartWhenReloadFails(t *testing.T) {
+	m, _, _ := newTestManager(t)
+	calls := stubSystemctl(t, t.TempDir(), "1")
+
+	result := applyTwice(t, m)
+	if ok, _ := result.Get("ok"); ok != true {
+		t.Fatalf("apply should succeed after fallback: %v", result.Keys())
+	}
+	recorded, _ := os.ReadFile(calls)
+	log := string(recorded)
+	if !strings.Contains(log, "reload sing-box-stub") || !strings.Contains(log, "restart sing-box-stub") {
+		t.Fatalf("expected reload then restart, got:\n%s", log)
+	}
+}
+
+func TestApplyRestartStrategySkipsReload(t *testing.T) {
+	m, s, _ := newTestManager(t)
+	s.Data["apply_strategy"] = "restart"
+	calls := stubSystemctl(t, t.TempDir(), "0")
+
+	result := applyTwice(t, m)
+	if ok, _ := result.Get("ok"); ok != true {
+		t.Fatal("apply failed")
+	}
+	recorded, _ := os.ReadFile(calls)
+	log := string(recorded)
+	if strings.Contains(log, "reload sing-box-stub") {
+		t.Fatalf("restart strategy must not reload:\n%s", log)
+	}
+	if !strings.Contains(log, "restart sing-box-stub") {
+		t.Fatalf("expected a restart call:\n%s", log)
+	}
+}
+
+// ApplyText must write the caller's exact text: a parse+dump round-trip would
+// strip JSONC comments and reformat the file.
+func TestApplyTextPreservesComments(t *testing.T) {
+	m, s, _ := newTestManager(t)
+	stubBin(t, map[string]string{
+		"sing-box": "exit 0",
+		"systemctl": `case "$1" in
+  is-active) echo active ;;
+  show) echo "ExecReload=" ;;
+esac
+exit 0`,
+	})
+	text := "{\n  // 保留这行注释\n  \"inbounds\": [],\n  \"outbounds\": []\n}\n"
+	cfg, err := jsonx.ParseObject(text)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	result := m.ApplyText(text, cfg, "test-comment", true)
+	if ok, _ := result.Get("ok"); ok != true {
+		t.Fatalf("apply failed: %v", result.Keys())
+	}
+	raw, err := os.ReadFile(s.SingBoxConfigPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != text {
+		t.Fatalf("written text lost comments/formatting:\n%s", raw)
 	}
 }

@@ -99,6 +99,32 @@ func (s *Service) Control(action string) *jsonx.OrderMap {
 	return ok(fmt.Sprintf("已执行 systemctl %s %s", action, s.S.String("service")))
 }
 
+// ReloadSupported reports whether the unit declares an ExecReload. sing-box's
+// unit uses `kill -HUP $MAINPID`, which re-reads the config in place.
+func (s *Service) ReloadSupported() bool {
+	if s.S.DryRun {
+		return false
+	}
+	rc, out, _ := sysutil.Run("systemctl", []string{"show", "-p", "ExecReload", s.S.String("service")}, 30*time.Second)
+	if rc != 0 {
+		return false
+	}
+	key, value, found := strings.Cut(strings.TrimSpace(out), "=")
+	return found && key == "ExecReload" && strings.TrimSpace(value) != ""
+}
+
+// Reload asks systemd to run the unit's ExecReload.
+func (s *Service) Reload() *jsonx.OrderMap {
+	if s.S.DryRun {
+		return ok(fmt.Sprintf("[dry-run] 跳过 systemctl reload %s", s.S.String("service")))
+	}
+	rc, _, e := sysutil.Run("systemctl", []string{"reload", s.S.String("service")}, 60*time.Second)
+	if rc != 0 {
+		return err(fmt.Sprintf("systemctl reload 失败：%s", orCode(e, rc)))
+	}
+	return ok(fmt.Sprintf("已执行 systemctl reload %s", s.S.String("service")))
+}
+
 // Journal ports Service.journal().
 func (s *Service) Journal(lines int) string {
 	if s.S.DryRun {

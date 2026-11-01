@@ -92,3 +92,19 @@ func TestRoundTrip(t *testing.T) {
 		t.Fatal("round trip mismatch")
 	}
 }
+
+// uint64 must render as a JSON number: the history summary and sample counters
+// are uint64, and encoding them through the default branch produced strings.
+func TestDumpEncodesUint64AsNumber(t *testing.T) {
+	obj := NewOrderMap()
+	obj.Set("down_peak", uint64(27484))
+	obj.Set("up_peak", uint64(4553))
+	raw, err := json.Marshal(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"down_peak":27484,"up_peak":4553}`
+	if string(raw) != want {
+		t.Fatalf("marshalled %s, want %s", raw, want)
+	}
+}

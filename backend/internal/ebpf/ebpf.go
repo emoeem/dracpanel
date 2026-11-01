@@ -365,7 +365,7 @@ func ListApps(procRoot string, desktopDirs []string) []jsonx.Value {
 				case strings.HasPrefix(line, "Exec=") && execLine == "":
 					execLine = strings.TrimSpace(line[5:])
 				case strings.HasPrefix(line, "Icon=") && icon == "":
-					icon = strings.TrimSpace(line[7:])
+					icon = strings.TrimSpace(line[len("Icon="):])
 				}
 			}
 			file.Close()

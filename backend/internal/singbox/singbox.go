@@ -200,10 +200,24 @@ func (m *Manager) Check(cfg *jsonx.OrderMap) (bool, string) {
 // restart → health check → rollback on failure. The temp file is 0600
 // (fixing the Python build's 0644).
 func (m *Manager) Apply(newCfg *jsonx.OrderMap, reason string, restart bool) *jsonx.OrderMap {
+	return m.apply(newCfg, m.S.DumpSingBoxConfig(newCfg), reason, restart)
+}
+
+// ApplyText validates cfg but writes text verbatim. A parse+dump round-trip
+// drops JSONC comments and reformats the file, so edits that started from the
+// live text use this instead of Apply.
+func (m *Manager) ApplyText(text string, cfg *jsonx.OrderMap, reason string, restart bool) *jsonx.OrderMap {
+	if strings.TrimSpace(text) == "" {
+		return errResult("配置内容为空")
+	}
+	return m.apply(cfg, text, reason, restart)
+}
+
+func (m *Manager) apply(cfg *jsonx.OrderMap, text, reason string, restart bool) *jsonx.OrderMap {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	okc, msg := m.Check(newCfg)
+	okc, msg := m.Check(cfg)
 	if !okc {
 		return errResult(fmt.Sprintf("配置校验未通过，未做任何改动：%s", msg))
 	}
@@ -219,7 +233,7 @@ func (m *Manager) Apply(newCfg *jsonx.OrderMap, reason string, restart bool) *js
 			return errResult(err.Error())
 		}
 		dryPath := dry.Name()
-		if _, err := dry.WriteString(m.S.DumpSingBoxConfig(newCfg)); err != nil {
+		if _, err := dry.WriteString(text); err != nil {
 			dry.Close()
 			return errResult(err.Error())
 		}
@@ -232,7 +246,7 @@ func (m *Manager) Apply(newCfg *jsonx.OrderMap, reason string, restart bool) *js
 		previous = string(raw)
 	}
 	tmp := target + ".panel-tmp"
-	if err := os.WriteFile(tmp, []byte(m.S.DumpSingBoxConfig(newCfg)), 0o600); err != nil {
+	if err := os.WriteFile(tmp, []byte(text), 0o600); err != nil {
 		return errResult(err.Error())
 	}
 	_ = os.Chmod(tmp, 0o600)
@@ -243,6 +257,17 @@ func (m *Manager) Apply(newCfg *jsonx.OrderMap, reason string, restart bool) *js
 	if !restart {
 		out := okResult("配置已写入（未重启）", backupName)
 		return out
+	}
+
+	// reload-first: a unit with ExecReload (sing-box: SIGHUP) re-reads the
+	// config without dropping connections. Fall back to a full restart when the
+	// unit has no reload, the reload command fails, or the core dies anyway.
+	if m.S.String("apply_strategy") != "restart" && m.Service.ReloadSupported() {
+		if rc, _, _ := sysutil.Run("systemctl", []string{"reload", m.S.String("service")}, 60*time.Second); rc == 0 {
+			if healthy, why := m.Service.WaitHealthy(); healthy {
+				return okResult(fmt.Sprintf("配置已热重载，连接未中断（%s）", why), backupName)
+			}
+		}
 	}
 
 	rc, _, e := sysutil.Run("systemctl", []string{"restart", m.S.String("service")}, 60*time.Second)

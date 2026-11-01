@@ -18,13 +18,17 @@ import (
 	"time"
 
 	"github.com/emoeem/dracpanel/backend/internal/clashapi"
+	"github.com/emoeem/dracpanel/backend/internal/dnslog"
+	"github.com/emoeem/dracpanel/backend/internal/dnsprobe"
 	"github.com/emoeem/dracpanel/backend/internal/ebpf"
 	"github.com/emoeem/dracpanel/backend/internal/geoip"
 	"github.com/emoeem/dracpanel/backend/internal/history"
 	"github.com/emoeem/dracpanel/backend/internal/jsonx"
 	"github.com/emoeem/dracpanel/backend/internal/localip"
 	"github.com/emoeem/dracpanel/backend/internal/meminfo"
+	"github.com/emoeem/dracpanel/backend/internal/nodes"
 	"github.com/emoeem/dracpanel/backend/internal/notifications"
+	"github.com/emoeem/dracpanel/backend/internal/policy"
 	"github.com/emoeem/dracpanel/backend/internal/profiles"
 	"github.com/emoeem/dracpanel/backend/internal/settings"
 	"github.com/emoeem/dracpanel/backend/internal/singbox"
@@ -49,11 +53,18 @@ type Deps struct {
 	Feed     *notifications.Feed
 	History  *history.Store
 	Sampler  *history.Sampler
-	// NotifyConfigs lets main() record manual config applies; nil skips it.
-	NotifyConfigs func(cfg *jsonx.OrderMap, reason string, restart bool) *jsonx.OrderMap
+	// ApplyConfigText applies a manual edit while writing the caller's original
+	// text, so JSONC comments and formatting survive. Nil falls back to
+	// Configs.ApplyText without a feed entry.
+	ApplyConfigText func(cfg *jsonx.OrderMap, text, reason string) *jsonx.OrderMap
+	// DNSLog reads per-query DNS records from the sing-box journal; DNSProbe
+	// times each configured upstream. Both are optional: a nil subsystem yields
+	// an empty, honestly-explained payload instead of a 500.
+	DNSLog   *dnslog.Reader
+	DNSProbe *dnsprobe.Prober
 }
 
-// Features is the documented capability list (api_version 8 contract).
+// Features is the documented capability list (api_version 9 contract).
 var Features = []string{
 	"subscriptions.schedule",
 	"subscriptions.managed",
@@ -62,10 +73,12 @@ var Features = []string{
 	"logs",
 	"clash.version",
 	"geoip",
+	"journal",
+	"dns.stats",
 }
 
 // APIVersion mirrors DEPLOYMENT.md's backend contract revision.
-const APIVersion = 8
+const APIVersion = 9
 
 // Handler serves the panel.
 type Handler struct {
@@ -121,6 +134,17 @@ func registerAPI(mux *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/profiles/import", h.handleProfilesImport)
 	mux.HandleFunc("GET /api/history", h.handleHistory)
 	mux.HandleFunc("GET /api/notifications", h.handleNotifications)
+	mux.HandleFunc("GET /api/journal", h.handleJournal)
+	mux.HandleFunc("POST /api/journal", h.handleJournalAppend)
+	mux.HandleFunc("GET /api/policies", h.handlePolicies)
+	mux.HandleFunc("POST /api/policies/{tag}/overrides", h.handlePolicyOverrides)
+	mux.HandleFunc("GET /api/nodes", h.handleNodes)
+	mux.HandleFunc("POST /api/nodes/parse", h.handleNodeParse)
+	mux.HandleFunc("GET /api/nodes/{tag}", h.handleNode)
+	mux.HandleFunc("POST /api/nodes/{tag}/exclude", h.handleNodeExclude)
+	mux.HandleFunc("GET /api/dns", h.handleDNS)
+	mux.HandleFunc("GET /api/dns/queries", h.handleDNSQueries)
+	mux.HandleFunc("GET /api/dns/probe", h.handleDNSProbe)
 }
 
 // ── plumbing ────────────────────────────────────────────────────────────────
@@ -393,6 +417,10 @@ func (h *Handler) handleState(w http.ResponseWriter, r *http.Request) {
 	out.Set("metacubexd_url", metacubexdURL(s, cfg))
 	out.Set("managed_group", s.String("managed_group"))
 	out.Set("managed_urltest", s.String("managed_urltest"))
+	applyCapability := jsonx.NewOrderMap()
+	applyCapability.Set("strategy", s.String("apply_strategy"))
+	applyCapability.Set("reload_supported", h.Deps.Service.ReloadSupported())
+	out.Set("apply_capability", applyCapability)
 	out.Set("egress_ip", s.EgressIP())
 	out.Set("local_ip", localip.Detect())
 	if mem, ok := h.Deps.Mem.Get().Get("app"); ok {
@@ -402,7 +430,11 @@ func (h *Handler) handleState(w http.ResponseWriter, r *http.Request) {
 		out.Set("memory_kernel", mem)
 	}
 	if h.Deps.Sampler != nil {
-		out.Set("cpu_percent", h.Deps.Sampler.CurrentCPU())
+		ready := h.Deps.Sampler.Ready()
+		out.Set("cpu_ready", ready)
+		if ready {
+			out.Set("cpu_percent", h.Deps.Sampler.CurrentCPU())
+		}
 	}
 	out.Set("token_file", s.TokenFile())
 	writeJSON(w, r, 200, out)
@@ -504,6 +536,183 @@ func (h *Handler) handleLogs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, 200, out)
 }
 
+// handleDNS returns the structured DNS configuration (servers, rules, cache
+// settings and the cache file's on-disk footprint) so the DNS page can render
+// without pulling apart the whole config text.
+func (h *Handler) handleDNS(w http.ResponseWriter, r *http.Request) {
+	out := jsonx.NewOrderMap()
+	cfg, err := h.Deps.S.LoadSingBoxConfig()
+	if err != nil {
+		out.Set("ok", false)
+		out.Set("message", fmt.Sprintf("读取配置失败：%v", err))
+		writeJSON(w, r, 200, out)
+		return
+	}
+	out.Set("ok", true)
+	out.Set("config_path", h.Deps.S.SingBoxConfigPath())
+
+	servers := []jsonx.Value{}
+	rules := []jsonx.Value{}
+	dns := jsonx.NewOrderMap()
+	if value, ok := cfg.Get("dns"); ok {
+		if obj, ok := value.(*jsonx.OrderMap); ok {
+			dns = obj
+		}
+	}
+	if value, ok := dns.Get("servers"); ok {
+		if list, ok := value.([]jsonx.Value); ok {
+			servers = list
+		}
+	}
+	if value, ok := dns.Get("rules"); ok {
+		if list, ok := value.([]jsonx.Value); ok {
+			rules = list
+		}
+	}
+	out.Set("servers", servers)
+	out.Set("rules", rules)
+	final := ""
+	if value, ok := dns.Get("final"); ok {
+		final, _ = value.(string)
+	}
+	out.Set("final", final)
+
+	cache := jsonx.NewOrderMap()
+	if value, ok := dns.Get("cache"); ok {
+		if obj, ok := value.(*jsonx.OrderMap); ok {
+			cache = obj
+		}
+	}
+	out.Set("cache", cache)
+	cacheEnabled := false
+	if value, ok := dns.Get("cache_enabled"); ok {
+		cacheEnabled, _ = value.(bool)
+	}
+	out.Set("cache_enabled", cacheEnabled)
+
+	// Download log level decides whether per-query records exist at all.
+	level := ""
+	if value, ok := cfg.Get("log"); ok {
+		if logObj, ok := value.(*jsonx.OrderMap); ok {
+			if raw, ok := logObj.Get("level"); ok {
+				level, _ = raw.(string)
+			}
+		}
+	}
+	out.Set("log_level", level)
+	out.Set("debug_logging", strings.EqualFold(level, "debug") || strings.EqualFold(level, "trace"))
+
+	// experimental.cache_file backs the DNS cache and resolved-IP store; the
+	// core exposes no entry list, only the file itself.
+	cacheFile := jsonx.NewOrderMap()
+	cacheFile.Set("enabled", false)
+	if value, ok := cfg.Get("experimental"); ok {
+		if experimental, ok := value.(*jsonx.OrderMap); ok {
+			if raw, ok := experimental.Get("cache_file"); ok {
+				if obj, ok := raw.(*jsonx.OrderMap); ok {
+					cacheFile.Set("enabled", true)
+					path := ""
+					if enabled, ok := obj.Get("enabled"); ok {
+						if flag, ok := enabled.(bool); ok {
+							cacheFile.Set("enabled", flag)
+						}
+					}
+					if rawPath, ok := obj.Get("path"); ok {
+						path, _ = rawPath.(string)
+					}
+					if path == "" {
+						path = "cache.db"
+					}
+					cacheFile.Set("path", path)
+					if info, err := os.Stat(path); err == nil {
+						cacheFile.Set("size", info.Size())
+						cacheFile.Set("mtime", info.ModTime().Unix())
+					}
+				}
+			}
+		}
+	}
+	out.Set("cache_file", cacheFile)
+	writeJSON(w, r, 200, out)
+}
+
+// handleDNSQueries returns the DNS records parsed from the sing-box journal.
+// Only log.level=debug produces them; the note says so when the list is empty.
+func (h *Handler) handleDNSQueries(w http.ResponseWriter, r *http.Request) {
+	window := time.Hour
+	if raw := r.URL.Query().Get("minutes"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			window = time.Duration(parsed) * time.Minute
+		}
+	}
+	limit := 500
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	out := jsonx.NewOrderMap()
+	out.Set("ok", true)
+	if h.Deps.DNSLog == nil {
+		out.Set("entries", []jsonx.Value{})
+		out.Set("note", "DNS 日志读取未装配")
+		writeJSON(w, r, 200, out)
+		return
+	}
+	entries, note := h.Deps.DNSLog.Queries(window, limit)
+	values := make([]jsonx.Value, 0, len(entries))
+	for _, entry := range entries {
+		item := jsonx.NewOrderMap()
+		item.Set("at", entry.At)
+		item.Set("domain", entry.Domain)
+		item.Set("type", entry.Type)
+		item.Set("client", entry.Client)
+		item.Set("upstream", entry.Upstream)
+		item.Set("status", entry.Status)
+		item.Set("elapsed_ms", entry.ElapsedMs)
+		values = append(values, item)
+	}
+	out.Set("entries", values)
+	out.Set("note", note)
+	out.Set("source", h.Deps.DNSLog.Describe())
+	writeJSON(w, r, 200, out)
+}
+
+// handleDNSProbe times every configured upstream with a real DNS round trip.
+func (h *Handler) handleDNSProbe(w http.ResponseWriter, r *http.Request) {
+	out := jsonx.NewOrderMap()
+	out.Set("ok", true)
+	if h.Deps.DNSProbe == nil {
+		out.Set("servers", []jsonx.Value{})
+		out.Set("note", "DNS 探测未装配")
+		writeJSON(w, r, 200, out)
+		return
+	}
+	cfg, err := h.Deps.S.LoadSingBoxConfig()
+	if err != nil {
+		out.Set("ok", false)
+		out.Set("message", fmt.Sprintf("读取配置失败：%v", err))
+		writeJSON(w, r, 200, out)
+		return
+	}
+	servers := dnsprobe.ParseServers(cfg)
+	force := r.URL.Query().Get("force") == "1"
+	results := h.Deps.DNSProbe.Probe(servers, force)
+	values := make([]jsonx.Value, 0, len(results))
+	for _, result := range results {
+		item := jsonx.NewOrderMap()
+		item.Set("tag", result.Tag)
+		item.Set("type", result.Type)
+		item.Set("server", result.Server)
+		item.Set("ok", result.OK)
+		item.Set("elapsed_ms", result.ElapsedMs)
+		item.Set("error", result.Error)
+		values = append(values, item)
+	}
+	out.Set("servers", values)
+	writeJSON(w, r, 200, out)
+}
+
 func (h *Handler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	path := h.Deps.S.SingBoxConfigPath()
 	text := ""
@@ -514,6 +723,9 @@ func (h *Handler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	out.Set("ok", true)
 	out.Set("path", path)
 	out.Set("text", text)
+	if info, err := os.Stat(path); err == nil {
+		out.Set("mtime", info.ModTime().Unix())
+	}
 	out.Set("backups", backupsToValues(h.Deps.Configs.ListBackups()))
 	writeJSON(w, r, 200, out)
 }
@@ -538,11 +750,45 @@ func (h *Handler) handlePostConfig(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, r, 200, errMap(fmt.Sprintf("JSON 语法错误：%v", err)))
 		return
 	}
-	apply := h.Deps.NotifyConfigs
-	if apply == nil {
-		apply = h.Deps.Configs.Apply
+	// Optional optimistic concurrency: the editor sends the mtime it started
+	// from, so a stale tab cannot clobber a newer write.
+	if want, ok := intValueOK(body, "base_mtime"); ok && want > 0 {
+		if info, err := os.Stat(h.Deps.S.SingBoxConfigPath()); err == nil && info.ModTime().Unix() != want {
+			out := errMap("配置文件已被其他操作修改，请刷新后重试")
+			out.Set("code", "config_stale")
+			writeJSON(w, r, 200, out)
+			return
+		}
 	}
-	writeJSON(w, r, 200, apply(cfg, "manual-edit", true))
+	apply := h.Deps.ApplyConfigText
+	var result *jsonx.OrderMap
+	if apply != nil {
+		result = apply(cfg, text, "manual-edit")
+	} else {
+		result = h.Deps.Configs.ApplyText(text, cfg, "manual-edit", true)
+	}
+	writeJSON(w, r, 200, result)
+}
+
+// intValueOK reads an ordered-map value as int64 (jsonx parses numbers as
+// json.Number, but tests and callers may pass float64).
+func intValueOK(body *jsonx.OrderMap, key string) (int64, bool) {
+	value, ok := body.Get(key)
+	if !ok || value == nil {
+		return 0, false
+	}
+	switch v := value.(type) {
+	case json.Number:
+		n, err := v.Int64()
+		return n, err == nil
+	case float64:
+		return int64(v), true
+	case int:
+		return int64(v), true
+	case int64:
+		return v, true
+	}
+	return 0, false
 }
 
 func (h *Handler) handleValidateConfig(w http.ResponseWriter, r *http.Request) {
@@ -571,6 +817,15 @@ func (h *Handler) handleBackupConfig(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleRestoreConfig(w http.ResponseWriter, r *http.Request) {
 	body := h.body(r)
 	result := h.Deps.Configs.Restore(bodyString(body, "name", ""))
+	if okValue, _ := result.Get("ok"); okValue == true {
+		// The restored config may no longer contain every tag managed.json
+		// still lists; drop those references so the next apply is not misled.
+		if cfg, err := h.Deps.S.LoadSingBoxConfig(); err == nil {
+			if pruned := h.Deps.Subs.ReconcileManaged(cfg); pruned > 0 {
+				result.Set("pruned", pruned)
+			}
+		}
+	}
 	h.Deps.Feed.Record("config", "恢复备份", result)
 	writeJSON(w, r, 200, result)
 }
@@ -892,6 +1147,240 @@ func (h *Handler) handleNotifications(w http.ResponseWriter, r *http.Request) {
 	out.Set("ok", true)
 	out.Set("notifications", h.Deps.Feed.ListValue())
 	writeJSON(w, r, 200, out)
+}
+
+// handleJournal serves the Activity/Events pages: the same persisted feed,
+// filtered by category and severity.
+func (h *Handler) handleJournal(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	limit := 200
+	if raw := query.Get("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 && parsed <= notifications.MaxEntries {
+			limit = parsed
+		}
+	}
+	entries := h.Deps.Feed.Query(query.Get("category"), query.Get("severity"), limit)
+	out := jsonx.NewOrderMap()
+	out.Set("ok", true)
+	out.Set("entries", notifications.Values(entries))
+	writeJSON(w, r, 200, out)
+}
+
+func (h *Handler) handlePolicies(w http.ResponseWriter, r *http.Request) {
+	cfg, err := h.Deps.S.LoadSingBoxConfig()
+	if err != nil {
+		writeJSON(w, r, 200, errMap(err.Error()))
+		return
+	}
+	groups := policy.List(cfg, h.Deps.S.String("managed_group"), h.Deps.S.String("managed_urltest"))
+	values := make([]jsonx.Value, 0, len(groups))
+	for _, group := range groups {
+		obj := jsonx.NewOrderMap()
+		obj.Set("tag", group.Tag)
+		obj.Set("type", group.Type)
+		obj.Set("members", stringsToAny(group.Members))
+		obj.Set("managed", group.Managed)
+		if group.URL != "" {
+			obj.Set("url", group.URL)
+		}
+		if group.Interval != "" {
+			obj.Set("interval", group.Interval)
+		}
+		if group.Tolerance != 0 {
+			obj.Set("tolerance", group.Tolerance)
+		}
+		values = append(values, obj)
+	}
+	out := okEnvelope()
+	out.Set("groups", values)
+	if overrides, ok := h.Deps.S.Managed().Get("group_overrides"); ok {
+		out.Set("overrides", overrides)
+	}
+	writeJSON(w, r, 200, out)
+}
+
+// handlePolicyOverrides records manual membership edits so the next
+// subscription apply keeps them.
+func (h *Handler) handlePolicyOverrides(w http.ResponseWriter, r *http.Request) {
+	tag := r.PathValue("tag")
+	if tag == "" {
+		writeJSON(w, r, 200, errMap("缺少组名"))
+		return
+	}
+	body := h.body(r)
+	entry := jsonx.NewOrderMap()
+	entry.Set("exclude", stringList(body, "exclude"))
+	entry.Set("order", stringList(body, "order"))
+
+	managed := h.Deps.S.Managed()
+	overrides := jsonx.NewOrderMap()
+	if value, ok := managed.Get("group_overrides"); ok {
+		if existing, ok := value.(*jsonx.OrderMap); ok {
+			overrides = existing
+		}
+	}
+	overrides.Set(tag, entry)
+	managed.Set("group_overrides", overrides)
+	if err := h.Deps.S.WriteJSON(h.Deps.S.ManagedFile(), managed); err != nil {
+		writeJSON(w, r, 200, errMap(fmt.Sprintf("保存失败：%v", err)))
+		return
+	}
+	writeJSON(w, r, 200, okMap("已记录成员覆盖"))
+}
+
+func stringList(body *jsonx.OrderMap, key string) []jsonx.Value {
+	value, ok := body.Get(key)
+	if !ok {
+		return []jsonx.Value{}
+	}
+	arr, ok := value.([]jsonx.Value)
+	if !ok {
+		return []jsonx.Value{}
+	}
+	return arr
+}
+
+func (h *Handler) handleNodes(w http.ResponseWriter, r *http.Request) {
+	cfg, err := h.Deps.S.LoadSingBoxConfig()
+	if err != nil {
+		writeJSON(w, r, 200, errMap(err.Error()))
+		return
+	}
+	list := nodes.List(cfg, h.Deps.S.Managed())
+	values := make([]jsonx.Value, 0, len(list))
+	for _, node := range list {
+		obj := jsonx.NewOrderMap()
+		obj.Set("tag", node.Tag)
+		obj.Set("type", node.Type)
+		obj.Set("server", node.Server)
+		obj.Set("server_port", node.ServerPort)
+		obj.Set("origin", node.Origin)
+		values = append(values, obj)
+	}
+	out := okEnvelope()
+	out.Set("nodes", values)
+	writeJSON(w, r, 200, out)
+}
+
+// handleNodeParse turns pasted share links into sing-box outbound objects. It
+// does not write anything: the caller patches them into the config.
+func (h *Handler) handleNodeParse(w http.ResponseWriter, r *http.Request) {
+	body := h.body(r)
+	raw := bodyString(body, "links", "")
+	if raw == "" {
+		raw = bodyString(body, "link", "")
+	}
+	if raw == "" {
+		writeJSON(w, r, 200, errMap("缺少 links"))
+		return
+	}
+	nodes := []jsonx.Value{}
+	errors := []string{}
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		node, message := subs.ParseLink(line)
+		if node == nil {
+			if message == "" {
+				message = "无法解析"
+			}
+			errors = append(errors, message)
+			continue
+		}
+		nodes = append(nodes, node)
+	}
+	out := jsonx.NewOrderMap()
+	out.Set("ok", len(nodes) > 0)
+	if len(nodes) == 0 {
+		out.Set("message", "未解析出任何节点")
+	} else {
+		out.Set("message", fmt.Sprintf("解析出 %d 个节点", len(nodes)))
+	}
+	out.Set("nodes", nodes)
+	out.Set("errors", stringsToAny(errors))
+	writeJSON(w, r, 200, out)
+}
+
+// handleNodeExclude records that a subscription-provided node should not come
+// back on the next apply.
+func (h *Handler) handleNodeExclude(w http.ResponseWriter, r *http.Request) {
+	tag := r.PathValue("tag")
+	if tag == "" {
+		writeJSON(w, r, 200, errMap("缺少节点名"))
+		return
+	}
+	body := h.body(r)
+	exclude := true
+	if value, ok := body.Get("exclude"); ok {
+		exclude = truthyAny(value)
+	}
+
+	managed := h.Deps.S.Managed()
+	current := []string{}
+	if value, ok := managed.Get("node_exclude"); ok {
+		if arr, ok := value.([]jsonx.Value); ok {
+			for _, item := range arr {
+				current = append(current, fmt.Sprintf("%v", item))
+			}
+		}
+	}
+	next := make([]string, 0, len(current)+1)
+	for _, item := range current {
+		if item != tag {
+			next = append(next, item)
+		}
+	}
+	if exclude {
+		next = append(next, tag)
+	}
+	managed.Set("node_exclude", stringsToAny(next))
+	if err := h.Deps.S.WriteJSON(h.Deps.S.ManagedFile(), managed); err != nil {
+		writeJSON(w, r, 200, errMap(fmt.Sprintf("保存失败：%v", err)))
+		return
+	}
+	writeJSON(w, r, 200, okMap("已记录节点排除"))
+}
+
+func (h *Handler) handleNode(w http.ResponseWriter, r *http.Request) {
+	tag := r.PathValue("tag")
+	cfg, err := h.Deps.S.LoadSingBoxConfig()
+	if err != nil {
+		writeJSON(w, r, 200, errMap(err.Error()))
+		return
+	}
+	node := nodes.Find(cfg, tag)
+	if node == nil {
+		writeJSON(w, r, 404, errMap("找不到节点"))
+		return
+	}
+	reveal := r.URL.Query().Get("reveal") == "1"
+	out := okEnvelope()
+	out.Set("node", nodes.Sanitize(node, reveal))
+	writeJSON(w, r, 200, out)
+}
+
+// handleJournalAppend lets the browser report events the panel cannot observe
+// itself (node health transitions).
+func (h *Handler) handleJournalAppend(w http.ResponseWriter, r *http.Request) {
+	body := h.body(r)
+	title := bodyString(body, "title", "")
+	if title == "" {
+		writeJSON(w, r, 200, errMap("title 不能为空"))
+		return
+	}
+	okValue, _ := body.Get("ok")
+	h.Deps.Feed.AddEvent(notifications.Entry{
+		Kind:     bodyString(body, "kind", "system"),
+		Severity: bodyString(body, "severity", "info"),
+		Category: bodyString(body, "category", "event"),
+		Source:   bodyString(body, "source", "browser"),
+		Title:    title,
+		Detail:   bodyString(body, "detail", ""),
+		OK:       okValue == true,
+	})
+	writeJSON(w, r, 200, okMap("已记录"))
 }
 
 func (h *Handler) handleProfilesImport(w http.ResponseWriter, r *http.Request) {

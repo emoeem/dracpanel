@@ -184,6 +184,12 @@ var rangeWindows = map[string]time.Duration{
 // Range returns downsampled points plus summary for a named range.
 // bucketSeconds ≤ 0 means "use the default for the range".
 func (st *Store) Range(name string, bucketSeconds int64) RangeResult {
+	if st == nil {
+		if bucketSeconds <= 0 {
+			bucketSeconds = 60
+		}
+		return RangeResult{Range: name, Bucket: bucketSeconds, Points: nil}
+	}
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	if bucketSeconds <= 0 {

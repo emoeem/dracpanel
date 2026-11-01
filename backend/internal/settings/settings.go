@@ -82,6 +82,7 @@ func Load(path string, dryRun bool) (*Settings, error) {
 		"managed_group":                DefaultManagedGroup,
 		"managed_urltest":              DefaultManagedURLTest,
 		"restart_timeout":              float64(DefaultRestartTimeout),
+		"apply_strategy":               "reload-first",
 		"health_probe_url":             "",
 		"backup_keep":                  float64(DefaultBackupKeep),
 		"subscription_update_interval": float64(DefaultSubscriptionUpdateInterval),
