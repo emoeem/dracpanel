@@ -1,0 +1,134 @@
+.toolbar-actions {
+  display: flex;
+  gap: var(--fc-space-4);
+  align-items: center;
+}
+
+.card {
+  padding: var(--fc-space-8) var(--fc-space-16);
+}
+
+.day-label {
+  padding: var(--fc-space-12) var(--fc-space-4) var(--fc-space-4);
+  font-size: var(--fc-text-caption2);
+  font-weight: var(--fc-weight-medium);
+  color: var(--fc-on-surface-faint);
+}
+
+.event {
+  display: flex;
+  gap: var(--fc-space-12);
+  align-items: flex-start;
+  padding: var(--fc-space-12) var(--fc-space-4);
+  border-bottom: 1px solid var(--fc-divider);
+}
+
+.event:last-child {
+  border-bottom: 0;
+}
+
+.time {
+  flex-shrink: 0;
+  width: 56px;
+  font-size: var(--fc-text-caption2);
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-on-surface-faint);
+}
+
+.dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin-top: var(--fc-space-6);
+  background: var(--fc-on-surface-faint);
+  border-radius: 50%;
+}
+
+.dot-info {
+  background: var(--fc-primary);
+}
+
+.dot-warn {
+  background: var(--fc-warning);
+}
+
+.dot-error {
+  background: var(--fc-error);
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--fc-space-2);
+  min-width: 0;
+}
+
+.title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--fc-text-footnote);
+  color: var(--fc-on-surface);
+}
+
+.detail {
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-on-surface-faint);
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  flex-shrink: 0;
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-on-surface-faint);
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  font-size: var(--fc-text-footnote);
+  color: var(--fc-on-surface-faint);
+}
+
+.filters {
+  display: flex;
+  gap: var(--fc-space-8);
+  align-items: center;
+  margin-bottom: var(--fc-space-12);
+}
+
+/* flows 列表样式已迁移至 src/views/flows/FlowsView.module.css */
+
+/* status */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--fc-space-12);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-4);
+}
+
+.stat-label {
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-on-surface-faint);
+}
+
+.stat-value {
+  font-size: var(--fc-text-title3, 1.35rem);
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-on-surface);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fc-space-8);
+  align-items: center;
+  margin-top: var(--fc-space-8);
+}

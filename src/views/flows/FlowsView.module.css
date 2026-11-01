@@ -1,0 +1,165 @@
+/* Flows page: path topology columns + SVG sankey links + records table. */
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-8);
+  min-width: 0;
+}
+
+.node {
+  display: flex;
+  gap: var(--fc-space-8);
+  align-items: center;
+  width: 100%;
+  height: 44px;
+  padding: 0 var(--fc-space-10);
+  text-align: start;
+  cursor: pointer;
+  background: var(--fc-block);
+  border: 1px solid transparent;
+  border-radius: var(--fc-radius-sm);
+}
+
+.node:hover {
+  border-color: var(--fc-divider);
+}
+
+.node-active {
+  border-color: var(--fc-primary);
+}
+
+.node-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-on-surface);
+  white-space: nowrap;
+}
+
+.node-count {
+  flex-shrink: 0;
+  min-width: 20px;
+  font-size: var(--fc-text-caption2);
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-on-surface-faint);
+  text-align: end;
+}
+
+.topo-area {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-8);
+  padding: 0 var(--fc-space-16) var(--fc-space-16);
+}
+
+.topo-head {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--fc-space-24);
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-on-surface-faint);
+  text-transform: uppercase;
+}
+
+.topo-wrap {
+  position: relative;
+}
+
+.topo-links {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.link {
+  fill: none;
+  stroke: var(--fc-primary);
+}
+
+.topo-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--fc-space-24);
+}
+
+.topo-note {
+  margin: 0;
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-on-surface-faint);
+}
+
+.record-table {
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--fc-space-16) var(--fc-space-16);
+}
+
+.record-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1.4fr) minmax(0, 1fr) 96px 88px;
+  gap: var(--fc-space-12);
+  align-items: center;
+  min-height: 40px;
+  padding: var(--fc-space-4) var(--fc-space-8);
+  font-size: var(--fc-text-caption2);
+  border-bottom: 1px solid var(--fc-divider);
+}
+
+.record-row:last-child {
+  border-bottom: 0;
+}
+
+.record-head {
+  color: var(--fc-on-surface-faint);
+  text-transform: uppercase;
+}
+
+.record-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-on-surface-faint);
+}
+
+.record-host {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fc-on-surface);
+  white-space: nowrap;
+}
+
+.record-rule {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fc-on-surface-faint);
+  white-space: nowrap;
+}
+
+.record-bytes {
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-on-surface);
+  text-align: end;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--fc-space-48) 0;
+  font-size: var(--fc-text-footnote);
+  color: var(--fc-on-surface-faint);
+}
+
+@media (max-width: 720px) {
+  .topo-head,
+  .topo-grid {
+    gap: var(--fc-space-12);
+  }
+
+  .record-row {
+    grid-template-columns: 64px minmax(0, 1.4fr) minmax(0, 1fr) 72px 72px;
+  }
+}
