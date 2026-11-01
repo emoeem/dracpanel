@@ -7,9 +7,11 @@ subscriptions, eBPF policy, JSON config editor) through `sing-box-panel`. One
 UI entry, one panel token, and the native API secret is bootstrapped and cached
 automatically.
 
-> **Latest update:** 2026-10-18 — DNS tools, connection history/export/grouping,
-> traffic history, latency history with optional auto-test, and the DracPanel
-> rename. See [CHANGELOG.md](CHANGELOG.md).
+> **Latest update:** 2026-10-31 — 全量重构为 FlClash v0.9.2 风格 UI（新增 Go 版
+> `backend/`：sing-box-panel 0.2.0，含流量历史持久化与事件通知流）。已删除：全球
+> 连接地图、可编辑仪表盘、旧的 12 项信息架构。当前结构以
+> **[docs/HANDOFF.md](docs/HANDOFF.md)（维护交接文档）** 为准——新人从这里开始读。
+> 历史变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 > **Unofficial fork.** This project is built on top of
 > [SagerNet/sing-box-dashboard](https://github.com/SagerNet/sing-box-dashboard)
@@ -19,6 +21,9 @@ automatically.
 ![DracPanel overview](artifacts/screenshots/01-overview-dark.png)
 
 ## 这是什么
+
+> ⚠️ 本节与下方功能列表写于 2026-10 大重构之前，部分描述（如实时地图、12 项 IA）
+> 已不适用；准确的当前形态见 [docs/HANDOFF.md](docs/HANDOFF.md)。
 
 一个 sing-box Web 面板，交互与视觉以 [FlClash](https://github.com/chen08209/FlClash)
 为参照重新设计：
