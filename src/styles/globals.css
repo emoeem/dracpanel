@@ -78,13 +78,16 @@
   --shadow-card-hover: 0 2px 4px rgb(27 27 29 / 6%), 0 10px 28px rgb(27 27 29 / 9%);
   --shadow-control: 0 1px 2px rgb(0 0 0 / 4%);
   --shadow-overlay: 0 12px 48px rgb(0 0 0 / 22%);
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-control: 10px;
-  --radius-lg: 12px;
-  --radius-card: 16px;
-  --radius-xl: 20px;
+
+  /* Legacy names, aliased to the FlClash scale so an old component cannot
+     render a 12px card next to a 24px one. */
+  --radius-xs: var(--fc-radius-xs, 4px);
+  --radius-sm: var(--fc-radius-sm, 8px);
+  --radius-md: var(--fc-radius-sm, 8px);
+  --radius-control: var(--fc-radius-sm, 8px);
+  --radius-lg: var(--fc-radius-block, 20px);
+  --radius-card: var(--fc-radius-card, 24px);
+  --radius-xl: var(--fc-radius-card, 24px);
   --radius-pill: 999px;
   --control-height: 30px;
   --sidebar-width: 232px;
@@ -164,8 +167,9 @@
   --fc-warning-container: var(--medium-soft);
   --fc-error: var(--danger);
   --fc-error-container: var(--danger-soft);
-  --fc-track: color-mix(in srgb, var(--card), var(--text) 12%);
-  --fc-thumb: var(--text-faint);
+  --fc-track: color-mix(in srgb, var(--card), var(--text) 14%);
+  --fc-thumb: color-mix(in srgb, var(--text) 90%, var(--card));
+  --fc-thumb-shadow: 0 1px 2px color-mix(in srgb, #000 28%, transparent);
   --fc-scrim: var(--scrim);
 
   --fc-space-2: 2px;
@@ -195,11 +199,11 @@
   --fc-radius-md: 16px;
   --fc-radius-block: 20px;
   --fc-radius-block-mobile: 22px;
-  --fc-radius-card: 32px;
-  --fc-radius-card-mobile: 34px;
+  --fc-radius-card: 24px;
+  --fc-radius-card-mobile: 26px;
   --fc-radius-tab: 16px;
   --fc-radius-badge: 14px;
-  --fc-radius-profile: 24px;
+  --fc-radius-profile: var(--fc-radius-card);
   --fc-radius-proxy: 20px;
   --fc-radius-sheet: 28px;
   --fc-radius-pill: 999px;
@@ -230,6 +234,10 @@
   --fc-leading-caption1: 16px;
   --fc-text-caption2: 11px;
   --fc-leading-caption2: 13px;
+  --fc-text-caption3: 10px;
+  --fc-leading-caption3: 14px;
+
+  --fc-hairline: 1px;
 
   --fc-weight-regular: 400;
   --fc-weight-medium: 500;
@@ -267,6 +275,20 @@
   --fc-duration-page: 450ms;
   --fc-transition-control: var(--fc-duration-medium) var(--fc-ease-out-cubic);
   --fc-transition-surface: var(--fc-duration-slow) var(--fc-ease-standard);
+
+  /* Shared surface rhythm: cards, chips and focus rings read from these so a
+     page cannot drift by inventing its own padding or ring colour. */
+  --fc-card-padding: var(--fc-space-20);
+  --fc-card-padding-tight: var(--fc-space-16);
+  --fc-card-gap: var(--fc-space-16);
+  --fc-chip-height: 22px;
+  --fc-chip-padding: 0 var(--fc-space-8);
+  --fc-chip-radius: var(--fc-radius-pill);
+  --fc-hover-surface: color-mix(in srgb, var(--text) 5%, transparent);
+  --fc-pressed-surface: color-mix(in srgb, var(--text) 9%, transparent);
+  --fc-focus-ring-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  --fc-focus-ring: 0 0 0 3px var(--fc-focus-ring-color);
+  --fc-divider-color: var(--fc-outline);
 }
 
 [data-theme="dark"] {

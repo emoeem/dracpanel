@@ -17,3 +17,6 @@ export {
 export { FcTabs, type FcTabOption } from "./FcTabs";
 export { FcField, FcSelect } from "./FcField";
 export { FcScatter, type ScatterPoint } from "./FcScatter";
+export { FcBadge, type FcBadgeTone } from "./FcBadge";
+export { FcEmptyState } from "./FcEmptyState";
+export { FcSearchField } from "./FcSearchField";

@@ -209,6 +209,17 @@ a.menu-item {
   background: var(--danger-soft);
 }
 
+/* One focus ring everywhere. Components that paint their own ring (inputs
+   use a border + shadow) opt out by declaring `outline: none` themselves. */
+:where(a, button, [role="button"], [role="tab"], [role="switch"], summary):focus-visible {
+  outline: 2px solid var(--fc-focus-ring-color);
+  outline-offset: 2px;
+}
+
+:where(a, button, [role="button"], [role="tab"], [role="switch"], summary):focus:not(:focus-visible) {
+  outline: none;
+}
+
 .page {
   /* Fill the flex column: without an explicit width, `margin-inline: auto`
      makes the page shrink-wrap its content (logs collapsed to 247px). */
@@ -267,19 +278,18 @@ a.menu-item {
 }
 
 .card {
-  padding: var(--space-20);
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
+  padding: var(--fc-card-padding);
+  background: var(--fc-card);
+  border: 1px solid var(--fc-outline);
+  border-radius: var(--fc-radius-card);
+  box-shadow: var(--fc-shadow-e1);
   transition: border-color var(--transition-medium), box-shadow var(--transition-medium), transform var(--transition-medium) var(--ease-out-soft);
 }
 
 /* Gentle hover lift, matching modern proxy dashboards (zashboard et al). */
 .card:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-card-hover);
-  transform: translateY(-1px);
+  border-color: var(--fc-outline-strong);
+  box-shadow: var(--fc-shadow-e2);
 }
 
 .card-header {
@@ -645,16 +655,18 @@ a.nav-line {
 
 .badge {
   display: inline-flex;
-  gap: var(--space-4);
+  gap: var(--fc-space-4);
   align-items: center;
-  padding: var(--space-2) var(--space-8);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
+  height: var(--fc-chip-height);
+  padding: var(--fc-chip-padding);
+  font-size: var(--fc-text-caption2);
+  font-weight: var(--fc-weight-semibold);
   font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
+  color: var(--fc-on-surface-variant);
+  letter-spacing: 0.01em;
   white-space: nowrap;
   background: var(--neutral-soft);
-  border-radius: var(--radius-pill);
+  border-radius: var(--fc-chip-radius);
 }
 
 .badge.good {
@@ -1268,16 +1280,22 @@ button.settings-row:focus-visible {
 }
 
 .empty-state {
-  padding: var(--space-64) var(--space-20);
-  font-size: var(--text-base);
-  color: var(--text-faint);
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-6);
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-48) var(--space-20);
+  font-size: var(--fc-text-footnote);
+  color: var(--fc-on-surface-faint);
   text-align: center;
 }
 
 .empty-state .icon {
   display: block;
-  margin: 0 auto var(--space-10);
-  color: var(--border-strong);
+  margin-bottom: var(--fc-space-6);
+  color: var(--fc-on-surface-faint);
+  opacity: 0.7;
 }
 
 .empty-state .spinner {

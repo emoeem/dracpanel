@@ -20,6 +20,7 @@
   pointer-events: none;
   background: var(--fc-thumb);
   border-radius: var(--fc-radius-pill);
+  box-shadow: var(--fc-thumb-shadow);
   transition:
     width var(--fc-duration-slow) var(--fc-ease-out-back),
     height var(--fc-duration-slow) var(--fc-ease-out-back),
@@ -30,6 +31,7 @@
 
 .on {
   background: var(--fc-primary);
+  box-shadow: inset 0 0 0 var(--fc-hairline) color-mix(in srgb, var(--fc-on-primary) 12%, transparent);
 }
 
 .on .thumb {
@@ -38,6 +40,7 @@
   width: 40px;
   height: 22px;
   background: var(--fc-on-primary);
+  box-shadow: var(--fc-thumb-shadow);
 }
 
 .switch:disabled {

@@ -1,4 +1,4 @@
-import { Children, cloneElement, createContext, isValidElement, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type KeyboardEvent, type MouseEventHandler, type PointerEventHandler, type ReactElement, type ReactNode, type RefObject } from "react";
+import { Children, Fragment, cloneElement, createContext, isValidElement, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type KeyboardEvent, type MouseEventHandler, type PointerEventHandler, type ReactElement, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { encode as encodeQR } from "uqr";
 
@@ -940,15 +940,20 @@ export function Toggle(props: { label: ReactNode; value: boolean; onChange: (val
   );
 }
 
-export function Field(props: { label: ReactNode; children: ReactElement<{ id?: string }> }) {
+export function Field(props: { label: ReactNode; children: ReactNode }) {
   const generatedId = useId();
-  const controlId = props.children.props.id ?? generatedId;
+  // Only a single element can receive the generated id: cloning a Fragment (or a
+  // list of controls) throws "Invalid prop `id` supplied to React.Fragment".
+  const single = isValidElement(props.children) && props.children.type !== Fragment
+    ? (props.children as ReactElement<{ id?: string }>)
+    : null;
+  const controlId = single?.props.id ?? generatedId;
   return (
     <div className="field">
-      <label className="field-label" htmlFor={controlId}>
+      <label className="field-label" htmlFor={single ? controlId : undefined}>
         {props.label}
       </label>
-      {cloneElement(props.children, { id: controlId })}
+      {single ? cloneElement(single, { id: controlId }) : props.children}
     </div>
   );
 }

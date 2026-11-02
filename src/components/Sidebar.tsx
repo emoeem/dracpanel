@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { navigate } from "../app/context";
+import { useI18n } from "../app/i18n";
 import { Icon, type IconName } from "./Icon";
 import { loadStoredJson, loadStoredString, saveStoredJson, saveStoredString } from "../lib/storage";
 import { cx } from "../lib/cx";
@@ -73,6 +74,7 @@ export function Sidebar(props: {
   overlay?: boolean;
 }) {
   const { items, activePage, expanded, onToggle, overlay } = props;
+  const { t } = useI18n();
   const [mounted, setMounted] = useState(false);
   const [openGroups, toggleGroup] = useGroupState();
   useEffect(() => {
@@ -108,12 +110,12 @@ export function Sidebar(props: {
         overlay && styles.overlay,
         mounted && styles.ready,
       )}
-      aria-label="主导航"
+      aria-label={t("Main navigation")}
     >
       <button
         type="button"
         className={styles.toggle}
-        aria-label={expanded ? "收起侧栏" : "展开侧栏"}
+        aria-label={expanded ? t("Collapse sidebar") : t("Expand sidebar")}
         aria-expanded={expanded}
         onClick={() => onToggle(!expanded)}
       >

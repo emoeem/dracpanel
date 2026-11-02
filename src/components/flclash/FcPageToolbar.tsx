@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { useI18n } from "../../app/i18n";
 import { Icon } from "../Icon";
 import { cx } from "../../lib/cx";
 import styles from "./FcPageToolbar.module.css";
@@ -19,14 +20,16 @@ export function FcPageToolbar({
   subtitle,
   actions,
   onBack,
-  backLabel = "返回",
+  backLabel,
   className,
 }: FcPageToolbarProps) {
+  const { t } = useI18n();
+  const backText = backLabel ?? t("Back");
   return (
     <header className={cx(styles.toolbar, className)}>
       <div className={styles.leading}>
         {onBack && (
-          <button type="button" className={styles.back} aria-label={backLabel} onClick={onBack}>
+          <button type="button" className={styles.back} aria-label={backText} onClick={onBack}>
             <Icon name="arrow_back" size={22} />
           </button>
         )}

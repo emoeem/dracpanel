@@ -1,0 +1,79 @@
+.field {
+  display: flex;
+  gap: var(--fc-space-8);
+  align-items: center;
+  height: 40px;
+  padding: 0 var(--fc-space-12);
+  background: var(--fc-block);
+  border: 1px solid transparent;
+  border-radius: var(--fc-radius-pill);
+  transition:
+    background var(--fc-duration-fast) var(--fc-ease-out-cubic),
+    border-color var(--fc-duration-fast) var(--fc-ease-out-cubic),
+    box-shadow var(--fc-duration-fast) var(--fc-ease-out-cubic);
+}
+
+.field:hover {
+  border-color: var(--fc-outline-strong);
+}
+
+.field:focus-within {
+  background: var(--fc-card);
+  border-color: var(--fc-primary);
+  box-shadow: var(--fc-focus-ring);
+}
+
+.icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--fc-on-surface-faint);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  font-size: var(--fc-text-footnote);
+  color: var(--fc-on-surface);
+  outline: none;
+  background: transparent;
+  border: 0;
+}
+
+.input::placeholder {
+  color: var(--fc-on-surface-faint);
+}
+
+.clear {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--fc-on-surface-faint);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+}
+
+.clear:hover {
+  color: var(--fc-on-surface);
+  background: var(--hover);
+}
+
+.compact {
+  height: 34px;
+}
+
+.narrow {
+  width: 220px;
+}
+
+@media (max-width: 600px) {
+  .narrow {
+    width: 100%;
+  }
+}

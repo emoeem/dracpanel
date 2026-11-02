@@ -1,5 +1,6 @@
 import { useId } from "react";
 
+import { useI18n } from "../../app/i18n";
 import { cx } from "../../lib/cx";
 import styles from "./FcScatter.module.css";
 
@@ -41,6 +42,7 @@ function formatTick(value: number): string {
  * connection.
  */
 export function FcScatter({ points, onSelect, className, height = 300 }: FcScatterProps) {
+  const { t } = useI18n();
   const gradientId = `fc-scatter-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const values = points.flatMap((point) => [point.x, point.y, 1]);
   const max = Math.max(...values, 1e3);
@@ -56,7 +58,7 @@ export function FcScatter({ points, onSelect, className, height = 300 }: FcScatt
       className={cx(styles.chart, className)}
       viewBox={`0 0 ${WIDTH} ${height}`}
       role="img"
-      aria-label="连接流量散点图"
+      aria-label={t("Connection traffic scatter plot")}
     >
       <defs>
         <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">

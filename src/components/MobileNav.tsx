@@ -1,4 +1,5 @@
 import { navigate } from "../app/context";
+import { useI18n } from "../app/i18n";
 import { Icon, type IconName } from "./Icon";
 import { cx } from "../lib/cx";
 import styles from "./MobileNav.module.css";
@@ -12,8 +13,9 @@ export interface MobileNavItem {
 
 export function MobileNav(props: { items: MobileNavItem[]; activePage: string }) {
   const { items, activePage } = props;
+  const { t } = useI18n();
   return (
-    <nav className={styles.bar} aria-label="底部导航">
+    <nav className={styles.bar} aria-label={t("Bottom navigation")}>
       {items.map((item) => {
         const active = activePage === item.page;
         return (

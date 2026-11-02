@@ -1,6 +1,7 @@
 import { useId } from "react";
 
 import { formatBytes } from "../../api/format";
+import { useI18n } from "../../app/i18n";
 import { cx } from "../../lib/cx";
 import styles from "./FcDonut.module.css";
 
@@ -21,6 +22,7 @@ const STROKE = 14;
 
 /** doona-style outbound-traffic donut with total in the middle. */
 export function FcDonut({ slices, centerLabel, size = 132, className }: FcDonutProps) {
+  const { t } = useI18n();
   const clipId = `fc-donut-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const total = slices.reduce((sum, slice) => sum + Math.max(0, slice.value), 0);
   const radius = (size - STROKE) / 2;
@@ -82,7 +84,7 @@ export function FcDonut({ slices, centerLabel, size = 132, className }: FcDonutP
             </span>
           </li>
         ))}
-        {arcs.length === 0 && <li className={styles.empty}>暂无数据</li>}
+        {arcs.length === 0 && <li className={styles.empty}>{t("No data")}</li>}
       </ul>
     </div>
   );

@@ -24,6 +24,18 @@
   min-height: 0;
 }
 
+/* Cards keep their natural height and the page scrolls. Without this they were
+   flex-shrunk to the viewport and their last rows were clipped on a phone. */
+.fc-page-body > * {
+  flex-shrink: 0;
+}
+
+/* The one page that owns its own scrolling area (the live log list). */
+.fc-page-body > .fc-fill {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .fc-stack {
   display: flex;
   flex-direction: column;

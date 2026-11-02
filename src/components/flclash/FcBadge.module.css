@@ -1,0 +1,91 @@
+.badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--fc-space-4);
+  align-items: center;
+  height: var(--fc-chip-height);
+  padding: var(--fc-chip-padding);
+  font-size: var(--fc-text-caption2);
+  font-weight: var(--fc-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  border-radius: var(--fc-chip-radius);
+}
+
+.mono {
+  font-family: var(--fc-font-mono);
+  font-size: var(--fc-text-caption3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  background: currentcolor;
+  border-radius: 50%;
+}
+
+/* Soft (filled) variants: the resting chip used inside cards and rows. */
+.neutral {
+  color: var(--fc-on-surface-variant);
+  background: var(--neutral-soft);
+}
+
+.accent {
+  color: var(--fc-primary-container-text);
+  background: var(--fc-primary-container);
+}
+
+.success {
+  color: var(--fc-success);
+  background: var(--fc-success-container);
+}
+
+.warning {
+  color: var(--fc-warning);
+  background: var(--fc-warning-container);
+}
+
+.error {
+  color: var(--fc-error);
+  background: var(--fc-error-container);
+}
+
+.info {
+  color: var(--info);
+  background: var(--info-soft);
+}
+
+/* Outline variants: for dense rows where a filled chip would shout. */
+.badge.outline {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px currentcolor;
+}
+
+.badge.outline.neutral {
+  color: var(--fc-on-surface-variant);
+  box-shadow: inset 0 0 0 1px var(--fc-outline-strong);
+}
+
+.badge.outline.accent {
+  color: var(--fc-primary-container-text);
+}
+
+.badge.outline.success {
+  color: var(--fc-success);
+}
+
+.badge.outline.warning {
+  color: var(--fc-warning);
+}
+
+.badge.outline.error {
+  color: var(--fc-error);
+}
+
+.badge.outline.info {
+  color: var(--info);
+}

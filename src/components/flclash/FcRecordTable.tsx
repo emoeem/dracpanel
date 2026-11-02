@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import { cx } from "../../lib/cx";
+import { useI18n } from "../../app/i18n";
 import styles from "./FcRecordTable.module.css";
 
 export interface FcColumn<T> {
@@ -67,13 +68,14 @@ export function FcRecordTable<T>({
   sortKey,
   sortDirection = "desc",
   onSort,
-  emptyLabel = "暂无数据",
+  emptyLabel,
   className,
   bodyClassName,
   rowClassName,
   maxRows = 100,
   dense = false,
 }: FcRecordTableProps<T>) {
+  const { t } = useI18n();
   const wrapRef = useRef<HTMLDivElement>(null);
   const width = useElementWidth(wrapRef);
   const visibleColumns = columns.filter(
@@ -127,7 +129,7 @@ export function FcRecordTable<T>({
       </div>
       <div className={cx(styles.body, bodyClassName)} role="rowgroup">
         {visibleRows.length === 0 ? (
-          <div className={styles.empty}>{emptyLabel}</div>
+          <div className={styles.empty}>{emptyLabel ?? t("No data")}</div>
         ) : (
           visibleRows.map((row) => {
             const clickable = onRowClick !== undefined;

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { useI18n } from "../../app/i18n";
 import { Icon } from "../Icon";
 import { cx } from "../../lib/cx";
 import styles from "./FcSheet.module.css";
@@ -16,6 +17,7 @@ interface FcSheetProps {
 
 /** FlClash detail sheet: bottom sheet on phones, centered panel on desktop. */
 export function FcSheet({ title, subtitle, children, footer, onClose, wide }: FcSheetProps) {
+  const { t } = useI18n();
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -62,7 +64,7 @@ export function FcSheet({ title, subtitle, children, footer, onClose, wide }: Fc
             ref={closeRef}
             type="button"
             className={styles.close}
-            aria-label="关闭"
+            aria-label={t("Close")}
             onClick={onClose}
           >
             <Icon name="close" size={20} />
