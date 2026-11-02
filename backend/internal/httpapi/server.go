@@ -78,7 +78,7 @@ var Features = []string{
 }
 
 // APIVersion mirrors DEPLOYMENT.md's backend contract revision.
-const APIVersion = 9
+const APIVersion = 10
 
 // Handler serves the panel.
 type Handler struct {
@@ -295,34 +295,35 @@ func (h *Handler) handleState(w http.ResponseWriter, r *http.Request) {
 		cfg = loaded
 	}
 	var inbounds []string
+	var proxyPorts []jsonx.Value
 	if cfg != nil {
 		if value, ok := cfg.Get("inbounds"); ok {
 			if arr, ok := value.([]jsonx.Value); ok {
 				for _, item := range arr {
 					if obj, ok := item.(*jsonx.OrderMap); ok {
-						if typ, ok := obj.Get("type"); ok {
-							inbounds = append(inbounds, fmt.Sprintf("%v", typ))
+						typ := ""
+						if value, ok := obj.Get("type"); ok {
+							typ = fmt.Sprintf("%v", value)
+							inbounds = append(inbounds, typ)
+						}
+						// Port-based inbounds are the only ones the panel can
+						// point a client at, so report the ports it may use.
+						switch typ {
+						case "mixed", "http", "socks", "redirect", "tproxy":
+							if port, ok := obj.Get("listen_port"); ok {
+								if n, ok := port.(json.Number); ok {
+									if v, err := n.Int64(); err == nil {
+										proxyPorts = append(proxyPorts, int(v))
+									}
+								}
+							}
 						}
 					}
 				}
 			}
 		}
 	}
-	mode := "mixed"
-	for _, inbound := range inbounds {
-		if inbound == "ebpf" {
-			mode = "ebpf"
-			break
-		}
-	}
-	if mode == "mixed" {
-		for _, inbound := range inbounds {
-			if inbound == "tun" {
-				mode = "tun"
-				break
-			}
-		}
-	}
+	mode := classifyInbounds(inbounds)
 	configPath := s.SingBoxConfigPath()
 	mtime, bytes := int64(0), int64(0)
 	if info, err := os.Stat(configPath); err == nil {
@@ -395,6 +396,25 @@ func (h *Handler) handleState(w http.ResponseWriter, r *http.Request) {
 	out.Set("features", features)
 	out.Set("mode", mode)
 	out.Set("inbounds", stringsToAny(inbounds))
+	// `mode`/`inbounds` are the original contract; `capture` is the richer one
+	// the UI reads instead of re-deriving the mode from inbound types on every
+	// page. Older panels keep working because the fields are additive.
+	capture := jsonx.NewOrderMap()
+	capture.Set("mode", mode)
+	capture.Set("inbounds", stringsToAny(inbounds))
+	capture.Set("tun", containsString(inbounds, "tun"))
+	if proxyPorts == nil {
+		proxyPorts = []jsonx.Value{}
+	}
+	capture.Set("proxy_ports", proxyPorts)
+	if cfg != nil && h.Deps.Ebpf != nil {
+		if policy := h.Deps.Ebpf.PolicyOf(cfg); policy != nil {
+			if present, ok := policy.Get("present"); ok && truthyAny(present) {
+				capture.Set("ebpf", policy)
+			}
+		}
+	}
+	out.Set("capture", capture)
 	out.Set("service", h.Deps.Service.Status())
 	out.Set("config_path", configPath)
 	out.Set("config_mtime", mtime)
@@ -438,6 +458,38 @@ func (h *Handler) handleState(w http.ResponseWriter, r *http.Request) {
 	}
 	out.Set("token_file", s.TokenFile())
 	writeJSON(w, r, 200, out)
+}
+
+// classifyInbounds mirrors the UI's precedence: a kernel eBPF inbound wins,
+// then TUN, then port-based inbounds, then anything else. An empty list is
+// "none" — not "mixed" — because claiming a capture mode the config does not
+// have is exactly the kind of lie that makes the dashboard unreadable.
+func classifyInbounds(inbounds []string) string {
+	if len(inbounds) == 0 {
+		return "none"
+	}
+	has := func(want string) bool { return containsString(inbounds, want) }
+	if has("ebpf") {
+		return "ebpf"
+	}
+	if has("tun") {
+		return "tun"
+	}
+	for _, typ := range []string{"mixed", "socks", "http", "redirect", "tproxy"} {
+		if has(typ) {
+			return "mixed"
+		}
+	}
+	return "proxy"
+}
+
+func containsString(list []string, want string) bool {
+	for _, item := range list {
+		if item == want {
+			return true
+		}
+	}
+	return false
 }
 
 func truthyAny(value any) bool {

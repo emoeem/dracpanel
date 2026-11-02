@@ -65,14 +65,26 @@ func (e *Ebpf) Inbound(cfg *jsonx.OrderMap) *jsonx.OrderMap {
 // Policy ports Ebpf.policy(): the state lives inside the live config.
 func (e *Ebpf) Policy() *jsonx.OrderMap {
 	cfg, err := e.S.LoadSingBoxConfig()
-	out := okEnvelope()
 	if err != nil {
-		out.Set("present", false)
-		out.Set("mode", "none")
-		out.Set("uids", []jsonx.Value{})
-		out.Set("local", jsonx.NewOrderMap())
-		return out
+		return emptyPolicy()
 	}
+	return e.PolicyOf(cfg)
+}
+
+func emptyPolicy() *jsonx.OrderMap {
+	out := okEnvelope()
+	out.Set("present", false)
+	out.Set("mode", "none")
+	out.Set("uids", []jsonx.Value{})
+	out.Set("local", jsonx.NewOrderMap())
+	return out
+}
+
+// PolicyOf reports the eBPF policy of an already-loaded config, so callers
+// that need both the inbound list and the policy (the dashboard state) do not
+// read and parse the file twice.
+func (e *Ebpf) PolicyOf(cfg *jsonx.OrderMap) *jsonx.OrderMap {
+	out := okEnvelope()
 	inbound := e.Inbound(cfg)
 	if inbound == nil {
 		out.Set("present", false)
@@ -256,6 +268,8 @@ func sortedUniqueInts(values []jsonx.Value) []jsonx.Value {
 
 func toIntValue(value jsonx.Value) (int64, bool) {
 	switch v := value.(type) {
+	case int:
+		return int64(v), true
 	case int64:
 		return v, true
 	case float64:

@@ -344,6 +344,72 @@ func TestEBPFPolicyShape(t *testing.T) {
 	}
 }
 
+func TestStateReportsEBPFCapture(t *testing.T) {
+	f := newFixture(t)
+	stubBinDir(t, map[string]string{
+		"sing-box": `#!/bin/sh
+if [ "$1" = "version" ]; then echo "sing-box version v1.12.3-ebpf"; exit 0; fi
+exit 0`,
+		"systemctl": `#!/bin/sh
+case "$1" in
+  is-active) echo active; exit 0;;
+  is-enabled) echo enabled; exit 0;;
+  show) printf "ActiveEnterTimestamp=Sat 2026-10-31 12:00:00 CST\nMainPID=1234\n"; exit 0;;
+esac
+exit 0`,
+	})
+	// The reF1nd eBPF fork takes traffic over through an `ebpf` inbound; the
+	// panel must report that mode instead of falling back to "TUN / disabled".
+	cfg := `{"inbounds":[
+		{"type":"mixed","tag":"mixed-in","listen":"127.0.0.1","listen_port":7890},
+		{"type":"ebpf","tag":"ebpf-in","network":["tcp","udp"],
+		 "local":{"data_plane":"cgroup","dns_mode":"hijack","ipv6":true,"include_uid":[1000,1001]}}
+	],"outbounds":[],"services":[{"type":"api","listen_port":9091}]}`
+	if err := os.WriteFile(f.s.SingBoxConfigPath(), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	body := decode(t, f.do(t, http.MethodGet, "/api/state", ""))
+	if body["mode"] != "ebpf" {
+		t.Fatalf("mode = %v", body["mode"])
+	}
+	capture, _ := body["capture"].(map[string]any)
+	if capture["mode"] != "ebpf" || capture["tun"] != false {
+		t.Fatalf("capture = %v", capture)
+	}
+	ports, _ := capture["proxy_ports"].([]any)
+	if len(ports) != 1 || ports[0] != float64(7890) {
+		t.Fatalf("proxy_ports = %v", ports)
+	}
+	ebpfInfo, _ := capture["ebpf"].(map[string]any)
+	if ebpfInfo["present"] != true || ebpfInfo["mode"] != "whitelist" {
+		t.Fatalf("ebpf = %v", ebpfInfo)
+	}
+	if ebpfInfo["data_plane"] != "cgroup" || ebpfInfo["dns_mode"] != "hijack" {
+		t.Fatalf("ebpf data plane = %v", ebpfInfo)
+	}
+	uids, _ := ebpfInfo["uids"].([]any)
+	if len(uids) != 2 {
+		t.Fatalf("uids = %v", uids)
+	}
+
+	// No config at all → "none", never a capture mode we cannot prove.
+	if err := os.Remove(f.s.SingBoxConfigPath()); err != nil {
+		t.Fatal(err)
+	}
+	body = decode(t, f.do(t, http.MethodGet, "/api/state", ""))
+	if body["mode"] != "none" {
+		t.Fatalf("mode without config = %v", body["mode"])
+	}
+	capture, _ = body["capture"].(map[string]any)
+	if capture["mode"] != "none" || capture["tun"] != false {
+		t.Fatalf("capture without config = %v", capture)
+	}
+	if _, ok := capture["ebpf"]; ok {
+		t.Fatalf("capture without config should omit ebpf: %v", capture)
+	}
+}
+
 func TestClashPassthroughShapes(t *testing.T) {
 	f := newFixture(t)
 	// No Clash API on the test box → honest failure shapes.

@@ -149,3 +149,44 @@ entries are skipped — they never touch the network.
   rewrites `log.level` through the standard config transaction.
 
 `GET /api/state.features` includes `dns.stats` from api_version 9.
+
+## Traffic capture mode (api_version 10)
+
+`GET /api/state` gained a `capture` block so the UI no longer has to guess the
+capture mode from inbound *types* — a guess that showed "virtual NIC: disabled"
+on machines where the reF1nd eBPF fork captures every packet through a kernel
+`ebpf` inbound.
+
+```json
+"capture": {
+  "mode": "ebpf",
+  "inbounds": ["mixed", "ebpf"],
+  "tun": false,
+  "proxy_ports": [7892],
+  "ebpf": {
+    "ok": true, "present": true, "mode": "off",
+    "uids": [], "include": [], "exclude": [],
+    "data_plane": "cgroup", "dns_mode": "hijack", "ipv6": true,
+    "shared": {
+      "enabled": true, "data_plane": "packet_rewrite",
+      "interface": ["virbr0"], "dns_mode": "hijack",
+      "bypass_private_address": true, "ipv6": true
+    }
+  }
+}
+```
+
+- `mode` — the classified mode, same precedence as the UI always used: `ebpf`
+  → `tun` → `mixed` (port-based) → `proxy`; `none` when the config has no
+  inbounds at all, `unknown` when the config could not be read.
+- `tun` — whether a `tun` inbound exists. Independent of `mode`, because the
+  fork supports both at once (eBPF still wins).
+- `proxy_ports` — listen ports of `mixed`/`http`/`socks`/`redirect`/`tproxy`
+  inbounds, i.e. what a client may point at.
+- `ebpf` — omitted entirely when no `ebpf` inbound exists. `mode` is the policy
+  selector (`off` / `whitelist` / `blacklist`), `uids` the selected app UIDs,
+  `shared` mirrors the fork's `local.shared` block (VMs behind a bridge).
+
+`mode` and `inbounds` at the top level are unchanged, so older UIs keep
+working; a UI that finds no `capture` block must fall back to classifying
+`inbounds` itself.
