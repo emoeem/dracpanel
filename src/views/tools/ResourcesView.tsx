@@ -6,11 +6,12 @@ import type { PanelState } from "../../api/panel";
 import { useStream } from "../../api/stream";
 import { useApi, useNow } from "../../app/context";
 import { useUnaryOnce } from "../../app/hooks";
-import { useI18n } from "../../app/i18n";
+import { useI18n, type MessageKey } from "../../app/i18n";
 import { navigate } from "../../app/context";
 import { ServiceStatus_Type } from "../../gen/daemon/started_service_pb";
 import { FcCard } from "../../components/flclash";
 import { formatUptimeClock } from "../../lib/flclash/format";
+import { ebpfPolicyKey, INBOUND_MODE_KEYS, readCapture } from "../../lib/inboundMode";
 import { ToolsPageHeader } from "./ToolsView";
 import styles from "./ResourcesView.module.css";
 
@@ -35,6 +36,28 @@ export function ResourcesView() {
   const current = status.data.current;
   const started = serviceStatus.data.status?.status === ServiceStatus_Type.STARTED;
 
+  // Read the backend's classified capture mode; falling back to the inbound
+  // list keeps older panels working, and an unreadable config says so instead
+  // of claiming a mode.
+  const captureLabel = useMemo(() => {
+    const capture = readCapture(panelInfo);
+    if (capture.unknown && capture.mode === "unknown") {
+      return t("Unknown");
+    }
+    if (capture.mode === "ebpf" && capture.ebpfInfo) {
+      const info = capture.ebpfInfo;
+      const policy = t(ebpfPolicyKey(info.mode) as MessageKey);
+      return info.mode === "off"
+        ? t("{plane} hook · {policy}", { plane: info.dataPlane, policy })
+        : t("{plane} hook · {policy} · {apps}", {
+            plane: info.dataPlane,
+            policy,
+            apps: info.uids.length,
+          });
+    }
+    return t(INBOUND_MODE_KEYS[capture.mode] as MessageKey);
+  }, [panelInfo, t]);
+
   const rows = useMemo(() => {
     const panel: PanelState | null = panelInfo;
     return [
@@ -45,19 +68,12 @@ export function ResourcesView() {
       [t("Total download"), current ? formatMemoryBytes(Number(current.downlinkTotal)) : "—"],
       [t("Uptime"), started && startedAt !== null ? formatUptimeClock(startedAt, now) : "—"],
       [t("Kernel version"), serverInfo?.version ?? "—"],
-      [
-        t("Traffic capture"),
-        panelInfo?.mode === "ebpf"
-          ? t("eBPF (kernel space)")
-          : panelInfo?.mode === "tun"
-            ? t("TUN (virtual adapter)")
-            : (panelInfo?.mode ?? "—"),
-      ],
+      [t("Traffic capture"), captureLabel],
       [t("Config path"), panel?.config_path ?? "—"],
       [t("Panel service"), panel?.service ? (panel.service.active ? t("Running") : t("Stopped")) : "—"],
       [t("Panel version"), panel?.panel_version ?? panel?.version ?? "—"],
     ] as const;
-  }, [current, started, startedAt, now, serverInfo, panelInfo, t]);
+  }, [captureLabel, current, started, startedAt, now, serverInfo, panelInfo, t]);
 
   return (
     <div className="fc-page">

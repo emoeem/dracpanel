@@ -433,6 +433,8 @@ export class FixtureDaemonApi {
 
 export function installFixtureFetch(): void {
   const original = window.fetch.bind(window);
+  // `?capture=tun` renders the virtual-NIC path so both modes can be reviewed.
+  const tunFixture = new URLSearchParams(window.location.search).get("capture") === "tun";
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     const path = new URL(url, window.location.href).pathname;
@@ -445,7 +447,38 @@ export function installFixtureFetch(): void {
         panel_version: "fixture",
         api_version: 3,
         features: ["subscriptions", "subscriptions.managed", "subscriptions.schedule", "config.backup.download", "logs", "clash.version", "geoip"],
-        inbounds: ["tun", "mixed"],
+        // The machine this panel runs on uses the eBPF fork: an `ebpf`
+        // inbound takes traffic over and there is no TUN device at all. The
+        // fixture mirrors that so screenshots match production behaviour.
+        // `?capture=tun` switches to the virtual-NIC shape for comparison.
+        mode: tunFixture ? "tun" : "ebpf",
+        inbounds: tunFixture ? ["tun", "mixed"] : ["mixed", "ebpf"],
+        capture: tunFixture
+          ? { mode: "tun", inbounds: ["tun", "mixed"], tun: true, proxy_ports: [7890] }
+          : {
+              mode: "ebpf",
+              inbounds: ["mixed", "ebpf"],
+              tun: false,
+              proxy_ports: [7890],
+              ebpf: {
+                present: true,
+                mode: "whitelist",
+                uids: [1000, 1001, 1002, 1003],
+                include: [1000, 1001, 1002, 1003],
+                exclude: [],
+                data_plane: "cgroup",
+                dns_mode: "hijack",
+                ipv6: true,
+                shared: {
+                  enabled: true,
+                  data_plane: "packet_rewrite",
+                  interface: ["virbr0"],
+                  dns_mode: "hijack",
+                  bypass_private_address: true,
+                  ipv6: true,
+                },
+              },
+            },
         service: { active: true, enabled: true, since: new Date().toISOString(), pid: "4242" },
         config_path: "/etc/sing-box/config.json",
         config_mtime: Math.floor(Date.now() / 1000) - 3600 * 10,
@@ -700,7 +733,43 @@ export function installFixtureFetch(): void {
       return json({});
     }
     if (path === "/api/ebpf/policy") {
-      return json({ ok: true, present: false, mode: "off", uids: [] });
+      // Mirrors the eBPF inbound reported by /api/state: a 4-app allow list.
+      return json({
+        ok: true,
+        present: true,
+        mode: "whitelist",
+        uids: [1000, 1001, 1002, 1003],
+        include: [1000, 1001, 1002, 1003],
+        exclude: [],
+        data_plane: "cgroup",
+        dns_mode: "hijack",
+        ipv6: true,
+        shared: {},
+      });
+    }
+    if (path === "/api/apps") {
+      return json({
+        ok: true,
+        apps: [
+          { uid: 1000, label: "Firefox", execs: ["firefox"], pids: [3100], names: ["Firefox"], icon: "firefox" },
+          { uid: 1001, label: "Chromium", execs: ["chromium"], pids: [3120], names: ["Chromium"], icon: "chromium" },
+          { uid: 1002, label: "Steam", execs: ["steam"], pids: [3400], names: ["Steam"], icon: "steam" },
+          { uid: 1003, label: "Telegram", execs: ["telegram-desktop"], pids: [3500], names: ["Telegram"], icon: "telegram" },
+          { uid: 1004, label: "mpv", execs: ["mpv"], pids: [3600], names: ["mpv"], icon: "mpv" },
+        ],
+      });
+    }
+    if (path === "/api/ebpf/apps") {
+      return json([
+        { uid: 1000, label: "Firefox", execs: ["firefox"], pids: [3100], names: ["Firefox"], icon: "firefox" },
+        { uid: 1001, label: "Chromium", execs: ["chromium"], pids: [3120], names: ["Chromium"], icon: "chromium" },
+        { uid: 1002, label: "Steam", execs: ["steam"], pids: [3400], names: ["Steam"], icon: "steam" },
+        { uid: 1003, label: "Telegram", execs: ["telegram-desktop"], pids: [3500], names: ["Telegram"], icon: "telegram" },
+        { uid: 1004, label: "mpv", execs: ["mpv"], pids: [3600], names: ["mpv"], icon: "mpv" },
+      ]);
+    }
+    if (path === "/api/ebpf/probe") {
+      return json({ ok: true, result: "dry-run", findings: [], exit_code: 0 });
     }
     return original(input, init);
   };

@@ -46,9 +46,10 @@ import { Badge, Button, Card, Dialog, SearchInput, Spinner } from "../components
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { diffConfig, diffLines, formatDiffValue } from "../lib/configDiff";
 import {
-  detectInboundMode,
+  ebpfPolicyKey,
   inboundModeHintKey,
   INBOUND_MODE_KEYS,
+  readCapture,
 } from "../lib/inboundMode";
 import {
   ageParams,
@@ -257,6 +258,15 @@ async function afterConfigChange(api: DaemonApi) {
   api.reconnectNow();
 }
 
+/** `#/settings?tab=ebpf` wins over the remembered tab. */
+function requestedTab(): Tab | null {
+  const query = location.hash.split("?")[1] ?? "";
+  const value = new URLSearchParams(query).get("tab");
+  return value === "status" || value === "ebpf" || value === "config" || value === "notify"
+    ? value
+    : null;
+}
+
 export function ManageView() {
   const { t } = useI18n();
   const capabilities = usePanelCapabilities();
@@ -264,6 +274,12 @@ export function ManageView() {
     ? capabilities.missing.filter((feature) => feature !== "subscriptions.userinfo")
     : [];
   const [tab, setTab] = useState<Tab>(() => {
+    // A `?tab=` in the hash wins over the remembered tab so the dashboard can
+    // deep-link straight to the eBPF rules (e.g. #/settings?tab=ebpf).
+    const requested = requestedTab();
+    if (requested !== null) {
+      return requested;
+    }
     const stored = localStorage.getItem(TAB_KEY);
     if (stored === "subscriptions") {
       // The subscriptions tab moved to the dedicated Profiles page.
@@ -274,6 +290,7 @@ export function ManageView() {
       ? stored
       : "status";
   });
+
   // Keep a tab mounted after its first visit so drafts survive switching, but
   // do not mount Status (5s polling) or fetch the full config until needed.
   const [visited, setVisited] = useState<Set<Tab>>(() => new Set<Tab>([tab]));
@@ -283,6 +300,18 @@ export function ManageView() {
     setVisited((current) => (current.has(next) ? current : new Set(current).add(next)));
     localStorage.setItem(TAB_KEY, next);
   };
+  // Same view, new hash: follow the deep link instead of silently ignoring it.
+  useEffect(() => {
+    const onHashChange = () => {
+      const requested = requestedTab();
+      if (requested === null) {
+        return;
+      }
+      selectTab(requested);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  });
 
   const missingLabels = missingFeatures
     .map((feature) => PANEL_FEATURE_LABELS[feature])
@@ -450,7 +479,7 @@ function StatusTab() {
   const native = useStream(api.status);
   const [state, setState] = useState<PanelState | null>(null);
   // Read-only: the panel HTTP API exposes no endpoint to switch capture modes.
-  const inbound = useMemo(() => detectInboundMode(state?.inbounds), [state?.inbounds]);
+  const inbound = useMemo(() => readCapture(state), [state]);
   const inboundHint = inboundModeHintKey(inbound.mode);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -784,7 +813,9 @@ function StatusTab() {
           <dt>{t("Inbound")}</dt>
           <dd>
             {inbound.mode === "unknown" ? (
-              "—"
+              <span className={styles.muted}>
+                {inbound.reason ?? t("Unknown")}
+              </span>
             ) : (
               <>
                 <Badge tone={inbound.tun || inbound.ebpf ? "accent" : "neutral"}>
@@ -793,6 +824,28 @@ function StatusTab() {
                 {inbound.types.length > 0 ? (
                   <span className={styles.muted}> · {inbound.types.join(" / ")}</span>
                 ) : null}
+                {inbound.ebpfInfo !== null && (
+                  <span className={styles.muted}>
+                    {" "}
+                    ·{" "}
+                    {inbound.ebpfInfo.mode === "off"
+                      ? t("{plane} hook · {policy}", {
+                          plane: inbound.ebpfInfo.dataPlane,
+                          policy: t(ebpfPolicyKey(inbound.ebpfInfo.mode) as MessageKey),
+                        })
+                      : t("{plane} hook · {policy} · {apps}", {
+                          plane: inbound.ebpfInfo.dataPlane,
+                          policy: t(ebpfPolicyKey(inbound.ebpfInfo.mode) as MessageKey),
+                          apps: inbound.ebpfInfo.uids.length,
+                        })}
+                  </span>
+                )}
+                {inbound.proxyPorts.length > 0 && (
+                  <span className={styles.muted}>
+                    {" "}
+                    · {t("Port {port}", { port: inbound.proxyPorts[0] })}
+                  </span>
+                )}
               </>
             )}
             {inboundHint !== null && (

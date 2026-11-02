@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { formatBytes, formatDurationMs, formatMemoryBytes, formatRelativeTime } from "../../api/format";
 import { hasPanelToken, serviceAction } from "../../api/panel";
@@ -13,6 +13,7 @@ import { useLanControl, useSystemProxy, useTunControl } from "../../app/useRunti
 import { Icon } from "../../components/Icon";
 import {
   FcAvatar,
+  FcBadge,
   FcButton,
   FcCard,
   FcCardHeader,
@@ -34,6 +35,7 @@ import { connectionHost, connectionProcessName } from "../../lib/connectionTools
 import { countryCodeOf } from "../../lib/flclash/country";
 import { buildRequestLedger } from "../../lib/requestLedger";
 import { useDnsLedger } from "../../lib/flclash/dnsLedger";
+import { ebpfPolicyKey } from "../../lib/inboundMode";
 import { formatExpiryDays, formatPeak, formatRate, formatUptimeClock, percentLabel } from "../../lib/flclash/format";
 import { OUTBOUND_MODES, modeForSegment, segmentOfMode, type OutboundModeSegment } from "../../lib/flclash/mode";
 import { useLocalIp } from "../../lib/flclash/localIp";
@@ -402,6 +404,7 @@ function TakeoverShell({
   busy,
   disabled,
   onChange,
+  footer,
 }: {
   icon: "swap_horiz" | "vpn_lock" | "shield";
   title: string;
@@ -410,23 +413,28 @@ function TakeoverShell({
   busy: boolean;
   disabled: boolean;
   onChange: (checked: boolean) => void;
+  /** Optional second row: capture details, badges, a link to the full page. */
+  footer?: ReactNode;
 }) {
   const { t } = useI18n();
   return (
-    <FcCard shape="block" className={styles.takeoverCard}>
-      <span className={cx(styles.takeoverIcon, checked && styles.takeoverIconActive)}>
-        <Icon name={icon} size={18} />
-      </span>
-      <span className={styles.takeoverText}>
-        <span className={styles.takeoverTitle}>{title}</span>
-        <span className={styles.takeoverSub}>{busy ? t("Working…") : subtitle}</span>
-      </span>
-      <FcSwitch
-        checked={checked}
-        disabled={disabled || busy}
-        label={title}
-        onChange={onChange}
-      />
+    <FcCard shape="block" className={cx(styles.takeoverCard, footer !== undefined && styles.takeoverCardStacked)}>
+      <div className={styles.takeoverRow}>
+        <span className={cx(styles.takeoverIcon, checked && styles.takeoverIconActive)}>
+          <Icon name={icon} size={18} />
+        </span>
+        <span className={styles.takeoverText}>
+          <span className={styles.takeoverTitle}>{title}</span>
+          <span className={styles.takeoverSub}>{busy ? t("Working…") : subtitle}</span>
+        </span>
+        <FcSwitch
+          checked={checked}
+          disabled={disabled || busy}
+          label={title}
+          onChange={onChange}
+        />
+      </div>
+      {footer !== undefined && <div className={styles.takeoverFooter}>{footer}</div>}
     </FcCard>
   );
 }
@@ -496,17 +504,36 @@ function SystemProxyCard({ control }: { control: SystemProxyControl }) {
 
 function TunCard({ control }: { control: ConfigToggleControl }) {
   const { t } = useI18n();
+  const capture = control.capture;
+  const ebpf = control.ebpfMode ? (capture?.ebpfInfo ?? null) : null;
+  const unknown = capture?.mode === "unknown";
+  // The eBPF fork captures through the kernel, so the interesting facts are
+  // the hook, the per-app policy and whether IPv6 is captured too — none of
+  // which a "virtual NIC: disabled" line would ever tell you.
   const subtitle = !control.supported
     ? control.reason ?? t("Requires the panel backend")
     : control.ebpfMode
-      ? t("eBPF data plane is taking over")
-      : control.pending !== null
-        ? control.pending
-          ? t("About to enable")
-          : t("About to disable")
-        : control.enabled
-          ? t("Enabled")
-          : control.reason ?? t("Disabled");
+      ? ebpf
+        ? ebpf.mode === "off"
+          ? t("{plane} hook · {policy}", {
+              plane: ebpf.dataPlane,
+              policy: t(ebpfPolicyKey(ebpf.mode) as MessageKey),
+            })
+          : t("{plane} hook · {policy} · {apps}", {
+              plane: ebpf.dataPlane,
+              policy: t(ebpfPolicyKey(ebpf.mode) as MessageKey),
+              apps: ebpf.uids.length,
+            })
+        : t("eBPF data plane is taking over")
+      : unknown
+        ? t("The configuration could not be read, so the capture mode is unknown")
+        : control.pending !== null
+          ? control.pending
+            ? t("About to enable")
+            : t("About to disable")
+          : control.enabled
+            ? t("Enabled")
+            : control.reason ?? t("Disabled");
   return (
     <>
       <TakeoverShell
@@ -515,8 +542,38 @@ function TunCard({ control }: { control: ConfigToggleControl }) {
         subtitle={subtitle}
         checked={control.ebpfMode ? true : (control.pending ?? control.enabled)}
         busy={control.busy}
-        disabled={!control.supported || control.ebpfMode || (control.reason !== null && !control.enabled)}
+        disabled={!control.supported || control.ebpfMode || unknown || (control.reason !== null && !control.enabled)}
         onChange={(next) => control.request(next)}
+        footer={
+          ebpf ? (
+            <>
+              <FcBadge tone="accent" variant="soft">
+                {t("Kernel eBPF")}
+              </FcBadge>
+              <FcBadge tone="neutral" variant="outline">
+                {ebpf.dnsMode === "hijack" ? t("DNS hijacked") : ebpf.dnsMode}
+              </FcBadge>
+              {ebpf.ipv6 && (
+                <FcBadge tone="neutral" variant="outline">
+                  IPv6
+                </FcBadge>
+              )}
+              {ebpf.shared !== null && ebpf.shared.interfaces.length > 0 && (
+                <FcBadge tone="info" variant="outline">
+                  {t("Shared {interface}", { interface: ebpf.shared.interfaces.join(", ") })}
+                </FcBadge>
+              )}
+              <button
+                type="button"
+                className={styles.takeoverLink}
+                onClick={() => navigate("config?tab=ebpf")}
+              >
+                {t("Manage per-app rules")}
+                <Icon name="chevron_right" size={14} />
+              </button>
+            </>
+          ) : undefined
+        }
       />
       {control.pending !== null && (
         <ConfirmToggle

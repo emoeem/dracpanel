@@ -216,6 +216,67 @@ export const dashboardMessages = {
     "fa": "حالت مستقیم نمی‌تواند هسته را کنترل کند؛ از بک‌اند پنل استفاده کنید.",
     "ru": "В прямом режиме ядром управлять нельзя; нужен бэкенд панели.",
   },
+  /* TRAFFIC CAPTURE (TUN / eBPF) */
+  "{plane} hook · {policy} · {apps}": {
+    "zh-Hans": "{plane} 钩子 · {policy} · {apps} 个应用",
+    "zh-Hant": "{plane} 鉤子 · {policy} · {apps} 個應用",
+    "fa": "قلاب {plane} · {policy} · {apps} برنامه",
+    "ru": "хук {plane} · {policy} · приложений: {apps}",
+  },
+  "{plane} hook · {policy}": {
+    "zh-Hans": "{plane} 钩子 · {policy}",
+    "zh-Hant": "{plane} 鉤子 · {policy}",
+    "fa": "قلاب {plane} · {policy}",
+    "ru": "хук {plane} · {policy}",
+  },
+  "Shared {interface}": {
+    "zh-Hans": "共享网段 {interface}",
+    "zh-Hant": "共享網段 {interface}",
+    "fa": "شبکهٔ مشترک {interface}",
+    "ru": "Общая сеть {interface}",
+  },
+  "Kernel eBPF": {
+    "zh-Hans": "内核 eBPF",
+    "zh-Hant": "核心 eBPF",
+    "fa": "eBPF هسته",
+    "ru": "eBPF в ядре",
+  },
+  "DNS hijacked": {
+    "zh-Hans": "DNS 劫持",
+    "zh-Hant": "DNS 劫持",
+    "fa": "DNS ربوده می‌شود",
+    "ru": "DNS перехватывается",
+  },
+  "Manage per-app rules": {
+    "zh-Hans": "管理分应用规则",
+    "zh-Hant": "管理分應用程式規則",
+    "fa": "مدیریت قواعد هر برنامه",
+    "ru": "Правила для приложений",
+  },
+  "The configuration could not be read, so the capture mode is unknown": {
+    "zh-Hans": "配置无法读取，接管方式未知",
+    "zh-Hant": "設定無法讀取，接管方式未知",
+    "fa": "پیکربندی خوانده نشد؛ حالت دریافت مشخص نیست.",
+    "ru": "Конфигурация не прочитана, режим перехвата неизвестен",
+  },
+  "Allow list": {
+    "zh-Hans": "白名单",
+    "zh-Hant": "白名單",
+    "fa": "فهرست مجاز",
+    "ru": "Белый список",
+  },
+  "Block list": {
+    "zh-Hans": "黑名单",
+    "zh-Hant": "黑名單",
+    "fa": "فهرست مسدود",
+    "ru": "Чёрный список",
+  },
+  "No app filter": {
+    "zh-Hans": "不过滤应用",
+    "zh-Hant": "不過濾應用程式",
+    "fa": "بدون فیلتر برنامه",
+    "ru": "Без фильтра приложений",
+  },
   "The core is not running; the outbound mode cannot be switched.": {
     "zh-Hans": "核心未运行，无法切换出站模式",
     "zh-Hant": "核心未執行，無法切換出站模式",

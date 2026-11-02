@@ -1,5 +1,6 @@
 import { loadServersState, removeServer, saveServersState, type Server } from "./config";
 import { loadStoredJson, removeStoredValue, saveStoredJson } from "../lib/storage";
+import type { RawCapture } from "../lib/inboundMode";
 
 /**
  * Client for the privileged sing-box-panel HTTP API.
@@ -32,6 +33,8 @@ export interface PanelState {
   features?: string[];
   mode?: string;
   inbounds?: string[];
+  /** api_version 10+: the classified capture mode plus eBPF/proxy details. */
+  capture?: RawCapture;
   service?: PanelServiceStatus;
   config_path?: string;
   config_mtime?: number;

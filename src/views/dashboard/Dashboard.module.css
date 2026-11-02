@@ -517,6 +517,54 @@
   white-space: nowrap;
 }
 
+/* eBPF capture: a second row carries the hook / policy / DNS facts, so the
+   card stops pretending the machine runs a virtual NIC. */
+.takeover-card-stacked {
+  flex-direction: column;
+  gap: var(--fc-space-10);
+  align-items: stretch;
+  padding: var(--fc-space-14) var(--fc-space-16);
+}
+
+.takeover-card-stacked .takeover-sub {
+  overflow: visible;
+  line-height: 1.5;
+  white-space: normal;
+}
+
+.takeover-row {
+  display: flex;
+  gap: var(--fc-space-10);
+  align-items: center;
+  min-width: 0;
+}
+
+.takeover-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fc-space-6);
+  align-items: center;
+  padding-left: calc(34px + var(--fc-space-10));
+}
+
+.takeover-link {
+  display: inline-flex;
+  gap: var(--fc-space-2);
+  align-items: center;
+  padding: 0;
+  margin-left: auto;
+  font-family: inherit;
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-primary);
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.takeover-link:hover {
+  text-decoration: underline;
+}
+
 /* ── intranet / profile / service / memory ─────────────────── */
 
 .intranet-value {

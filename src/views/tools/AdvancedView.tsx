@@ -1,5 +1,5 @@
 import { hasPanelToken } from "../../api/panel";
-import { useI18n } from "../../app/i18n";
+import { useI18n, type MessageKey } from "../../app/i18n";
 import { useApi, navigate } from "../../app/context";
 import { usePanelState } from "../../app/usePanelState";
 import type { PanelStateResult } from "../../app/usePanelState";
@@ -7,6 +7,7 @@ import type { ConfigToggleControl, SystemProxyControl } from "../../app/useRunti
 import { useLanControl, useSystemProxy, useTunControl } from "../../app/useRuntimeToggles";
 import { Icon } from "../../components/Icon";
 import { FcCard, FcSheet, FcSwitch } from "../../components/flclash";
+import { ebpfPolicyKey } from "../../lib/inboundMode";
 import { ToolsPageHeader } from "./ToolsView";
 import styles from "./AdvancedView.module.css";
 
@@ -128,7 +129,18 @@ export function AdvancedView() {
               !tun.supported
                 ? tun.reason ?? t("Panel backend required")
                 : tun.ebpfMode
-                  ? t("In eBPF mode, the kernel's ebpf inbound handles traffic.")
+                  ? tun.capture?.ebpfInfo
+                    ? tun.capture.ebpfInfo.mode === "off"
+                      ? t("{plane} hook · {policy}", {
+                          plane: tun.capture.ebpfInfo.dataPlane,
+                          policy: t(ebpfPolicyKey(tun.capture.ebpfInfo.mode) as MessageKey),
+                        })
+                      : t("{plane} hook · {policy} · {apps}", {
+                          plane: tun.capture.ebpfInfo.dataPlane,
+                          policy: t(ebpfPolicyKey(tun.capture.ebpfInfo.mode) as MessageKey),
+                          apps: tun.capture.ebpfInfo.uids.length,
+                        })
+                    : t("In eBPF mode, the kernel's ebpf inbound handles traffic.")
                   : tun.enabled
                     ? t("Enabled (tun inbound)")
                     : tun.reason ?? t("Disabled")

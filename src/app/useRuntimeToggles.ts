@@ -18,6 +18,7 @@ import {
   setLanProxyEnabled,
 } from "../lib/flclash/configEdit";
 import { loadTunPreset, saveTunPreset } from "../lib/flclash/tunPreset";
+import { readCapture, type InboundModeSummary } from "../lib/inboundMode";
 import { afterConfigChange } from "./configResync";
 import { useI18n, type Translate } from "./i18n";
 import { showError } from "./errorStore";
@@ -117,14 +118,16 @@ export interface ConfigToggleControl {
   reason: string | null;
   /** 流量由配置中的 ebpf 入站接管（reF1nd fork 数据面）。 */
   ebpfMode?: boolean;
+  /** Normalised capture summary; eBPF details live here, not in ad-hoc flags. */
+  capture?: InboundModeSummary;
 }
 
 /** TUN is toggled by removing/restoring the inbound through the config API. */
 export function useTunControl(api: DaemonApi, panel: PanelStateResult): ConfigToggleControl {
   const { t } = useI18n();
-  const inbounds = panel.state?.inbounds ?? [];
-  const installed = inbounds.includes("tun");
-  const ebpfMode = inbounds.includes("ebpf");
+  const capture = useMemo(() => readCapture(panel.state), [panel.state]);
+  const installed = capture.tun;
+  const ebpfMode = capture.mode === "ebpf";
   const configPath = panel.state?.config_path ?? null;
   const preset = useMemo(
     () => (hasPanelToken() ? loadTunPreset(api.config.id, configPath) : null),
@@ -142,9 +145,11 @@ export function useTunControl(api: DaemonApi, panel: PanelStateResult): ConfigTo
     ? t("Direct mode cannot change the virtual interface")
     : ebpfMode
       ? t("eBPF mode handles traffic through the kernel ebpf inbound; edit the config to change TUN")
-      : !enabled && preset === null
-        ? t("No restorable TUN inbound in the configuration")
-        : null;
+      : capture.unknown
+        ? t("The configuration could not be read, so the capture mode is unknown")
+        : !enabled && preset === null
+          ? t("No restorable TUN inbound in the configuration")
+          : null;
 
   const request = (next: boolean) => {
     if (!hasPanelToken()) {
@@ -208,6 +213,7 @@ export function useTunControl(api: DaemonApi, panel: PanelStateResult): ConfigTo
     cancel: () => setPending(null),
     reason,
     ebpfMode,
+    capture,
   };
 }
 
@@ -300,7 +306,7 @@ export function tunStateOf(
   serverId: string,
 ): TunStateInfo {
   return {
-    installed: (panelState?.inbounds ?? []).includes("tun"),
+    installed: readCapture(panelState).tun,
     presetAvailable: loadTunPreset(serverId, panelState?.config_path ?? null) !== null,
   };
 }
