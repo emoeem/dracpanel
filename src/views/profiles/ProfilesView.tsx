@@ -20,7 +20,7 @@ import { showError } from "../../app/errorStore";
 import { useDismiss } from "../../app/hooks";
 import { useI18n } from "../../app/i18n";
 import { Icon } from "../../components/Icon";
-import { FcButton, FcCard, FcIconButton, FcSheet } from "../../components/flclash";
+import { FcBadge, FcButton, FcCard, FcIconButton, FcSheet } from "../../components/flclash";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { QRCode } from "../../components/ui";
 import { daysUntil, formatExpiryDays } from "../../lib/flclash/format";
@@ -31,7 +31,7 @@ type AddMode = "link" | "file" | null;
 
 export function ProfilesView() {
   const api = useApi();
-  const { language } = useI18n();
+  const { t, language } = useI18n();
   const now = useNow(30_000);
   const [items, setItems] = useState<PanelSubscription[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,14 +80,14 @@ export function ProfilesView() {
 
   const addFromLink = async () => {
     if (!isHttpUrl(url.trim())) {
-      showError(new Error("请输入有效的订阅链接（http/https）"));
+      showError(new Error(t("Enter a valid subscription URL (http/https)")));
       return;
     }
     setBusy(true);
     try {
       const result = await addSubscription(name.trim(), url.trim());
       if (!result.ok) {
-        throw new Error(result.message || "添加配置失败");
+        throw new Error(result.message || t("Failed to add the subscription"));
       }
       setAddMode(null);
       setName("");
@@ -105,14 +105,14 @@ export function ProfilesView() {
     try {
       const result = await importProfileFile(file);
       if (!result.ok) {
-        throw new Error(result.message || "导入配置失败");
+        throw new Error(result.message || t("Failed to import the subscription"));
       }
       setAddMode(null);
       await load();
     } catch (error) {
       if (error instanceof PanelFeatureUnavailableError) {
         setFileUnsupported(true);
-        showError(new Error("当前面板后端未提供本地导入接口（/api/profiles/import）"));
+        showError(new Error(t("The panel backend has no local import endpoint")));
       } else {
         showError(error);
       }
@@ -126,7 +126,7 @@ export function ProfilesView() {
     try {
       const result = await updateAllSubscriptions();
       if (!result.ok) {
-        throw new Error(result.message || "更新失败");
+        throw new Error(result.message || t("Failed to update"));
       }
       await load();
     } catch (error) {
@@ -141,7 +141,7 @@ export function ProfilesView() {
     try {
       const result = await updateSubscription(item.id);
       if (!result.ok) {
-        throw new Error(result.message || "更新失败");
+        throw new Error(result.message || t("Failed to update"));
       }
       await load();
     } catch (error) {
@@ -157,7 +157,7 @@ export function ProfilesView() {
     try {
       const result = await deleteSubscription(item.id);
       if (!result.ok) {
-        throw new Error(result.message || "删除失败");
+        throw new Error(result.message || t("Failed to delete"));
       }
       setDeleteTarget(null);
       await load();
@@ -172,10 +172,10 @@ export function ProfilesView() {
     return (
       <div className="fc-page">
         <div className={styles.toolbar}>
-          <h1 className={styles.pageTitle}>配置</h1>
+          <h1 className={styles.pageTitle}>{t("Profiles")}</h1>
         </div>
         <div className={styles.empty}>
-          配置管理需要面板后端；直接模式下不可用。
+          {t("Profile management requires the panel backend; unavailable in direct mode.")}
         </div>
       </div>
     );
@@ -185,16 +185,16 @@ export function ProfilesView() {
     <div className="fc-page">
       <div className={styles.toolbar}>
         <div className={styles.titleRow}>
-          <h1 className={styles.pageTitle}>配置</h1>
+          <h1 className={styles.pageTitle}>{t("Profiles")}</h1>
           <div className={styles.actions}>
-            <FcIconButton label="更新全部" disabled={busy || items.length === 0} onClick={() => void syncAll()}>
+            <FcIconButton label={t("Update all")} disabled={busy || items.length === 0} onClick={() => void syncAll()}>
               {busy ? <span className={styles.spinner} /> : <Icon name="sync" size={18} />}
             </FcIconButton>
-            <FcIconButton label="写入配置" disabled={busy || items.length === 0} onClick={() => void writeAndApply()}>
+            <FcIconButton label={t("Write configuration")} disabled={busy || items.length === 0} onClick={() => void writeAndApply()}>
               <Icon name="system_update_alt" size={18} />
             </FcIconButton>
             <div className={styles.menuAnchor} ref={menuRef}>
-              <FcIconButton label="添加配置" aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)}>
+              <FcIconButton label={t("Add subscription")} aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)}>
                 <Icon name="add" size={20} />
               </FcIconButton>
               {menuOpen && (
@@ -208,10 +208,10 @@ export function ProfilesView() {
                       setAddMode("link");
                     }}
                   >
-                    <Icon name="link" size={16} /> 链接
+                    <Icon name="link" size={16} /> {t("Link")}
                   </button>
                   <label className={cx(styles.menuRow, styles.menuFileRow)}>
-                    <Icon name="upload_file" size={16} /> 文件
+                    <Icon name="upload_file" size={16} /> {t("File")}
                     <input
                       type="file"
                       accept=".yaml,.yml,.json,.txt"
@@ -231,9 +231,13 @@ export function ProfilesView() {
                     role="menuitem"
                     className={cx(styles.menuRow, styles.menuDisabled)}
                     disabled
-                    title={fileUnsupported ? "当前面板后端未提供本地导入接口" : "需扫描二维码导入，可先使用链接"}
+                    title={
+                      fileUnsupported
+                        ? t("The panel backend has no local import endpoint")
+                        : t("Scan a QR code to import; use a link for now")
+                    }
                   >
-                    <Icon name="qr_code" size={16} /> 二维码
+                    <Icon name="qr_code" size={16} /> {t("QR code")}
                   </button>
                 </div>
               )}
@@ -252,9 +256,9 @@ export function ProfilesView() {
           </div>
         ) : sorted.length === 0 ? (
           <div className={styles.empty}>
-            <p>暂无配置</p>
+            <p>{t("No profiles")}</p>
             <FcButton variant="primary" onClick={() => setAddMode("link")}>
-              添加配置
+              {t("Add subscription")}
             </FcButton>
           </div>
         ) : (
@@ -276,22 +280,22 @@ export function ProfilesView() {
                   <FcCard shape="profile" className={styles.card}>
                     <div className={styles.cardMain}>
                       <span className={styles.cardTitle} title={item.name || item.url}>
-                        {item.name || "未命名配置"}
+                        {item.name || t("Untitled profile")}
                       </span>
                       {days !== null && days <= 7 && (
                         <span className={cx(styles.expiryChip, styles.expiryWarning)}>
-                          {formatExpiryDays(days)}
+                          {formatExpiryDays(days, t)}
                         </span>
                       )}
                     </div>
                     <div className={styles.cardSubtitle}>
-                      {hasTotal ? `${formatBytes(used)} / ${formatBytes(userinfo.total ?? 0)}` : "远程"}
+                      {hasTotal ? `${formatBytes(used)} / ${formatBytes(userinfo.total ?? 0)}` : t("Remote")}
                     </div>
                     <div className={styles.cardTrailing}>
                       {item.last_update ? formatRelativeTime(item.last_update * 1000, now, language) : "—"}
                       <span className={styles.cardMenu}>
                         <FcIconButton
-                          label="配置操作"
+                          label={t("Profile actions")}
                           onClick={(event) => {
                             event.stopPropagation();
                             setContextTarget(item);
@@ -311,26 +315,30 @@ export function ProfilesView() {
 
       {addMode === "link" && (
         <FcSheet
-          title="添加配置"
-          subtitle="从订阅链接导入节点"
+          title={t("Add subscription")}
+          subtitle={t("Import nodes from a subscription link")}
           onClose={() => setAddMode(null)}
           footer={
             <>
               <FcButton variant="text" disabled={busy} onClick={() => setAddMode(null)}>
-                取消
+                {t("Cancel")}
               </FcButton>
               <FcButton variant="primary" disabled={busy} onClick={() => void addFromLink()}>
-                {busy ? "添加中…" : "添加"}
+                {busy ? t("Adding...") : t("Add")}
               </FcButton>
             </>
           }
         >
           <label className={styles.field}>
-            <span>名称（可选）</span>
-            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="我的订阅" />
+            <span>{t("Name (optional)")}</span>
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder={t("My subscription")}
+            />
           </label>
           <label className={styles.field}>
-            <span>订阅链接</span>
+            <span>{t("Subscription URL")}</span>
             <input
               value={url}
               onChange={(event) => setUrl(event.target.value)}
@@ -360,7 +368,11 @@ export function ProfilesView() {
       )}
 
       {qrTarget && (
-        <FcSheet title="配置二维码" subtitle={qrTarget.name || "订阅链接"} onClose={() => setQrTarget(null)}>
+        <FcSheet
+          title={t("Profile QR code")}
+          subtitle={qrTarget.name || t("Subscription URL")}
+          onClose={() => setQrTarget(null)}
+        >
           <div className={styles.qrWrap}>
             <QRCode value={qrTarget.url} />
             <p className={styles.qrText}>{qrTarget.url}</p>
@@ -370,9 +382,11 @@ export function ProfilesView() {
 
       {deleteTarget && (
         <ConfirmDialog
-          title="删除配置"
-          message={`删除 “${deleteTarget.name || deleteTarget.url}”？下次“写入配置”时会从内核配置中移除对应节点。`}
-          confirmLabel="删除"
+          title={t("Delete profile")}
+          message={t("Delete “{name}”? The next “Write configuration” removes the matching nodes from the core configuration.", {
+            name: deleteTarget.name || deleteTarget.url,
+          })}
+          confirmLabel={t("Delete")}
           danger
           busy={busy}
           onConfirm={() => void remove(deleteTarget)}
@@ -387,7 +401,7 @@ export function ProfilesView() {
     try {
       const result = await applySubscriptions();
       if (!result.ok) {
-        throw new Error(result.message || "写入失败");
+        throw new Error(result.message || t("Failed to write"));
       }
       await afterConfigChange(api);
     } catch (error) {
@@ -406,36 +420,42 @@ function ContextSheet(props: {
   onShowQr: () => void;
   onDelete: () => void;
 }) {
-  const { language } = useI18n();
+  const { t, language } = useI18n();
   const now = useNow(30_000);
   const item = props.item;
   const userinfo = item.userinfo ?? {};
   return (
-    <FcSheet title={item.name || "未命名配置"} subtitle={item.url} onClose={props.onClose}>
+    <FcSheet title={item.name || t("Untitled profile")} subtitle={item.url} onClose={props.onClose}>
       <div className={styles.contextMeta}>
-        <span>更新于 {item.last_update ? formatDateTime(item.last_update * 1000, language) : "—"}</span>
-        <span>{item.node_count ?? 0} 个节点</span>
+        <span>
+          {t("Updated {time}", {
+            time: item.last_update ? formatDateTime(item.last_update * 1000, language) : "—",
+          })}
+        </span>
+        <span>{t("{count} nodes", { count: item.node_count ?? 0 })}</span>
         {typeof userinfo.expire === "number" && userinfo.expire > 0 && (
-          <span>{formatExpiryDays(daysUntil(userinfo.expire, now))}</span>
+          <span>{formatExpiryDays(daysUntil(userinfo.expire, now), t)}</span>
         )}
-        {item.last_error && <span className={styles.contextError}>失败：{item.last_error}</span>}
+        {item.last_error && (
+          <span className={styles.contextError}>{t("Failed: {error}", { error: item.last_error })}</span>
+        )}
       </div>
       <div className={styles.contextActions}>
         <FcButton onClick={props.onSync} disabled={props.busy}>
-          <Icon name="sync" size={16} /> 同步
+          <Icon name="sync" size={16} /> {t("Sync")}
         </FcButton>
         <FcButton onClick={props.onShowQr}>
-          <Icon name="qr_code" size={16} /> 二维码
+          <Icon name="qr_code" size={16} /> {t("QR code")}
         </FcButton>
         <FcButton
           onClick={() => {
             void navigator.clipboard.writeText(item.url).catch(() => {});
           }}
         >
-          <Icon name="content_copy" size={16} /> 复制链接
+          <Icon name="content_copy" size={16} /> {t("Copy link")}
         </FcButton>
         <FcButton variant="danger" onClick={props.onDelete} disabled={props.busy}>
-          <Icon name="delete" size={16} /> 删除
+          <Icon name="delete" size={16} /> {t("Delete")}
         </FcButton>
       </div>
     </FcSheet>
@@ -447,7 +467,7 @@ function ContextSheet(props: {
 function CurrentConfigCard() {
   const panel = usePanelState();
   const state = panel.state;
-  const { language } = useI18n();
+  const { t, language } = useI18n();
   const now = useNow(30_000);
   if (!state?.config_path) {
     return null;
@@ -458,23 +478,24 @@ function CurrentConfigCard() {
   return (
     <FcCard shape="profile" className={styles.currentCard}>
       <div className={styles.currentMain}>
-        <span className={styles.currentBadge}>当前配置</span>
+        <FcBadge tone="accent">{t("Current profile")}</FcBadge>
         <span className={styles.currentName} title={state.config_path}>
           {name}
         </span>
-      </div>
-      <div className={styles.currentMeta}>
-        <span>{size}</span>
-        <span>更新于 {updated}</span>
+        <span className={styles.currentMeta}>
+          <span>{size}</span>
+          <span>{t("Updated {time}", { time: updated })}</span>
+        </span>
         {state.config_error && <span className={styles.contextError}>{state.config_error}</span>}
+        <FcButton
+          variant="tonal"
+          size="small"
+          className={styles.currentAction}
+          onClick={() => navigate("tools/config")}
+        >
+          <Icon name="code" size={14} /> {t("Open config editor")}
+        </FcButton>
       </div>
-      <FcButton
-        variant="tonal"
-        size="small"
-        onClick={() => navigate("tools/config")}
-      >
-        <Icon name="code" size={14} /> 打开配置编辑器
-      </FcButton>
     </FcCard>
   );
 }

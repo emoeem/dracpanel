@@ -1,14 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { getJournal, hasPanelToken, type PanelJournalEntry } from "../../api/panel";
-import { FcCard, FcIconButton, FcPageToolbar, FcSegmented } from "../../components/flclash";
+import { useI18n } from "../../app/i18n";
+import type { MessageKey } from "../../app/translations";
+import {
+  FcBadge,
+  FcCard,
+  FcIconButton,
+  FcPageToolbar,
+  FcSegmented,
+  FcSwitch,
+  type FcBadgeTone,
+} from "../../components/flclash";
 import { Icon } from "../../components/Icon";
 import { downloadTextFile } from "../../lib/connectionTools";
 import { filterBySeverity, groupJournalByDay, isEventEntry } from "../../lib/journal";
+import { loadStoredJson, saveStoredJson } from "../../lib/storage";
 import { cx } from "../../lib/cx";
 import styles from "../ops/ops.module.css";
 
 const REFRESH_MS = 30_000;
+const HIDE_SERVICE_KEY = "events-hide-service";
 
 type Tab = "events" | "operations";
 type SeverityFilter = "" | "warn" | "error";
@@ -23,6 +35,28 @@ function severityClass(severity: string): string {
   return styles.dotInfo;
 }
 
+function severityTone(severity: string): FcBadgeTone {
+  if (severity === "error") {
+    return "error";
+  }
+  if (severity === "warn") {
+    return "warning";
+  }
+  return "neutral";
+}
+
+/** `today` / `yesterday` come from the grouping key, not from a baked string. */
+function dayLabel(key: string, t: (key: MessageKey) => string): string {
+  if (key === "today") {
+    return t("Today");
+  }
+  if (key === "yesterday") {
+    return t("Yesterday");
+  }
+  const at = Number(key);
+  return Number.isNaN(at) ? key : new Date(at).toLocaleDateString();
+}
+
 function clock(t: number): string {
   return new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
@@ -33,16 +67,18 @@ function download(entries: PanelJournalEntry[], name: string) {
 
 /** 事件：异常与状态变更；操作记录：配置/服务/订阅/导入的审计时间线。 */
 export function EventsView() {
+  const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("events");
   const [entries, setEntries] = useState<PanelJournalEntry[]>([]);
   const [severity, setSeverity] = useState<SeverityFilter>("");
+  const [hideService, setHideService] = useState(() => loadStoredJson(HIDE_SERVICE_KEY) === true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     if (!hasPanelToken()) {
       setLoading(false);
-      setError("事件中心需要面板后端");
+      setError(t("The events center requires the panel backend"));
       return;
     }
     try {
@@ -54,7 +90,7 @@ export function EventsView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -70,25 +106,32 @@ export function EventsView() {
     if (tab === "operations") {
       return entries.filter((entry) => entry.category === "operation");
     }
-    return filterBySeverity(entries.filter(isEventEntry), severity);
-  }, [entries, severity, tab]);
+    // Service start/stop rows are the panel's own chatter; doona hides them by
+    // default so a restart burst cannot bury real warnings.
+    const events = entries.filter((entry) => isEventEntry(entry) && !(hideService && entry.kind === "service"));
+    return filterBySeverity(events, severity);
+  }, [entries, hideService, severity, tab]);
 
   const groups = groupJournalByDay(filtered);
 
   return (
     <div className="fc-page">
       <FcPageToolbar
-        title="事件"
-        subtitle={tab === "events" ? "异常与状态变更" : "配置、服务、订阅与导入记录"}
+        title={t("Events")}
+        subtitle={
+          tab === "events"
+            ? t("Exceptions and state changes")
+            : t("Configuration, service, subscription and import records")
+        }
         actions={
           <>
             <FcIconButton
-              label="导出 JSON"
+              label={t("Export JSON")}
               onClick={() => download(filtered, `dracpanel-${tab}.json`)}
             >
               <Icon name="download" size={18} />
             </FcIconButton>
-            <FcIconButton label="刷新" onClick={() => void load()}>
+            <FcIconButton label={t("Refresh")} onClick={() => void load()}>
               <Icon name="sync" size={18} />
             </FcIconButton>
           </>
@@ -97,38 +140,53 @@ export function EventsView() {
       <div className="fc-page-body">
         <div className={styles.filters}>
           <FcSegmented
-            ariaLabel="事件视图"
+            className={styles.filterTabs}
+            ariaLabel={t("Events view")}
             value={tab}
             onChange={(value) => setTab(value as Tab)}
             options={[
-              { value: "events", label: "事件" },
-              { value: "operations", label: "操作记录" },
+              { value: "events", label: t("Events") },
+              { value: "operations", label: t("Operations") },
             ]}
           />
           {tab === "events" && (
-            <FcSegmented
-              ariaLabel="事件级别"
-              value={severity}
-              onChange={(value) => setSeverity(value as SeverityFilter)}
-              options={[
-                { value: "", label: "全部" },
-                { value: "warn", label: "警告" },
-                { value: "error", label: "错误" },
-              ]}
-            />
+            <>
+              <FcSegmented
+                className={styles.filterSeverity}
+                ariaLabel={t("Event severity")}
+                value={severity}
+                onChange={(value) => setSeverity(value as SeverityFilter)}
+                options={[
+                  { value: "", label: t("All") },
+                  { value: "warn", label: t("Warning") },
+                  { value: "error", label: t("Error") },
+                ]}
+              />
+              <label className={styles.toggleFixed}>
+                <FcSwitch
+                  checked={hideService}
+                  label={t("Hide service events")}
+                  onChange={(value) => {
+                    setHideService(value);
+                    saveStoredJson(HIDE_SERVICE_KEY, value);
+                  }}
+                />
+                <span>{t("Hide service events")}</span>
+              </label>
+            </>
           )}
         </div>
         {error !== "" ? (
           <div className={styles.empty}>{error}</div>
         ) : loading ? (
-          <div className={styles.empty}>加载中…</div>
+          <div className={styles.empty}>{t("Loading...")}</div>
         ) : filtered.length === 0 ? (
-          <div className={styles.empty}>{tab === "events" ? "暂无事件" : "暂无操作记录"}</div>
+          <div className={styles.empty}>{tab === "events" ? t("No events") : t("No operations")}</div>
         ) : (
           <FcCard className={styles.card}>
             {groups.map((group) => (
               <div key={group.key}>
-                <div className={styles.dayLabel}>{group.label}</div>
+                <div className={styles.dayLabel}>{dayLabel(group.key, t)}</div>
                 {group.items.map((entry, index) => (
                   <div key={`${entry.t}-${index}`} className={styles.event}>
                     <span className={styles.time}>{clock(entry.t)}</span>
@@ -137,9 +195,15 @@ export function EventsView() {
                       <span className={styles.title}>{entry.title}</span>
                       {entry.detail && <span className={styles.detail}>{entry.detail}</span>}
                     </span>
-                    <span className={styles.meta}>
-                      {tab === "events" ? entry.severity : entry.kind}
-                    </span>
+                    {tab === "events" ? (
+                      <FcBadge tone={severityTone(entry.severity)} variant="outline" mono>
+                        {entry.severity}
+                      </FcBadge>
+                    ) : (
+                      <FcBadge tone="neutral" variant="soft">
+                        {entry.kind}
+                      </FcBadge>
+                    )}
                   </div>
                 ))}
               </div>

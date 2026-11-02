@@ -1,8 +1,10 @@
+import type { MessageKey } from "../../app/translations";
+
 export type OutboundModeSegment = "rule" | "global" | "direct";
 
 interface ModeDefinition {
   value: OutboundModeSegment;
-  label: string;
+  label: MessageKey;
   icon: "rule" | "public" | "gps_fixed";
   aliases: readonly string[];
 }
@@ -10,19 +12,19 @@ interface ModeDefinition {
 export const OUTBOUND_MODES: readonly ModeDefinition[] = [
   {
     value: "rule",
-    label: "规则",
+    label: "Rule",
     icon: "rule",
     aliases: ["rule", "rules", "proxy", "规则"],
   },
   {
     value: "global",
-    label: "全局",
+    label: "Global",
     icon: "public",
     aliases: ["global", "全局"],
   },
   {
     value: "direct",
-    label: "直连",
+    label: "Direct",
     icon: "gps_fixed",
     aliases: ["direct", "直连"],
   },

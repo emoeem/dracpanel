@@ -12,26 +12,28 @@ const base = {
 
 describe("statusChips", () => {
   it("falls back to the GeoIP location when type/quality are absent", () => {
-    expect(statusChips(base)).toEqual(["SG · Singapore"]);
+    expect(statusChips(base)).toEqual([{ kind: "text", text: "SG · Singapore" }]);
   });
 
   it("shows provided type and quality chips", () => {
     expect(statusChips({ ...base, ipType: "机房", ipQuality: "普通" })).toEqual([
-      "机房",
-      "质量 普通",
+      { kind: "text", text: "机房" },
+      { kind: "message", key: "Quality {quality}", params: { quality: "普通" } },
     ]);
-    expect(statusChips({ ...base, ipType: "住宅" })).toEqual(["住宅"]);
-    expect(statusChips({ ...base, ipQuality: "优质" })).toEqual(["质量 优质"]);
+    expect(statusChips({ ...base, ipType: "住宅" })).toEqual([{ kind: "text", text: "住宅" }]);
+    expect(statusChips({ ...base, ipQuality: "优质" })).toEqual([
+      { kind: "message", key: "Quality {quality}", params: { quality: "优质" } },
+    ]);
   });
 
   it("explains the configuration when no probe source exists", () => {
     expect(statusChips({ ...base, ip: "", egressConfigured: false })).toEqual([
-      "在 panel.json 配置 egress_ip_probe_url",
+      { kind: "message", key: "Configure an egress probe URL in panel.json" },
     ]);
   });
 
   it("says probing when configured but no IP has arrived yet", () => {
-    expect(statusChips({ ...base, ip: null })).toEqual(["待探测"]);
+    expect(statusChips({ ...base, ip: null })).toEqual([{ kind: "message", key: "Pending probe" }]);
   });
 
   it("returns nothing rather than unknown placeholders", () => {

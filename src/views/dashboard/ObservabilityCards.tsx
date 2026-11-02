@@ -4,6 +4,8 @@ import { formatBytes } from "../../api/format";
 import { hasPanelToken } from "../../api/panel";
 import type { ConnectionRow } from "../../api/daemon";
 import { useNow } from "../../app/context";
+import { useI18n } from "../../app/i18n";
+import type { MessageKey } from "../../app/translations";
 import type { PanelStateResult } from "../../app/usePanelState";
 import { Icon } from "../../components/Icon";
 import {
@@ -26,12 +28,15 @@ import {
 import { cx } from "../../lib/cx";
 import styles from "./ObservabilityCards.module.css";
 
-const RANGES: { value: HistoryRange; label: string }[] = [
-  { value: "10m", label: "10 分钟" },
-  { value: "1h", label: "1 小时" },
-  { value: "6h", label: "6 小时" },
-  { value: "24h", label: "24 小时" },
-  { value: "7d", label: "7 天" },
+type TrafficRange = HistoryRange | "live";
+
+const RANGE_KEYS: { value: TrafficRange; label: MessageKey }[] = [
+  { value: "live", label: "Realtime" },
+  { value: "10m", label: "10 minutes" },
+  { value: "1h", label: "1 hour" },
+  { value: "6h", label: "6 hours" },
+  { value: "24h", label: "24 hours" },
+  { value: "7d", label: "7 days" },
 ];
 
 const DONUT_COLORS = [
@@ -43,17 +48,26 @@ const DONUT_COLORS = [
   "var(--fc-on-surface-faint)",
 ];
 
-/** 流量卡：时间范围切换 + 双序列面积图 + 峰值/平均统计栏。 */
-export function ObsTrafficCard({ panel }: { panel: PanelStateResult }) {
-  const [range, setRange] = useState<HistoryRange>("10m");
-  const history = useHistoryRangeData(range);
+/** 流量卡：时间范围切换（含实时）+ 双序列面积图 + 峰值/平均统计栏。 */
+export function ObsTrafficCard({
+  panel,
+  live,
+}: {
+  panel: PanelStateResult;
+  live?: { up: readonly number[]; down: readonly number[] };
+}) {
+  const { t } = useI18n();
+  const [range, setRange] = useState<TrafficRange>("10m");
+  // The realtime tab reads the live status stream; asking the backend for a
+  // 10m history at the same time would be a wasted request every minute.
+  const history = useHistoryRangeData(range === "live" ? "10m" : range, range !== "live");
   return (
     <FcCard className={cx(styles.card, styles.traffic)}>
       <FcCardHeader
-        title="流量"
+        title={t("Traffic")}
         actions={
-          <div className={styles.rangeTabs} role="tablist" aria-label="时间范围">
-            {RANGES.map((item) => (
+          <div className={styles.rangeTabs} role="tablist" aria-label={t("Time range")}>
+            {RANGE_KEYS.map((item) => (
               <button
                 key={item.value}
                 type="button"
@@ -62,15 +76,88 @@ export function ObsTrafficCard({ panel }: { panel: PanelStateResult }) {
                 className={cx(styles.rangeTab, range === item.value && styles.rangeTabActive)}
                 onClick={() => setRange(item.value)}
               >
-                {item.label}
+                {t(item.label)}
               </button>
             ))}
           </div>
         }
       />
-      <TrafficChartBody range={range} history={history} panel={panel} />
+      {range === "live" ? (
+        <LiveChartBody live={live} />
+      ) : (
+        <TrafficChartBody range={range} history={history} panel={panel} />
+      )}
     </FcCard>
   );
+}
+
+function LiveChartBody({ live }: { live?: { up: readonly number[]; down: readonly number[] } }) {
+  const { t } = useI18n();
+  if (!hasPanelToken() && live === undefined) {
+    return <div className={styles.hintBlock}>{t("History needs the panel backend; direct mode only has the live speed above.")}</div>;
+  }
+  const down = live?.down ?? [];
+  const up = live?.up ?? [];
+  if (down.length < 2) {
+    return <div className={styles.hintBlock}>{t("No samples yet")}</div>;
+  }
+  const labelCount = Math.min(5, down.length);
+  const labels = Array.from({ length: labelCount }, (_, index) => {
+    const secondsAgo = Math.round(((down.length - 1) * (labelCount - 1 - index)) / Math.max(1, labelCount - 1));
+    return secondsAgo === 0 ? "0s" : `-${secondsAgo}s`;
+  });
+  const summary = summarize(down, up);
+  return (
+    <div className={styles.trafficBody}>
+      <FcTimeChart
+        height={150}
+        labels={labels}
+        series={[
+          { label: t("Download"), color: "var(--fc-info)", values: [...down] },
+          { label: t("Upload"), color: "var(--fc-warning)", values: [...up] },
+        ]}
+      />
+      <div className={styles.summary}>
+        <span className={styles.summaryRow}>
+          <i className={cx(styles.dot, styles.dotDown)} />
+          {t("Download peak")} <strong>{formatRate(summary.downPeak)}</strong>
+        </span>
+        <span className={styles.summaryRow}>
+          <i className={cx(styles.dot, styles.dotDown)} />
+          {t("Download average")} <strong>{formatRate(summary.downAvg)}</strong>
+        </span>
+        <span className={styles.summaryRow}>
+          <i className={cx(styles.dot, styles.dotUp)} />
+          {t("Upload peak")} <strong>{formatRate(summary.upPeak)}</strong>
+        </span>
+        <span className={styles.summaryRow}>
+          <i className={cx(styles.dot, styles.dotUp)} />
+          {t("Upload average")} <strong>{formatRate(summary.upAvg)}</strong>
+        </span>
+      </div>
+      <div className={styles.legend}>
+        <span>
+          <i className={cx(styles.dot, styles.dotDown)} /> {t("Download")}
+        </span>
+        <span>
+          <i className={cx(styles.dot, styles.dotUp)} /> {t("Upload")}
+        </span>
+        <span className={styles.hint}>{t("Last 30 seconds")}</span>
+      </div>
+    </div>
+  );
+}
+
+function summarize(down: readonly number[], up: readonly number[]) {
+  const peak = (values: readonly number[]) => (values.length === 0 ? 0 : Math.max(...values));
+  const avg = (values: readonly number[]) =>
+    values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length;
+  return {
+    downPeak: peak(down) * 60,
+    downAvg: avg(down) * 60,
+    upPeak: peak(up) * 60,
+    upAvg: avg(up) * 60,
+  };
 }
 
 function TrafficChartBody({
@@ -82,10 +169,11 @@ function TrafficChartBody({
   history: HistoryResult | null;
   panel: PanelStateResult;
 }) {
+  const { t } = useI18n();
   if (!hasPanelToken()) {
     return (
       <div className={styles.hintBlock}>
-        历史流量需要面板后端持久化；直接模式下仅仪表盘上方的实时速度可用。
+        {t("History needs the panel backend; direct mode only has the live speed above.")}
       </div>
     );
   }
@@ -117,46 +205,39 @@ function TrafficChartBody({
         height={150}
         labels={labels}
         series={[
-          { label: "下载", color: "var(--fc-info)", values: down },
-          { label: "上传", color: "var(--fc-warning)", values: up },
+          { label: t("Download"), color: "var(--fc-info)", values: down },
+          { label: t("Upload"), color: "var(--fc-warning)", values: up },
         ]}
       />
       <div className={styles.summary}>
         <span className={styles.summaryRow}>
           <i className={cx(styles.dot, styles.dotDown)} />
-          下载峰值 <strong>{formatRate(summary.down_peak)}</strong>
+          {t("Download peak")} <strong>{formatRate(summary.down_peak)}</strong>
         </span>
         <span className={styles.summaryRow}>
           <i className={cx(styles.dot, styles.dotDown)} />
-          下载平均 <strong>{formatRate(summary.down_avg)}</strong>
+          {t("Download average")} <strong>{formatRate(summary.down_avg)}</strong>
         </span>
         <span className={styles.summaryRow}>
           <i className={cx(styles.dot, styles.dotUp)} />
-          上传峰值 <strong>{formatRate(summary.up_peak)}</strong>
+          {t("Upload peak")} <strong>{formatRate(summary.up_peak)}</strong>
         </span>
         <span className={styles.summaryRow}>
           <i className={cx(styles.dot, styles.dotUp)} />
-          上传平均 <strong>{formatRate(summary.up_avg)}</strong>
+          {t("Upload average")} <strong>{formatRate(summary.up_avg)}</strong>
         </span>
       </div>
       <div className={styles.legend}>
         <span>
-          <i className={cx(styles.dot, styles.dotDown)} /> 下载
+          <i className={cx(styles.dot, styles.dotDown)} /> {t("Download")}
         </span>
         <span>
-          <i className={cx(styles.dot, styles.dotUp)} /> 上传
+          <i className={cx(styles.dot, styles.dotUp)} /> {t("Upload")}
         </span>
-        <span className={styles.hint}>{rangeHint(range, panel)}</span>
+        <span className={styles.hint}>{panel.state ? "" : t("This session")}</span>
       </div>
     </div>
   );
-}
-
-function rangeHint(range: HistoryRange, panel: PanelStateResult): string {
-  if (range === "10m") {
-    return "";
-  }
-  return panel.state ? "" : "数据来自面板后端";
 }
 
 function timeLabel(tUnix: number, range: HistoryRange): string {
@@ -179,6 +260,7 @@ export function ObsOutboundCard({
 }: {
   connections: { data: { rows: Map<string, ConnectionRow> } } | null;
 }) {
+  const { t } = useI18n();
   const session = useSessionOutboundTotals(connections);
   const [fetched, setFetched] = useState<HistoryResult | null>(null);
   const now = useNow(30_000);
@@ -215,7 +297,7 @@ export function ObsOutboundCard({
       value,
       color: DONUT_COLORS[index % DONUT_COLORS.length],
     })),
-    ...(rest > 0 ? [{ label: "其他", value: rest, color: DONUT_COLORS[5] }] : []),
+    ...(rest > 0 ? [{ label: t("Other"), value: rest, color: DONUT_COLORS[5] }] : []),
   ];
   const totalBytes = totals.reduce((sum, [, value]) => sum + value, 0);
   const since = fetched?.since ? fetched.since * 1000 : mountedAt;
@@ -223,11 +305,11 @@ export function ObsOutboundCard({
   return (
     <FcCard className={styles.card}>
       <FcCardHeader
-        title="出站下载量"
-        subtitle={persisted ? `自 ${formatDate(since)}` : "本会话"}
+        title={t("Outbound download")}
+        subtitle={persisted ? t("Since {date}", { date: formatDate(since) }) : t("This session")}
       />
       {totals.length === 0 ? (
-        <div className={styles.hintBlock}>暂无出站流量数据</div>
+        <div className={styles.hintBlock}>{t("No outbound traffic yet")}</div>
       ) : (
         <FcDonut
           slices={slices}
@@ -235,7 +317,9 @@ export function ObsOutboundCard({
           size={116}
         />
       )}
-      <div className={styles.cardFoot}>{now && persisted ? "近 7 天累计" : "会话级累计，重启清零"}</div>
+      <div className={styles.cardFoot}>
+        {now && persisted ? t("Last 7 days") : t("Session totals, reset on reload")}
+      </div>
     </FcCard>
   );
 }
@@ -249,15 +333,16 @@ function formatDate(ms: number): string {
 
 /** 流量排行：设备 / 域名 两个维度（会话级）。 */
 export function ObsRankingCard({ rows }: { rows: readonly ConnectionRow[] }) {
+  const { t } = useI18n();
   const [dimension, setDimension] = useState<"device" | "host">("device");
   const ranking = useSessionRanking(rows, dimension);
   const max = ranking.length > 0 ? ranking[0][1] : 0;
   return (
     <FcCard className={styles.card}>
       <FcCardHeader
-        title="流量排行"
+        title={t("Traffic ranking")}
         actions={
-          <div className={styles.rangeTabs} role="tablist" aria-label="排行维度">
+          <div className={styles.rangeTabs} role="tablist" aria-label={t("Ranking dimension")}>
             <button
               type="button"
               role="tab"
@@ -265,7 +350,7 @@ export function ObsRankingCard({ rows }: { rows: readonly ConnectionRow[] }) {
               className={cx(styles.rangeTab, dimension === "device" && styles.rangeTabActive)}
               onClick={() => setDimension("device")}
             >
-              设备
+              {t("Device")}
             </button>
             <button
               type="button"
@@ -274,13 +359,13 @@ export function ObsRankingCard({ rows }: { rows: readonly ConnectionRow[] }) {
               className={cx(styles.rangeTab, dimension === "host" && styles.rangeTabActive)}
               onClick={() => setDimension("host")}
             >
-              域名
+              {t("Domain")}
             </button>
           </div>
         }
       />
       {ranking.length === 0 ? (
-        <div className={styles.hintBlock}>暂无数据</div>
+        <div className={styles.hintBlock}>{t("No samples yet")}</div>
       ) : (
         <ul className={styles.ranking}>
           {ranking.map(([label, value]) => (
@@ -301,13 +386,14 @@ export function ObsRankingCard({ rows }: { rows: readonly ConnectionRow[] }) {
           ))}
         </ul>
       )}
-      <div className={styles.cardFoot}>会话级统计，来自实时连接事件</div>
+      <div className={styles.cardFoot}>{t("Session-scope statistics from live connection events")}</div>
     </FcCard>
   );
 }
 
 /** CPU 使用率卡（面板后端采样）。 */
 export function ObsCpuCard({ panel }: { panel: PanelStateResult }) {
+  const { t } = useI18n();
   const state = panel.state;
   const ready = state?.cpu_ready === true;
   const cpu = typeof state?.cpu_percent === "number" ? state.cpu_percent : null;
@@ -315,11 +401,13 @@ export function ObsCpuCard({ panel }: { panel: PanelStateResult }) {
     <FcCard className={styles.card}>
       <FcCardHeader
         icon={<Icon name="memory" size={14} />}
-        title="CPU 使用率"
-        subtitle={state ? undefined : "需要面板后端"}
+        title={t("CPU usage")}
+        subtitle={state ? undefined : t("Requires the panel backend")}
       />
       {cpu === null || !ready ? (
-        <div className={styles.hintBlock}>{state ? "采样尚未就绪" : "直接模式下不可用"}</div>
+        <div className={styles.hintBlock}>
+          {state ? t("Sampling not ready yet") : t("Unavailable in direct mode")}
+        </div>
       ) : (
         <>
           <div className={styles.cpuValue}>{cpu.toFixed(1)}%</div>
@@ -334,16 +422,17 @@ export function ObsCpuCard({ panel }: { panel: PanelStateResult }) {
 
 /** 通知与问题：面板事件流（配置/服务/订阅/导入）。 */
 export function ObsNotificationsCard() {
+  const { t } = useI18n();
   const items = useNotifications();
   return (
     <FcCard className={cx(styles.card, styles.notificationsCard)}>
       <FcCardHeader
         icon={<Icon name="notifications" size={14} />}
-        title="通知与问题"
+        title={t("Notifications")}
         actions={items.length > 0 ? <span className={styles.countChip}>{items.length}</span> : undefined}
       />
       {items.length === 0 ? (
-        <div className={styles.hintBlock}>暂无事件</div>
+        <div className={styles.hintBlock}>{t("No events yet")}</div>
       ) : (
         <ul className={styles.feed}>
           {items.slice(0, 5).map((item) => (

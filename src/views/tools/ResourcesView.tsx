@@ -6,6 +6,7 @@ import type { PanelState } from "../../api/panel";
 import { useStream } from "../../api/stream";
 import { useApi, useNow } from "../../app/context";
 import { useUnaryOnce } from "../../app/hooks";
+import { useI18n } from "../../app/i18n";
 import { navigate } from "../../app/context";
 import { ServiceStatus_Type } from "../../gen/daemon/started_service_pb";
 import { FcCard } from "../../components/flclash";
@@ -24,6 +25,7 @@ function Detail(props: { label: string; value: string }) {
 
 export function ResourcesView() {
   const api = useApi();
+  const { t } = useI18n();
   const now = useNow(1000);
   const status = useStream(api.status);
   const serviceStatus = useStream(api.serviceStatus);
@@ -36,30 +38,30 @@ export function ResourcesView() {
   const rows = useMemo(() => {
     const panel: PanelState | null = panelInfo;
     return [
-      ["内存", current ? formatMemoryBytes(current.memory) : "—"],
-      ["协程", current ? String(current.goroutines) : "—"],
-      ["实时连接", current ? String(current.connectionsIn + current.connectionsOut) : "—"],
-      ["累计上传", current ? formatMemoryBytes(Number(current.uplinkTotal)) : "—"],
-      ["累计下载", current ? formatMemoryBytes(Number(current.downlinkTotal)) : "—"],
-      ["运行时长", started && startedAt !== null ? formatUptimeClock(startedAt, now) : "—"],
-      ["内核版本", serverInfo?.version ?? "—"],
+      [t("Memory"), current ? formatMemoryBytes(current.memory) : "—"],
+      [t("Goroutines"), current ? String(current.goroutines) : "—"],
+      [t("Live connections"), current ? String(current.connectionsIn + current.connectionsOut) : "—"],
+      [t("Total upload"), current ? formatMemoryBytes(Number(current.uplinkTotal)) : "—"],
+      [t("Total download"), current ? formatMemoryBytes(Number(current.downlinkTotal)) : "—"],
+      [t("Uptime"), started && startedAt !== null ? formatUptimeClock(startedAt, now) : "—"],
+      [t("Kernel version"), serverInfo?.version ?? "—"],
       [
-        "流量接管",
+        t("Traffic capture"),
         panelInfo?.mode === "ebpf"
-          ? "eBPF（内核态）"
+          ? t("eBPF (kernel space)")
           : panelInfo?.mode === "tun"
-            ? "TUN（虚拟网卡）"
+            ? t("TUN (virtual adapter)")
             : (panelInfo?.mode ?? "—"),
       ],
-      ["配置路径", panel?.config_path ?? "—"],
-      ["面板服务", panel?.service ? (panel.service.active ? "运行中" : "已停止") : "—"],
-      ["面板版本", panel?.panel_version ?? panel?.version ?? "—"],
+      [t("Config path"), panel?.config_path ?? "—"],
+      [t("Panel service"), panel?.service ? (panel.service.active ? t("Running") : t("Stopped")) : "—"],
+      [t("Panel version"), panel?.panel_version ?? panel?.version ?? "—"],
     ] as const;
-  }, [current, started, startedAt, now, serverInfo, panelInfo]);
+  }, [current, started, startedAt, now, serverInfo, panelInfo, t]);
 
   return (
     <div className="fc-page">
-      <ToolsPageHeader title="资源" onBack={() => navigate("tools")} />
+      <ToolsPageHeader title={t("Resources")} onBack={() => navigate("tools")} />
       <div className="fc-page-body">
         <FcCard className={styles.card}>
           {rows.map(([label, value]) => (

@@ -1,0 +1,255 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+}
+
+.hint-block {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: var(--fc-space-14);
+  font-size: var(--fc-text-caption1);
+  line-height: var(--fc-leading-caption1);
+  color: var(--fc-on-surface-faint);
+  text-align: center;
+  border: 1px dashed var(--fc-divider);
+  border-radius: var(--fc-radius-sm);
+}
+
+.link-button {
+  padding: 0;
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-primary);
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
+/* ── node latency ─────────────────────────────────────────── */
+
+.latency-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-4);
+  padding: 0;
+  margin: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.latency-list[data-expanded="true"] {
+  max-height: 320px;
+}
+
+.latency-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(48px, 1fr) 64px;
+  gap: var(--fc-space-10);
+  align-items: center;
+  padding: var(--fc-space-4) 0;
+}
+
+.latency-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--fc-text-footnote);
+  color: var(--fc-on-surface-variant);
+  white-space: nowrap;
+}
+
+.latency-spark {
+  overflow: hidden;
+  color: var(--fc-primary);
+  opacity: 0.9;
+}
+
+.latency-value {
+  font-size: var(--fc-text-footnote);
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-on-surface);
+  text-align: right;
+}
+
+.latency-good {
+  color: var(--fc-success);
+}
+
+.latency-bad {
+  color: var(--fc-error);
+}
+
+.more-button {
+  padding: var(--fc-space-6);
+  margin-top: var(--fc-space-8);
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-primary);
+  cursor: pointer;
+  background: var(--fc-block);
+  border: 0;
+  border-radius: var(--fc-radius-pill);
+}
+
+/* ── shared legend ────────────────────────────────────────── */
+
+.legend-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-4);
+  padding: 0;
+  margin: var(--fc-space-8) 0 0;
+  list-style: none;
+}
+
+.legend-list li {
+  display: flex;
+  gap: var(--fc-space-8);
+  align-items: center;
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-on-surface-variant);
+}
+
+.legend-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--fc-radius-pill);
+}
+
+/* ── DNS results ──────────────────────────────────────────── */
+
+.dns-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-6);
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  list-style: none;
+}
+
+.dns-list li {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) 48px minmax(0, 1fr) 48px;
+  gap: var(--fc-space-8);
+  align-items: center;
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-on-surface-variant);
+}
+
+.dns-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--fc-radius-pill);
+}
+
+.dns-ok {
+  background: var(--fc-success);
+}
+
+.dns-bad {
+  background: var(--fc-error);
+}
+
+.dns-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fc-on-surface);
+  white-space: nowrap;
+}
+
+.dns-type {
+  color: var(--fc-on-surface-faint);
+  text-align: center;
+}
+
+.dns-result {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dns-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-on-surface-faint);
+  text-align: right;
+}
+
+/* ── policy groups ────────────────────────────────────────── */
+
+.group-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-2);
+  padding: 0;
+  margin: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.group-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 16px;
+  gap: var(--fc-space-8);
+  align-items: center;
+  width: 100%;
+  padding: var(--fc-space-6) var(--fc-space-8);
+  color: var(--fc-on-surface-variant);
+  text-align: left;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: var(--fc-radius-sm);
+}
+
+.group-row:hover {
+  background: var(--fc-block);
+}
+
+.group-tag {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--fc-text-footnote);
+  font-weight: var(--fc-weight-medium);
+  color: var(--fc-on-surface);
+  white-space: nowrap;
+}
+
+.group-selected {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-on-surface-faint);
+  white-space: nowrap;
+}
+
+/* ── global outbound ─────────────────────────────────────── */
+
+.outbound-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-8);
+}
+
+.outbound-select {
+  width: 100%;
+}
+
+.hint-line {
+  margin: 0;
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-on-surface-faint);
+}

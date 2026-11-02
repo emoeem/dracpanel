@@ -280,30 +280,29 @@
   }
 }
 
+/* The current config is a status strip, not a card with a full-width bar
+   button: one row, badge first, action pushed to the end. */
 .current-card {
   gap: var(--fc-space-8);
-  border: 1.5px solid var(--fc-primary);
+  padding: var(--fc-card-padding-tight) var(--fc-card-padding);
+  border: 1px solid var(--fc-divider);
+}
+
+.current-action {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
 }
 
 .current-main {
   display: flex;
-  gap: var(--fc-space-8);
+  flex-wrap: wrap;
+  gap: var(--fc-space-10);
   align-items: center;
   min-width: 0;
 }
 
-.current-badge {
-  flex-shrink: 0;
-  padding: var(--fc-space-2) var(--fc-space-8);
-  font-size: var(--fc-text-caption2);
-  font-weight: var(--fc-weight-semibold);
-  color: var(--fc-primary-container-text);
-  background: var(--fc-primary-container);
-  border-radius: var(--fc-radius-badge);
-}
-
 .current-name {
-  flex: 1;
+  flex: 1 1 160px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -79,27 +79,11 @@
   margin-top: var(--fc-space-10);
 }
 
+/* Only the width: the field itself is the shared FcSearchField, so the group
+   cards cannot drift from the page toolbar. */
 .tool-search {
-  display: flex;
-  flex: 1;
-  gap: var(--fc-space-6);
-  align-items: center;
-  min-width: 0;
-  height: 32px;
-  padding: 0 var(--fc-space-10);
-  color: var(--fc-on-surface-faint);
-  background: var(--fc-block);
-  border-radius: var(--fc-radius-pill);
-}
-
-.tool-search input {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--fc-text-caption2);
-  color: var(--fc-on-surface);
-  outline: none;
-  background: transparent;
-  border: 0;
+  flex: 1 1 200px;
+  max-width: 360px;
 }
 
 .tool-toggle {
@@ -107,8 +91,8 @@
   flex-shrink: 0;
   gap: var(--fc-space-6);
   align-items: center;
-  font-size: var(--fc-text-caption2);
-  color: var(--fc-on-surface-faint);
+  font-size: var(--fc-text-caption1);
+  color: var(--fc-on-surface-variant);
 }
 
 .members-empty {
@@ -150,6 +134,24 @@
   align-items: center;
 }
 
+/* The filter bar keeps the segmented control at its natural width; stretched
+   across the page it competes with the cards underneath. */
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fc-space-10);
+  align-items: center;
+  margin-bottom: var(--fc-space-12);
+}
+
+.filter-tabs {
+  flex: 0 0 380px;
+}
+
+.filter-row .note {
+  margin-inline-start: auto;
+}
+
 .member-row {
   display: flex;
   gap: var(--fc-space-8);
@@ -176,4 +178,21 @@
 .note {
   font-size: var(--fc-text-caption2);
   color: var(--fc-on-surface-faint);
+}
+
+.card-focus {
+  outline: 2px solid var(--fc-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-card, 14px);
+  transition: outline-color 300ms ease;
+}
+
+.member-link {
+  display: inline-flex;
+  gap: var(--fc-space-2);
+  align-items: center;
+  color: var(--fc-primary-container-text);
+  cursor: pointer;
+  background: var(--fc-primary-container);
+  border: 0;
 }

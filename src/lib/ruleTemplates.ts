@@ -7,12 +7,14 @@
  * referencing it — the kernel-maintained list is strictly more accurate.
  */
 
+import type { MessageKey } from "../app/translations";
 import type { RuleObject } from "./ruleEditor";
 
 export interface RuleTemplate {
   id: string;
-  name: string;
-  description: string;
+  /** Translated at render time: the template list is shown in every language. */
+  nameKey: MessageKey;
+  descriptionKey: MessageKey;
   /** "route" rules need an outbound target; "reject" rules do not. */
   action: "route" | "reject";
   /**
@@ -31,8 +33,8 @@ export interface RuleTemplate {
 export const RULE_TEMPLATES: readonly RuleTemplate[] = [
   {
     id: "ai",
-    name: "AI 服务",
-    description: "OpenAI / Claude / Gemini / DeepSeek 等常见 AI 服务",
+    nameKey: "AI services",
+    descriptionKey: "OpenAI, Claude, Gemini, DeepSeek and other AI services",
     action: "route",
     preferredRuleSets: ["geosite-openai", "geosite-ai", "geosite-anthropic"],
     domainSuffixes: [
@@ -59,8 +61,8 @@ export const RULE_TEMPLATES: readonly RuleTemplate[] = [
   },
   {
     id: "streaming",
-    name: "流媒体",
-    description: "YouTube / Netflix / Disney+ / Spotify 等视频与音乐平台",
+    nameKey: "Streaming",
+    descriptionKey: "YouTube, Netflix, Disney+, Spotify and other video and music platforms",
     action: "route",
     preferredRuleSets: [
       "geosite-youtube",
@@ -94,8 +96,8 @@ export const RULE_TEMPLATES: readonly RuleTemplate[] = [
   },
   {
     id: "ads",
-    name: "广告拦截",
-    description: "常见广告 / 统计 / 埋点域名，动作为拒绝",
+    nameKey: "Ad blocking",
+    descriptionKey: "Common ad, analytics and tracking domains; the action is reject",
     action: "reject",
     preferredRuleSets: ["geosite-category-ads-all", "geosite-ads"],
     domainSuffixes: [
@@ -120,16 +122,16 @@ export const RULE_TEMPLATES: readonly RuleTemplate[] = [
   },
   {
     id: "telegram",
-    name: "Telegram",
-    description: "Telegram 域名（IP 段仍建议使用 rule_set）",
+    nameKey: "Telegram",
+    descriptionKey: "Telegram domains (for IP ranges prefer a rule_set)",
     action: "route",
     preferredRuleSets: ["geosite-telegram"],
     domainSuffixes: ["telegram.org", "t.me", "tdesktop.com", "telesco.pe", "cdn-telegram.org"],
   },
   {
     id: "google",
-    name: "Google 服务",
-    description: "搜索、API 与账号服务（不含 YouTube，见流媒体模板）",
+    nameKey: "Google services",
+    descriptionKey: "Search, API and account services (no YouTube; see the streaming template)",
     action: "route",
     preferredRuleSets: ["geosite-google"],
     domainSuffixes: [
@@ -145,8 +147,8 @@ export const RULE_TEMPLATES: readonly RuleTemplate[] = [
   },
   {
     id: "github",
-    name: "开发者服务",
-    description: "GitHub / GitLab / Docker Hub / PyPI 等开发依赖",
+    nameKey: "Developer services",
+    descriptionKey: "GitHub, GitLab, Docker Hub, PyPI and other development dependencies",
     action: "route",
     preferredRuleSets: ["geosite-github", "geosite-dev"],
     domainSuffixes: [
@@ -170,8 +172,8 @@ export const RULE_TEMPLATES: readonly RuleTemplate[] = [
   },
   {
     id: "china",
-    name: "国内服务直连",
-    description: "腾讯 / 百度 / 阿里 / 字节等国内常用站点直连",
+    nameKey: "Chinese services, direct",
+    descriptionKey: "Tencent, Baidu, Alibaba, ByteDance and other popular Chinese sites, direct",
     action: "route",
     preferredRuleSets: ["geosite-cn"],
     domainSuffixes: [
@@ -203,8 +205,8 @@ export const RULE_TEMPLATES: readonly RuleTemplate[] = [
   },
   {
     id: "apple",
-    name: "Apple 服务",
-    description: "Apple / iCloud 服务",
+    nameKey: "Apple services",
+    descriptionKey: "Apple and iCloud services",
     action: "route",
     preferredRuleSets: ["geosite-apple"],
     domainSuffixes: [
@@ -219,16 +221,16 @@ export const RULE_TEMPLATES: readonly RuleTemplate[] = [
   },
   {
     id: "block-quic",
-    name: "屏蔽 QUIC",
-    description: "拒绝 UDP 443（QUIC/HTTP3），迫使浏览器回退到 TCP 代理",
+    nameKey: "Block QUIC",
+    descriptionKey: "Rejects UDP 443 (QUIC/HTTP3) so browsers fall back to proxied TCP",
     action: "reject",
     domainSuffixes: [],
     staticRule: { network: "udp", port: 443, action: "reject" },
   },
   {
     id: "private-direct",
-    name: "私有地址直连",
-    description: "RFC1918 / 回环 / 链路本地地址直连；建议添加后上移到列表前部",
+    nameKey: "Private addresses, direct",
+    descriptionKey: "RFC1918, loopback and link-local addresses, direct; move the rule to the top after adding it",
     action: "route",
     domainSuffixes: [],
     staticRule: { ip_is_private: true, outbound: "direct" },

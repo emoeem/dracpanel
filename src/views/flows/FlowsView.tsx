@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import type { ConnectionRow } from "../../api/daemon";
 import { useApi } from "../../app/context";
+import { useI18n } from "../../app/i18n";
 import { useStream } from "../../api/stream";
 import { FcCard, FcCardHeader, FcButton, FcPageToolbar, FcSegmented } from "../../components/flclash";
 import { formatBytes } from "../../api/format";
@@ -32,6 +33,7 @@ interface ColumnProps {
 }
 
 function FlowColumnView({ nodes, selectedKey, onSelect }: ColumnProps) {
+  const { t } = useI18n();
   return (
     <div className={styles.column}>
       {nodes.map((node) => (
@@ -39,7 +41,11 @@ function FlowColumnView({ nodes, selectedKey, onSelect }: ColumnProps) {
           key={node.key}
           type="button"
           className={cx(styles.node, selectedKey === node.key && styles.nodeActive)}
-          title={`${node.key} · ${node.count} 条 · ${formatBytes(node.bytes)}`}
+          title={t("{name} · {count} links · {bytes}", {
+            name: node.key,
+            count: node.count,
+            bytes: formatBytes(node.bytes),
+          })}
           onClick={() => onSelect(node.key)}
         >
           <span className={styles.nodeLabel}>{node.key}</span>
@@ -56,6 +62,7 @@ function linkPath(x1: number, y1: number, x2: number, y2: number): string {
 }
 
 function TopologyCard(props: { rows: readonly ConnectionRow[] }) {
+  const { t } = useI18n();
   const [dimension, setDimension] = useState<FlowDimension>("rule");
   const [selection, setSelection] = useState<FlowSelection | null>(null);
 
@@ -86,39 +93,42 @@ function TopologyCard(props: { rows: readonly ConnectionRow[] }) {
   return (
     <FcCard>
       <FcCardHeader
-        title="连接拓扑"
+        title={t("Connection topology")}
         subtitle={
           selection === null
-            ? `按${dimension === "rule" ? "规则" : "设备"}查看出站与节点的路径，点击行可筛选；覆盖 ${view.total} 条连接`
-            : `已按「${selection.key}」筛选 · 覆盖 ${view.total} 条连接`
+            ? t("{dimension} → outbound → node paths; click a row to filter · {count} connections", {
+                dimension: dimension === "rule" ? t("Rule") : t("Device"),
+                count: view.total,
+              })
+            : t("Filtered by “{name}” · {count} connections", { name: selection.key, count: view.total })
         }
         actions={
           <>
             {selection !== null && (
               <FcButton size="small" variant="text" onClick={() => setSelection(null)}>
-                清除路径筛选
+                {t("Clear path filter")}
               </FcButton>
             )}
             <FcSegmented
-              ariaLabel="拓扑维度"
+              ariaLabel={t("Topology dimension")}
               value={dimension}
               onChange={changeDimension}
               options={[
-                { value: "rule", label: "按规则" },
-                { value: "device", label: "按设备" },
+                { value: "rule", label: t("By rule") },
+                { value: "device", label: t("By device") },
               ]}
             />
           </>
         }
       />
       {props.rows.length === 0 ? (
-        <div className={styles.empty}>暂无活动连接</div>
+        <div className={styles.empty}>{t("No active connections")}</div>
       ) : (
         <div className={styles.topoArea}>
           <div className={styles.topoHead}>
-            <span>{dimension === "rule" ? "规则" : "设备"}</span>
-            <span>出站</span>
-            <span>节点</span>
+            <span>{dimension === "rule" ? t("Rule") : t("Device")}</span>
+            <span>{t("Outbound")}</span>
+            <span>{t("Node")}</span>
           </div>
           <div className={styles.topoWrap} style={{ height: wrapHeight }}>
             <svg
@@ -167,7 +177,9 @@ function TopologyCard(props: { rows: readonly ConnectionRow[] }) {
             </div>
           </div>
           {rowCount >= COLUMN_LIMIT && (
-            <p className={styles.topoNote}>每列最多显示 {COLUMN_LIMIT} 项，其余按计数截断。</p>
+            <p className={styles.topoNote}>
+              {t("At most {count} items per column; the rest are truncated by count", { count: COLUMN_LIMIT })}
+            </p>
           )}
         </div>
       )}
@@ -180,6 +192,7 @@ function TopologyCard(props: { rows: readonly ConnectionRow[] }) {
  * 数据来自实时连接流，是即时快照，不做持久化。
  */
 export function FlowsView() {
+  const { t } = useI18n();
   const api = useApi();
   const connections = useStream(api.connections);
   const [tab, setTab] = useState<Tab>("overview");
@@ -197,16 +210,16 @@ export function FlowsView() {
   return (
     <div className="fc-page">
       <FcPageToolbar
-        title="分流"
-        subtitle={`实时快照 · ${rows.length} 条活动连接`}
+        title={t("Flows")}
+        subtitle={t("Live snapshot · {count} active connections", { count: rows.length })}
         actions={
           <FcSegmented
-            ariaLabel="分流视图"
+            ariaLabel={t("Flows view")}
             value={tab}
             onChange={(value: string) => setTab(value as Tab)}
             options={[
-              { value: "overview", label: "概览" },
-              { value: "records", label: "记录" },
+              { value: "overview", label: t("Overview") },
+              { value: "records", label: t("Records") },
             ]}
           />
         }
@@ -216,14 +229,17 @@ export function FlowsView() {
           <TopologyCard rows={rows} />
         ) : (
           <FcCard>
-            <FcCardHeader title="连接记录" subtitle="当前活动连接，按开始时间倒序；实时快照不持久化" />
+            <FcCardHeader
+              title={t("Connection records")}
+              subtitle={t("Current active connections, newest first; the live snapshot is not persisted")}
+            />
             <div className={styles.recordTable} role="table">
               <div className={cx(styles.recordRow, styles.recordHead)} role="row">
-                <span role="columnheader">时间</span>
-                <span role="columnheader">目标</span>
-                <span role="columnheader">规则</span>
-                <span role="columnheader">出站</span>
-                <span role="columnheader">流量</span>
+                <span role="columnheader">{t("Time")}</span>
+                <span role="columnheader">{t("Destination")}</span>
+                <span role="columnheader">{t("Rule")}</span>
+                <span role="columnheader">{t("Outbound")}</span>
+                <span role="columnheader">{t("Traffic")}</span>
               </div>
               {rows.slice(0, 100).map((row) => (
                 <div key={row.connection.id} className={styles.recordRow} role="row">
@@ -242,7 +258,7 @@ export function FlowsView() {
                   </span>
                 </div>
               ))}
-              {rows.length === 0 && <div className={styles.empty}>暂无数据</div>}
+              {rows.length === 0 && <div className={styles.empty}>{t("No data")}</div>}
             </div>
           </FcCard>
         )}

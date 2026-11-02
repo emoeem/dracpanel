@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { getPanelToken, hasPanelToken } from "../../api/panel";
 import type { ConnectionRow } from "../../api/daemon";
+import { endpointIp } from "../../lib/connectionTools";
 
 /**
  * Observability data hooks behind the doona-style dashboard cards:
@@ -52,9 +53,12 @@ export async function fetchHistory(range: HistoryRange): Promise<HistoryResult> 
 const HISTORY_REFRESH_MS = 60_000;
 
 /** Persisted range data; null while unavailable (direct mode / no samples). */
-export function useHistoryRangeData(range: HistoryRange): HistoryResult | null {
+export function useHistoryRangeData(range: HistoryRange, enabled = true): HistoryResult | null {
   const [result, setResult] = useState<HistoryResult | null>(null);
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
     if (!hasPanelToken()) {
       setResult(null);
       return;
@@ -82,7 +86,7 @@ export function useHistoryRangeData(range: HistoryRange): HistoryResult | null {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [range]);
+  }, [range, enabled]);
   return result;
 }
 
@@ -91,8 +95,13 @@ interface ConnectionsSnapshot {
 }
 
 /**
- * Session-scope download totals per exit outbound. Each stream tick delivers
- * per-connection byte deltas (downlinkRate); accumulate them per outbound.
+ * Session-scope download totals per exit outbound.
+ *
+ * Deltas come from the per-connection cumulative byte counter, not from
+ * `downlinkRate`: the stream only rewrites rows that received an UPDATE event,
+ * so an idle row keeps last tick's rate and adding it again every frame
+ * double-counts the whole session (the ring chart grew without bound).
+ * Comparing cumulative totals is idempotent under repeated snapshots.
  * Reset on page reload by design — persisted history takes over when the
  * panel backend is available.
  */
@@ -101,6 +110,7 @@ export function useSessionOutboundTotals(
 ): [string, number][] {
   const [totals, setTotals] = useState<Map<string, number>>(() => new Map());
   const accumulator = useRef<Map<string, number>>(new Map());
+  const seen = useRef<Map<string, bigint>>(new Map());
   const rows = connections?.data.rows;
 
   useEffect(() => {
@@ -108,14 +118,29 @@ export function useSessionOutboundTotals(
       return;
     }
     let changed = false;
-    for (const row of rows.values()) {
-      const delta = row.downlinkRate;
-      if (delta <= 0) {
+    for (const [id, row] of rows) {
+      const total = row.downlinkTotal;
+      const previous = seen.current.get(id);
+      seen.current.set(id, total);
+      // First sighting only records a baseline: traffic that happened before
+      // the panel opened is not part of this session.
+      if (previous === undefined || total <= previous) {
+        continue;
+      }
+      const delta = Number(total - previous);
+      if (!Number.isFinite(delta) || delta <= 0) {
         continue;
       }
       const tag = row.connection.outbound || "direct";
       accumulator.current.set(tag, (accumulator.current.get(tag) ?? 0) + delta);
       changed = true;
+    }
+    if (seen.current.size > rows.size) {
+      for (const id of seen.current.keys()) {
+        if (!rows.has(id)) {
+          seen.current.delete(id);
+        }
+      }
     }
     if (changed) {
       setTotals(new Map(accumulator.current));
@@ -141,7 +166,7 @@ export function useSessionRanking(
     for (const row of rows) {
       const label =
         key === "device"
-          ? row.connection.source.split(":")[0] || row.connection.source
+          ? endpointIp(row.connection.source) || row.connection.source
           : (row.connection.domain || row.connection.destination || "").replace(/:\d+$/, "");
       if (label === "") {
         continue;

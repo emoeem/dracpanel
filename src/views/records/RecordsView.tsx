@@ -5,6 +5,7 @@ import type { ConnectionRow } from "../../api/daemon";
 import { useStream } from "../../api/stream";
 import { useApi, useNow } from "../../app/context";
 import { showError } from "../../app/errorStore";
+import { useI18n, type MessageKey } from "../../app/i18n";
 import { Icon } from "../../components/Icon";
 import {
   FcAvatar,
@@ -12,6 +13,7 @@ import {
   FcCard,
   FcIconButton,
   FcRecordTable,
+  FcSearchField,
   FcSegmented,
   FcSheet,
   type FcColumn,
@@ -62,14 +64,12 @@ function Toolbar(props: {
     <div className={styles.toolbar}>
       <h1 className={styles.pageTitle}>{props.title}</h1>
       <div className={styles.actions}>
-        <label className={styles.search}>
-          <Icon name="search" size={16} />
-          <input
-            value={props.search}
-            placeholder={props.searchPlaceholder}
-            onChange={(event) => props.onSearch(event.target.value)}
-          />
-        </label>
+        <FcSearchField
+          value={props.search}
+          onChange={props.onSearch}
+          placeholder={props.searchPlaceholder}
+          narrow
+        />
         {props.actions}
       </div>
     </div>
@@ -90,29 +90,30 @@ const COLUMN_SORT_KEY: Record<string, ConnectionSortKey> = {
   uploadRate: "rate",
 };
 
-const GROUP_LABELS: { value: ConnectionGroupKey; label: string }[] = [
-  { value: "none", label: "不分组" },
-  { value: "host", label: "按主机" },
-  { value: "process", label: "按进程" },
-  { value: "outbound", label: "按出口" },
-  { value: "rule", label: "按规则" },
-  { value: "source", label: "按设备" },
+const GROUP_LABELS: { value: ConnectionGroupKey; label: MessageKey }[] = [
+  { value: "none", label: "No grouping" },
+  { value: "host", label: "By host" },
+  { value: "process", label: "By process" },
+  { value: "outbound", label: "By outbound" },
+  { value: "rule", label: "By rule" },
+  { value: "source", label: "By device" },
 ];
 
-const SORT_LABELS: { value: ConnectionSortKey; label: string }[] = [
-  { value: "date", label: "开始时间" },
-  { value: "host", label: "主机" },
-  { value: "process", label: "进程" },
-  { value: "outbound", label: "出口" },
-  { value: "rule", label: "规则" },
-  { value: "download", label: "下载量" },
-  { value: "upload", label: "上传量" },
-  { value: "total", label: "总流量" },
-  { value: "rate", label: "当前速率" },
+const SORT_LABELS: { value: ConnectionSortKey; label: MessageKey }[] = [
+  { value: "date", label: "Start time" },
+  { value: "host", label: "Host" },
+  { value: "process", label: "Process" },
+  { value: "outbound", label: "Outbound" },
+  { value: "rule", label: "Rule" },
+  { value: "download", label: "Downloaded" },
+  { value: "upload", label: "Uploaded" },
+  { value: "total", label: "Total traffic" },
+  { value: "rate", label: "Current rate" },
 ];
 
 export function ConnectionsView() {
   const api = useApi();
+  const { t } = useI18n();
   const now = useNow(1000);
   const connections = useStream(api.connections);
   const groups = useStream(api.groups);
@@ -250,7 +251,7 @@ export function ConnectionsView() {
     () => [
       {
         key: "process",
-        label: "进程",
+        label: t("Process"),
         width: 150,
         sortable: true,
         render: (row) => {
@@ -265,7 +266,7 @@ export function ConnectionsView() {
       },
       {
         key: "target",
-        label: "目标",
+        label: t("Target"),
         flex: 1.4,
         sortable: true,
         render: (row) => (
@@ -276,13 +277,13 @@ export function ConnectionsView() {
       },
       {
         key: "protocol",
-        label: "协议",
+        label: t("Protocol"),
         width: 60,
         render: (row) => row.connection.network.toUpperCase() || "—",
       },
       {
         key: "rule",
-        label: "规则",
+        label: t("Rule"),
         flex: 0.9,
         hideBelow: 1000,
         sortable: true,
@@ -290,7 +291,7 @@ export function ConnectionsView() {
       },
       {
         key: "outbound",
-        label: "出口",
+        label: t("Outbound"),
         width: 120,
         sortable: true,
         render: (row) => (
@@ -301,7 +302,7 @@ export function ConnectionsView() {
       },
       {
         key: "downloadRate",
-        label: "下载速度",
+        label: t("Download rate"),
         width: 88,
         align: "end",
         sortable: true,
@@ -309,7 +310,7 @@ export function ConnectionsView() {
       },
       {
         key: "uploadRate",
-        label: "上传速度",
+        label: t("Upload rate"),
         width: 88,
         align: "end",
         sortable: true,
@@ -317,7 +318,7 @@ export function ConnectionsView() {
       },
       {
         key: "downloadTotal",
-        label: "下载总量",
+        label: t("Downloaded"),
         width: 84,
         align: "end",
         hideBelow: 1200,
@@ -326,7 +327,7 @@ export function ConnectionsView() {
       },
       {
         key: "uploadTotal",
-        label: "上传总量",
+        label: t("Uploaded"),
         width: 84,
         align: "end",
         hideBelow: 1200,
@@ -335,13 +336,13 @@ export function ConnectionsView() {
       },
       {
         key: "duration",
-        label: "时长",
+        label: t("Duration"),
         width: 72,
         align: "end",
         render: (row) => formatDurationMs(Math.max(0, now - Number(row.connection.createdAt))),
       },
     ],
-    [now],
+    [now, t],
   );
 
   const closeAll = async () => {
@@ -358,22 +359,22 @@ export function ConnectionsView() {
   return (
     <div className="fc-page">
       <Toolbar
-        title="连接"
+        title={t("Connections")}
         search={search}
         onSearch={setSearch}
-        searchPlaceholder="搜索连接"
+        searchPlaceholder={t("Search connections")}
         actions={
           <>
             <FcSegmented
-              ariaLabel="连接视图"
+              ariaLabel={t("Connection view")}
               value={tab}
               onChange={(value: string) => setTab(value as "traffic" | "list")}
               options={[
-                { value: "traffic", label: "流量" },
-                { value: "list", label: "列表" },
+                { value: "traffic", label: t("Traffic") },
+                { value: "list", label: t("List") },
               ]}
             />
-            <FcIconButton label="关闭全部连接" disabled={closingAll || rows.length === 0} onClick={() => void closeAll()}>
+            <FcIconButton label={t("Close all connections")} disabled={closingAll || rows.length === 0} onClick={() => void closeAll()}>
               {closingAll ? <span className={styles.spinner} /> : <Icon name="delete_sweep" size={18} />}
             </FcIconButton>
           </>
@@ -385,47 +386,47 @@ export function ConnectionsView() {
         <>
           <div className={styles.filterBar}>
             <FcSegmented
-              ariaLabel="连接状态"
+              ariaLabel={t("Connection state")}
               value={stateFilter}
               onChange={(value: string) => changeStateFilter(value as ConnectionStateFilter)}
               options={[
-                { value: "active", label: "活动" },
-                { value: "closed", label: "已关闭" },
-                { value: "all", label: "全部" },
+                { value: "active", label: t("Active") },
+                { value: "closed", label: t("Closed") },
+                { value: "all", label: t("All") },
               ]}
             />
             <FcSegmented
-              ariaLabel="网络类型"
+              ariaLabel={t("Network type")}
               value={network}
               onChange={(value: string) => changeNetwork(value as ConnectionNetworkFilter)}
               options={[
-                { value: "all", label: "全部" },
+                { value: "all", label: t("All") },
                 { value: "tcp", label: "TCP" },
                 { value: "udp", label: "UDP" },
               ]}
             />
             <label className={styles.filterField}>
-              <span>分组</span>
+              <span>{t("Group")}</span>
               <select value={groupBy} onChange={(event) => changeGroupBy(event.target.value)}>
                 {GROUP_LABELS.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {t(option.label)}
                   </option>
                 ))}
               </select>
             </label>
             <label className={styles.filterField}>
-              <span>排序</span>
+              <span>{t("Sort")}</span>
               <select value={sortKey} onChange={(event) => changeSortKey(event.target.value)}>
                 {SORT_LABELS.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {t(option.label)}
                   </option>
                 ))}
               </select>
             </label>
             <FcIconButton
-              label={sortDirection === "asc" ? "升序" : "降序"}
+              label={sortDirection === "asc" ? t("Ascending") : t("Descending")}
               onClick={changeSortDirection}
             >
               <span className={cx(styles.sortDirIcon, sortDirection === "asc" && styles.sortDirAsc)}>
@@ -434,10 +435,10 @@ export function ConnectionsView() {
             </FcIconButton>
             <span className={styles.filterSpacer} />
             <FcButton size="small" onClick={() => exportRows("csv")}>
-              导出 CSV
+              {t("Export CSV")}
             </FcButton>
             <FcButton size="small" onClick={() => exportRows("json")}>
-              导出 JSON
+              {t("Export JSON")}
             </FcButton>
           </div>
           {groupBy === "none" ? (
@@ -450,7 +451,7 @@ export function ConnectionsView() {
                 sortKey={sortKey}
                 sortDirection={sortDirection}
                 onSort={handleSort}
-                emptyLabel={connections.data.loaded ? "暂无数据" : "加载中…"}
+                emptyLabel={connections.data.loaded ? t("No data") : t("Loading…")}
                 maxRows={300}
               />
             </FcCard>
@@ -458,7 +459,7 @@ export function ConnectionsView() {
             <FcCard className={styles.tableCard}>
               {listGroups.length === 0 ? (
                 <div className={styles.empty}>
-                  {connections.data.loaded ? "暂无数据" : "加载中…"}
+                  {connections.data.loaded ? t("No data") : t("Loading…")}
                 </div>
               ) : (
                 listGroups.map((group) => (
@@ -476,8 +477,11 @@ export function ConnectionsView() {
                         {group.key}
                       </span>
                       <span className={styles.groupMeta}>
-                        {group.rows.length} 条 · ↓{formatBytes(group.downlink)} ↑
-                        {formatBytes(group.uplink)}
+                        {t("{count} rows · ↓{down} ↑{up}", {
+                          count: group.rows.length,
+                          down: formatBytes(group.downlink),
+                          up: formatBytes(group.uplink),
+                        })}
                       </span>
                     </button>
                     {expandedGroups.has(group.key) && (
@@ -513,27 +517,28 @@ export function ConnectionsView() {
 
 function ConnectionDetail(props: { row: ConnectionRow; now: number; onClose: () => void }) {
   const api = useApi();
+  const { t } = useI18n();
   const row = props.row;
   const connection = row.connection;
   const [closing, setClosing] = useState(false);
   const lines: [string, string][] = [
-    ["进程", connectionProcessName(row) || connection.processInfo?.processPath || "—"],
-    ["目标", connection.destination || "—"],
-    ["域名", connection.domain || "—"],
-    ["来源", connection.source || "—"],
-    ["入站", `${connection.inbound} (${connection.inboundType})`],
-    ["网络", connection.network.toUpperCase()],
-    ["协议", connection.protocol || "—"],
-    ["规则", connection.rule || "—"],
-    ["出口链", connectionChain(row) || "—"],
-    ["开始时间", new Date(Number(connection.createdAt)).toLocaleString()],
-    ["时长", formatDurationMs(Math.max(0, props.now - Number(connection.createdAt)))],
-    ["下载总量", formatBytes(row.downlinkTotal)],
-    ["上传总量", formatBytes(row.uplinkTotal)],
+    [t("Process"), connectionProcessName(row) || connection.processInfo?.processPath || "—"],
+    [t("Target"), connection.destination || "—"],
+    [t("Domain"), connection.domain || "—"],
+    [t("Source"), connection.source || "—"],
+    [t("Inbound"), `${connection.inbound} (${connection.inboundType})`],
+    [t("Network"), connection.network.toUpperCase()],
+    [t("Protocol"), connection.protocol || "—"],
+    [t("Rule"), connection.rule || "—"],
+    [t("Outbound chain"), connectionChain(row) || "—"],
+    [t("Start time"), new Date(Number(connection.createdAt)).toLocaleString()],
+    [t("Duration"), formatDurationMs(Math.max(0, props.now - Number(connection.createdAt)))],
+    [t("Downloaded"), formatBytes(row.downlinkTotal)],
+    [t("Uploaded"), formatBytes(row.uplinkTotal)],
   ];
   return (
     <FcSheet
-      title="连接详情"
+      title={t("Connection details")}
       subtitle={connectionHost(row)}
       onClose={props.onClose}
       footer={
@@ -551,7 +556,7 @@ function ConnectionDetail(props: { row: ConnectionRow; now: number; onClose: () 
               });
           }}
         >
-          {closing ? "关闭中…" : "关闭连接"}
+          {closing ? t("Closing…") : t("Close connection")}
         </FcButton>
       }
     >
@@ -571,6 +576,7 @@ function ConnectionDetail(props: { row: ConnectionRow; now: number; onClose: () 
 
 export function RequestsView() {
   const api = useApi();
+  const { t } = useI18n();
   const connections = useStream(api.connections);
   const now = useNow(1000);
   const [search, setSearch] = useState("");
@@ -592,32 +598,32 @@ export function RequestsView() {
   const columns: FcColumn<(typeof entries)[number]>[] = [
     {
       key: "time",
-      label: "时间",
+      label: t("Time"),
       width: 80,
       render: (entry) => new Date(entry.at).toLocaleTimeString(),
     },
     {
       key: "source",
-      label: "来源",
+      label: t("Source"),
       width: 140,
       hideBelow: 1000,
       render: (entry) => <span className={styles.muted}>{entry.inbound || "—"}</span>,
     },
     {
       key: "target",
-      label: "目标",
+      label: t("Target"),
       flex: 1.3,
       render: (entry) => <span title={entry.host}>{entry.host || "—"}</span>,
     },
     {
       key: "rule",
-      label: "规则",
+      label: t("Rule"),
       flex: 1,
       render: (entry) => <span className={styles.muted}>{entry.rule || "—"}</span>,
     },
     {
       key: "outbound",
-      label: "出口",
+      label: t("Outbound"),
       width: 110,
       render: (entry) => (
         <span className={styles.truncate} title={entry.chain}>
@@ -627,7 +633,7 @@ export function RequestsView() {
     },
     {
       key: "traffic",
-      label: "流量",
+      label: t("Traffic"),
       width: 88,
       align: "end",
       render: (entry) => formatBytes(entry.downloadTotal + entry.uploadTotal),
@@ -637,20 +643,22 @@ export function RequestsView() {
   return (
     <div className="fc-page">
       <Toolbar
-        title="最近请求"
+        title={t("Recent requests")}
         search={search}
         onSearch={setSearch}
-        searchPlaceholder="搜索请求"
+        searchPlaceholder={t("Search requests")}
       />
       <div className={styles.banner}>
-        请求列表由实时连接事件派生，核心不保留历史请求日志；重启后条目会消失。
+        {t(
+          "Requests are derived from live connection events; the core keeps no request history, so entries disappear after a restart.",
+        )}
       </div>
       <FcCard className={styles.tableCard}>
         <FcRecordTable
           columns={columns}
           rows={entries}
           getKey={(entry) => entry.id}
-          emptyLabel={connections.data.loaded ? "暂无数据" : "加载中…"}
+          emptyLabel={connections.data.loaded ? t("No data") : t("Loading…")}
           maxRows={400}
         />
       </FcCard>

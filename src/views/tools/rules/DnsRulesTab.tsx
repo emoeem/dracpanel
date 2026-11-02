@@ -1,3 +1,4 @@
+import { useI18n } from "../../../app/i18n";
 import type { RuleObject } from "../../../lib/ruleEditor";
 import { RuleEditorList } from "./RuleEditorList";
 import styles from "../RulesView.module.css";
@@ -12,20 +13,23 @@ export function DnsRulesTab(props: {
   serverTags: readonly string[];
   busy: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <div className={styles.tabBody}>
       <p className={styles.hint}>
-        DNS 规则按顺序匹配；「服务器」需为 dns.servers 中已定义的 tag，命中后该查询交给对应上游处理。
+        {t(
+          "DNS rules match in order; the server must be a tag defined in dns.servers, and matching queries are handed to that upstream.",
+        )}
       </p>
       <RuleEditorList
         rules={props.rules}
         onChange={props.onChange}
         targetKey="server"
-        targetLabel="DNS 服务器"
+        targetLabel={t("DNS server")}
         targetOptions={props.serverTags}
         busy={props.busy}
-        addLabel="添加 DNS 规则"
-        emptyText="暂无 DNS 规则"
+        addLabel={t("Add DNS rule")}
+        emptyText={t("No DNS rules")}
       />
     </div>
   );

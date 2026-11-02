@@ -13,31 +13,33 @@ import {
   type ThemePreference,
 } from "../../app/context";
 import { navigate } from "../../app/context";
+import { useI18n, type MessageKey } from "../../app/i18n";
 import { FcCard } from "../../components/flclash";
 import { cx } from "../../lib/cx";
 import { ToolsPageHeader } from "./ToolsView";
 import styles from "./ThemeView.module.css";
 
-const ACCENT_LABELS: Record<AccentPreset, string> = {
-  default: "默认",
-  blue: "蓝",
-  purple: "紫",
-  pink: "粉",
-  red: "红",
-  orange: "橙",
-  yellow: "黄",
-  green: "绿",
-  graphite: "灰",
+const ACCENT_LABELS: Record<AccentPreset, MessageKey> = {
+  default: "Default",
+  blue: "Blue",
+  purple: "Purple",
+  pink: "Pink",
+  red: "Red",
+  orange: "Orange",
+  yellow: "Yellow",
+  green: "Green",
+  graphite: "Graphite",
 };
 
-const THEME_MODES: { value: ThemePreference; label: string }[] = [
-  { value: "auto", label: "自动" },
-  { value: "light", label: "浅色" },
-  { value: "dark", label: "深色" },
+const THEME_MODES: { value: ThemePreference; label: MessageKey }[] = [
+  { value: "auto", label: "Auto" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
 ];
 
 export function ThemeView() {
   useApi();
+  const { t } = useI18n();
   const [theme, setTheme] = useState<ThemePreference>(loadThemePreference);
   const [amoled, setAmoled] = useState(() => loadAmoledPreference());
   const [accent, setAccent] = useState(loadAccentPreference);
@@ -59,10 +61,10 @@ export function ThemeView() {
 
   return (
     <div className="fc-page">
-      <ToolsPageHeader title="主题" onBack={() => navigate("tools")} />
+      <ToolsPageHeader title={t("Theme")} onBack={() => navigate("tools")} />
       <div className="fc-page-body">
         <FcCard className={styles.card}>
-          <h2 className={styles.cardTitle}>主题模式</h2>
+          <h2 className={styles.cardTitle}>{t("Theme mode")}</h2>
           <div className={styles.segmented}>
             {THEME_MODES.map((mode) => (
               <button
@@ -71,7 +73,7 @@ export function ThemeView() {
                 className={cx(styles.segment, theme === mode.value && styles.segmentActive)}
                 onClick={() => updateTheme(mode.value)}
               >
-                {mode.label}
+                {t(mode.label)}
               </button>
             ))}
           </div>
@@ -83,8 +85,8 @@ export function ThemeView() {
             onClick={() => updateAmoled(!amoled)}
           >
             <span className={styles.rowText}>
-              <span className={styles.rowLabel}>纯黑</span>
-              <span className={styles.rowDetail}>深色模式下使用纯黑背景（AMOLED 友好）</span>
+              <span className={styles.rowLabel}>{t("Pure black")}</span>
+              <span className={styles.rowDetail}>{t("Dark mode uses a pure black background (AMOLED friendly)")}</span>
             </span>
             <span className={styles.switchTrack} data-on={amoled}>
               <span className={styles.switchThumb} />
@@ -93,7 +95,7 @@ export function ThemeView() {
         </FcCard>
 
         <FcCard className={styles.card}>
-          <h2 className={styles.cardTitle}>主题色彩</h2>
+          <h2 className={styles.cardTitle}>{t("Accent color")}</h2>
           <div className={styles.swatches}>
             {ACCENT_PRESETS.map((preset) => (
               <button
@@ -101,13 +103,19 @@ export function ThemeView() {
                 type="button"
                 className={cx(styles.swatch, accent === preset && styles.swatchActive)}
                 data-accent={preset}
-                aria-label={ACCENT_LABELS[preset]}
-                title={ACCENT_LABELS[preset]}
+                aria-label={t(ACCENT_LABELS[preset])}
+                title={t(ACCENT_LABELS[preset])}
                 onClick={() => updateAccent(preset)}
               />
             ))}
           </div>
-          <p className={styles.hint}>主题色彩：{ACCENT_LABELS[accent as AccentPreset] ?? accent}</p>
+          <p className={styles.hint}>
+            {t("Accent color: {name}", {
+              name: ACCENT_LABELS[accent as AccentPreset]
+                ? t(ACCENT_LABELS[accent as AccentPreset])
+                : accent,
+            })}
+          </p>
         </FcCard>
       </div>
     </div>

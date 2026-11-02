@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   daysUntil,
-  formatExpiryDays,
+  expiryStatus,
   formatPeak,
   formatRate,
   formatUptimeClock,
@@ -51,8 +51,9 @@ describe("formatters", () => {
     expect(formatPeak([1, 2048, 3])).toBe("2 KB/s");
     expect(formatPeak([])).toBe("0 B/s");
     expect(percentLabel(0.34)).toBe("34%");
-    expect(formatExpiryDays(49)).toBe("剩余 49 天");
-    expect(formatExpiryDays(0)).toBe("已过期");
-    expect(formatExpiryDays(null)).toBe("—");
+    expect(expiryStatus(49)).toEqual({ expired: false, days: 49 });
+    expect(expiryStatus(0)).toEqual({ expired: true, days: 0 });
+    expect(expiryStatus(-3)).toEqual({ expired: true, days: -3 });
+    expect(expiryStatus(null)).toBeNull();
   });
 });

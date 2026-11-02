@@ -399,6 +399,7 @@ function Shell(props: ShellProps) {
 }
 
 function ShellContent(props: ShellProps & { onRetry: () => void }) {
+  const { t } = useI18n();
   const api = useApi();
   const route = props.route;
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -436,16 +437,29 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
   });
 
   useEffect(() => {
+    // The connections stream resets its data on reconnect, so a fast tab switch
+    // used to blank the list for a moment. Only reconnect after the tab was
+    // actually parked (a stale stream), and always after a network recovery.
+    let hiddenAt = 0;
     const kick = () => {
       if (!document.hidden) {
         api.reconnectNow();
       }
     };
-    document.addEventListener("visibilitychange", kick);
+    const onVisibility = () => {
+      if (document.hidden) {
+        hiddenAt = Date.now();
+        return;
+      }
+      if (Date.now() - hiddenAt >= 3_000) {
+        api.reconnectNow();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pageshow", kick);
     window.addEventListener("online", kick);
     return () => {
-      document.removeEventListener("visibilitychange", kick);
+      document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pageshow", kick);
       window.removeEventListener("online", kick);
     };
@@ -472,30 +486,29 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
     const go = (label: string, page: string, icon: IconName, hint?: string): Command => ({
       id: `nav-${seq++}`,
       label,
-      group: "页面",
+      group: t("Pages"),
       icon,
       hint,
       run: () => navigate(page),
     });
     return [
-      go("活动", "activity", "dashboard", "Ctrl+1"),
-      go("策略", "policies", "layers", "Ctrl+2"),
-      go("订阅", "profiles", "description", "Ctrl+3"),
-      go("连接", "connections", "hub", "Ctrl+4"),
-      go("活动", "activity", "history"),
-      go("系统状态", "overview", "speed"),
-      go("分流", "flows", "route"),
-      go("事件", "events", "notifications"),
-      go("节点", "nodes", "public"),
-      go("规则", "rules", "rule"),
+      go(t("Activity"), "activity", "dashboard", "Ctrl+1"),
+      go(t("Policies"), "policies", "layers", "Ctrl+2"),
+      go(t("Subscriptions"), "profiles", "description", "Ctrl+3"),
+      go(t("Connections"), "connections", "hub", "Ctrl+4"),
+      go(t("System Status"), "overview", "speed"),
+      go(t("Flows"), "flows", "route"),
+      go(t("Events"), "events", "notifications"),
+      go(t("Nodes"), "nodes", "public"),
+      go(t("Rules"), "rules", "rule"),
       go("DNS", "dns", "dns"),
-      go("日志", "logs", "text_snippet"),
-      go("设置", "tools", "handyman"),
-      go("最近请求", "tools/requests", "swap_vert"),
-      go("自定义资源", "tools/rulesets", "rule"),
-      go("配置文件", "config", "code"),
+      go(t("Logs"), "logs", "text_snippet"),
+      go(t("Tools"), "tools", "handyman"),
+      go(t("Recent Requests"), "tools/requests", "swap_vert"),
+      go(t("Custom Resources"), "tools/rulesets", "rule"),
+      go(t("Configuration file"), "config", "code"),
     ];
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const pages: Record<string, string> = {
@@ -530,7 +543,7 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
 
   const lostError =
     serviceStatus.phase === "error" && isTerminalCode(serviceStatus.errorCode)
-      ? (serviceStatus.error ?? "连接已断开")
+      ? (serviceStatus.error ?? t("Disconnected"))
       : null;
 
   if (lostError !== null) {
@@ -555,56 +568,55 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
   }
 
   const items: SidebarEntry[] = [
-    { key: "dashboard", label: "仪表盘", icon: "dashboard", page: "dashboard" },
     {
       key: "activity-group",
-      label: "活动",
+      label: t("Dashboard"),
       icon: "history",
       children: [
-        { key: "activity", label: "活动", icon: "dashboard", page: "activity" },
-        { key: "overview", label: "系统状态", icon: "speed", page: "overview" },
+        { key: "activity", label: t("Activity"), icon: "dashboard", page: "activity" },
+        { key: "overview", label: t("System Status"), icon: "speed", page: "overview" },
       ],
     },
     {
       key: "observe-group",
-      label: "观测",
+      label: t("Observation"),
       icon: "visibility",
       children: [
-        { key: "connections", label: "连接", icon: "hub", page: "connections", hidden: !started },
-        { key: "flows", label: "分流", icon: "route", page: "flows", hidden: !started },
+        { key: "connections", label: t("Connections"), icon: "hub", page: "connections", hidden: !started },
+        { key: "flows", label: t("Flows"), icon: "route", page: "flows", hidden: !started },
         { key: "dns", label: "DNS", icon: "dns", page: "dns" },
-        { key: "logs", label: "日志", icon: "text_snippet", page: "logs", hidden: !logsVisible || !started },
-        { key: "events", label: "事件", icon: "notifications", page: "events" },
+        { key: "logs", label: t("Logs"), icon: "text_snippet", page: "logs", hidden: !logsVisible || !started },
+        { key: "events", label: t("Events"), icon: "notifications", page: "events" },
       ],
     },
     {
       key: "route-group",
-      label: "路由",
+      label: t("Route"),
       icon: "layers",
       children: [
-        { key: "policies", label: "策略", icon: "layers", page: "policies", hidden: !hasProxies },
-        { key: "nodes", label: "节点", icon: "public", page: "nodes", hidden: !hasProxies },
-        { key: "profiles", label: "订阅", icon: "description", page: "profiles" },
-        { key: "rules", label: "规则", icon: "rule", page: "rules" },
+        { key: "policies", label: t("Policies"), icon: "layers", page: "policies", hidden: !hasProxies },
+        { key: "nodes", label: t("Nodes"), icon: "public", page: "nodes", hidden: !hasProxies },
+        { key: "profiles", label: t("Subscriptions"), icon: "description", page: "profiles" },
+        { key: "rules", label: t("Rules"), icon: "rule", page: "rules" },
       ],
     },
     {
       key: "settings-group",
-      label: "设置",
+      label: t("Settings"),
       icon: "settings",
       children: [
-        { key: "config", label: "配置", icon: "code", page: "config" },
-        { key: "settings", label: "设置", icon: "tune", page: "tools" },
+        { key: "config", label: t("Configuration"), icon: "code", page: "config" },
+        { key: "settings", label: t("Tools"), icon: "tune", page: "tools" },
       ],
     },
   ];
   const mobileItems: SidebarItem[] = (
     [
-      { key: "activity", label: "活动", icon: "dashboard", page: "activity" },
-      { key: "policies", label: "策略", icon: "layers", page: "policies", hidden: !hasProxies },
-      { key: "connections", label: "连接", icon: "hub", page: "connections", hidden: !started },
-      { key: "logs", label: "日志", icon: "text_snippet", page: "logs", hidden: !logsVisible || !started },
-      { key: "settings", label: "设置", icon: "settings", page: "tools" },
+      { key: "activity", label: t("Activity"), icon: "dashboard", page: "activity" },
+      { key: "policies", label: t("Policies"), icon: "layers", page: "policies", hidden: !hasProxies },
+      { key: "connections", label: t("Connections"), icon: "hub", page: "connections", hidden: !started },
+      { key: "logs", label: t("Logs"), icon: "text_snippet", page: "logs", hidden: !logsVisible || !started },
+      { key: "settings", label: t("Settings"), icon: "settings", page: "tools" },
     ] as SidebarItem[]
   ).filter((item) => !item.hidden);
 
@@ -673,6 +685,19 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
 
 /* Route-scoped error boundary: a crash in one page does not take the shell down,
    and navigating away remounts a fresh view. */
+function RouteErrorFallback(props: { error: Error; onRetry: () => void }) {
+  const { t } = useI18n();
+  return (
+    <div className={styles.connectingView}>
+      <p className={styles.errorText}>{t("The page encountered an error")}</p>
+      {props.error.message ? <p className={styles.errorDetail}>{props.error.message}</p> : null}
+      <Button variant="primary" onClick={props.onRetry}>
+        {t("Retry")}
+      </Button>
+    </div>
+  );
+}
+
 class ErrorBoundaryKeyed extends Component<{ routeKey: string; children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
 
@@ -689,15 +714,10 @@ class ErrorBoundaryKeyed extends Component<{ routeKey: string; children: ReactNo
   render() {
     if (this.state.error !== null) {
       return (
-        <div className={styles.connectingView}>
-          <p className={styles.errorText}>页面出现错误</p>
-          {this.state.error?.message ? (
-            <p className={styles.errorDetail}>{this.state.error.message}</p>
-          ) : null}
-          <Button variant="primary" onClick={() => this.setState({ error: null })}>
-            重试
-          </Button>
-        </div>
+        <RouteErrorFallback
+          error={this.state.error}
+          onRetry={() => this.setState({ error: null })}
+        />
       );
     }
     return this.props.children;

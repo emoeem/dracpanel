@@ -34,7 +34,7 @@ export function GeneralView() {
     try {
       const result = await serviceAction(action);
       if (!result.ok) {
-        throw new Error(result.message || "核心操作失败");
+        throw new Error(result.message || t("Core action failed"));
       }
       panel.refresh();
     } catch (error) {
@@ -45,15 +45,15 @@ export function GeneralView() {
   };
 
   const rows: [string, string][] = [
-    ["状态", panel.state?.service ? (panel.state.service.active ? "运行中" : "已停止") : "—"],
-    ["版本", serviceInfo?.version ?? "—"],
-    ["配置路径", panel.state?.config_path ?? "—"],
-    ["当前服务器", activeServer?.name ?? "—"],
+    [t("Status"), panel.state?.service ? (panel.state.service.active ? t("Running") : t("Stopped")) : "—"],
+    [t("Version"), serviceInfo?.version ?? "—"],
+    [t("Config path"), panel.state?.config_path ?? "—"],
+    [t("Current server"), activeServer?.name ?? "—"],
   ];
 
   return (
     <div className="fc-page">
-      <ToolsPageHeader title="常规" onBack={() => navigate("tools")} />
+      <ToolsPageHeader title={t("General")} onBack={() => navigate("tools")} />
       <div className="fc-page-body">
         <FcCard className={styles.card}>
           {rows.map(([label, value]) => (
@@ -65,7 +65,7 @@ export function GeneralView() {
             </div>
           ))}
           <div className={styles.row}>
-            <span>运行时长</span>
+            <span>{t("Uptime")}</span>
             <span className={styles.value}>
               {startedAt !== null ? formatUptimeClock(startedAt, now) : "—"}
             </span>
@@ -77,7 +77,7 @@ export function GeneralView() {
             {panelAvailable ? (
               <>
                 <button type="button" className={styles.action} disabled={busy} onClick={() => void run("restart")}>
-                  <Icon name="restart_alt" size={16} /> 重启核心
+                  <Icon name="restart_alt" size={16} /> {t("Restart core")}
                 </button>
                 <button
                   type="button"
@@ -87,7 +87,7 @@ export function GeneralView() {
                     void run("start");
                   }}
                 >
-                  <Icon name="play_arrow" size={16} /> 启动核心
+                  <Icon name="play_arrow" size={16} /> {t("Start core")}
                 </button>
                 <button
                   type="button"
@@ -95,11 +95,11 @@ export function GeneralView() {
                   disabled={busy}
                   onClick={() => setStopConfirm(true)}
                 >
-                  <Icon name="stop" size={16} /> 停止核心
+                  <Icon name="stop" size={16} /> {t("Stop core")}
                 </button>
               </>
             ) : (
-              <span className={styles.hint}>核心控制需要面板后端；直接模式下不可用。</span>
+              <span className={styles.hint}>{t("Core controls require the panel backend; unavailable in direct mode.")}</span>
             )}
           </div>
         </FcCard>
@@ -117,8 +117,8 @@ export function GeneralView() {
             }}
           >
             <span className={styles.rowText}>
-              <span className={styles.rowLabel}>日志开关</span>
-              <span className={styles.rowDetail}>开启后侧栏与底部导航显示「日志」页</span>
+              <span className={styles.rowLabel}>{t("Log toggle")}</span>
+              <span className={styles.rowDetail}>{t("Shows the Logs page in the sidebar and bottom navigation.")}</span>
             </span>
             <span className={styles.switchTrack} data-on={logsOn}>
               <span className={styles.switchThumb} />
@@ -126,8 +126,8 @@ export function GeneralView() {
           </button>
           <button type="button" className={styles.navRow} onClick={() => navigate("tools/servers")}>
             <span className={styles.rowText}>
-              <span className={styles.rowLabel}>服务器管理</span>
-              <span className={styles.rowDetail}>{servers.servers.length} 个服务器</span>
+              <span className={styles.rowLabel}>{t("Server management")}</span>
+              <span className={styles.rowDetail}>{t("{count} servers", { count: servers.servers.length })}</span>
             </span>
             <Icon name="chevron_right" size={16} />
           </button>
@@ -141,7 +141,7 @@ export function GeneralView() {
           >
             <span className={styles.rowText}>
               <span className={styles.rowLabel}>{t("Lock panel")}</span>
-              <span className={styles.rowDetail}>清除凭据并返回登录界面</span>
+              <span className={styles.rowDetail}>{t("Clear credentials and return to the sign-in screen")}</span>
             </span>
             <Icon name="logout" size={16} />
           </button>
@@ -149,9 +149,9 @@ export function GeneralView() {
       </div>
       {stopConfirm && (
         <ConfirmDialog
-          title="停止核心"
-          message="停止内核会中断所有经过它的连接，确定继续？"
-          confirmLabel="停止"
+          title={t("Stop core")}
+          message={t("Stopping the core drops every connection that goes through it. Continue?")}
+          confirmLabel={t("Stop")}
           danger
           busy={busy}
           onConfirm={() => {
@@ -161,7 +161,7 @@ export function GeneralView() {
               try {
                 const result = await serviceAction("stop");
                 if (!result.ok) {
-                  throw new Error(result.message || "核心操作失败");
+                  throw new Error(result.message || t("Core action failed"));
                 }
                 panel.refresh();
               } catch (error) {

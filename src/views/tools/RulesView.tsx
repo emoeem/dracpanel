@@ -8,6 +8,7 @@ import {
 } from "../../api/panel";
 import { useApi, navigate } from "../../app/context";
 import { afterConfigChange } from "../../app/configResync";
+import { useI18n } from "../../app/i18n";
 import { showError } from "../../app/errorStore";
 import { FcButton, FcCard, FcTabs } from "../../components/flclash";
 import type { RuleObject } from "../../lib/ruleEditor";
@@ -37,6 +38,7 @@ function tagList(value: { tag?: unknown }[]): string[] {
 
 export function RulesView() {
   const api = useApi();
+  const { t } = useI18n();
   const [tab, setTab] = useState<RulesTab>("route");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -55,7 +57,7 @@ export function RulesView() {
     try {
       const config = await getPanelConfig();
       if (!config.ok) {
-        throw new Error("读取配置失败");
+        throw new Error(t("Failed to read the configuration"));
       }
       const next: RuleSections = {
         route: readConfigValue<RuleObject[]>(config.text, ["route", "rules"], []),
@@ -74,7 +76,7 @@ export function RulesView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load(true);
@@ -92,7 +94,7 @@ export function RulesView() {
     try {
       const config = await getPanelConfig();
       if (!config.ok) {
-        throw new Error("读取配置失败");
+        throw new Error(t("Failed to read the configuration"));
       }
       // One write carries both sections; the patch keeps comments intact.
       const patches: { path: ConfigPath; value: unknown }[] = [];
@@ -105,11 +107,11 @@ export function RulesView() {
       const text = patchConfigTextMany(config.text, patches);
       const validation = await validatePanelConfig(text);
       if (!validation.ok) {
-        throw new Error(validation.message || "配置校验失败，未应用");
+        throw new Error(validation.message || t("Configuration validation failed; nothing was applied"));
       }
       const result = await applyPanelConfig(text, config.mtime);
       if (!result.ok) {
-        throw new Error(result.message || "写入失败");
+        throw new Error(result.message || t("Failed to write"));
       }
       await afterConfigChange(api);
       setBaseline({ route, dns });
@@ -121,7 +123,7 @@ export function RulesView() {
     } finally {
       setBusy(false);
     }
-  }, [api, dirty, routeDirty, dnsDirty, route, dns, load]);
+  }, [api, dirty, routeDirty, dnsDirty, route, dns, load, t]);
 
   const discard = useCallback(() => {
     setRoute(baseline.route);
@@ -142,46 +144,54 @@ export function RulesView() {
   if (!hasPanelToken()) {
     return (
       <div className="fc-page">
-        <ToolsPageHeader title="附加规则" onBack={() => navigate("tools/advanced")} />
-        <div className={styles.empty}>规则编辑需要面板后端；直接模式下不可用。</div>
+        <ToolsPageHeader title={t("Additional rules")} onBack={() => navigate("tools/advanced")} />
+        <div className={styles.empty}>{t("Rule editing requires the panel backend; unavailable in direct mode.")}</div>
       </div>
     );
   }
 
   return (
     <div className="fc-page">
-      <ToolsPageHeader title="附加规则" onBack={() => navigate("tools/advanced")} />
+      <ToolsPageHeader title={t("Additional rules")} onBack={() => navigate("tools/advanced")} />
       <div className="fc-page-body">
         <FcTabs
           className={styles.tabs}
-          ariaLabel="规则类型"
+          ariaLabel={t("Rule type")}
           value={tab}
           onChange={setTab}
           tabs={[
-            { value: "route", label: "路由规则" },
-            { value: "dns", label: "DNS 规则" },
-            { value: "trace", label: "追踪模拟" },
+            { value: "route", label: t("Routing rules") },
+            { value: "dns", label: t("DNS rules") },
+            { value: "trace", label: t("Trace simulation") },
           ]}
         />
         {dirty && (
           <FcCard className={styles.applyBar}>
             <span className={styles.applyText}>
-              有未应用的暂存改动
-              {routeDirty && dnsDirty ? "（路由 + DNS）" : routeDirty ? "（路由规则）" : "（DNS 规则）"}
-              ，应用时会校验配置并热更新内核。
+              {t(
+                "Unapplied staged changes {scope}; applying validates the configuration and hot-reloads the core.",
+                {
+                  scope:
+                    routeDirty && dnsDirty
+                      ? t("(routing + DNS)")
+                      : routeDirty
+                        ? t("(routing rules)")
+                        : t("(DNS rules)"),
+                },
+              )}
             </span>
             <span className={styles.applyActions}>
               <FcButton size="small" variant="text" disabled={busy} onClick={discard}>
-                放弃
+                {t("Discard")}
               </FcButton>
               <FcButton size="small" variant="primary" disabled={busy} onClick={() => void apply()}>
-                应用
+                {t("Apply")}
               </FcButton>
             </span>
           </FcCard>
         )}
         {loading ? (
-          <div className={styles.empty}>加载中…</div>
+          <div className={styles.empty}>{t("Loading...")}</div>
         ) : (
           <>
             {tab === "route" && (

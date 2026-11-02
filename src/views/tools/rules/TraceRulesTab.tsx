@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 
+import { useI18n, type MessageKey } from "../../../app/i18n";
 import { FcCard, FcField, FcSelect } from "../../../components/flclash";
 import type { RuleObject } from "../../../lib/ruleEditor";
 import { ruleSummary } from "./RuleEditorList";
@@ -7,10 +8,10 @@ import { traceRules, type TraceVerdict } from "../../../lib/ruleTrace";
 import { cx } from "../../../lib/cx";
 import styles from "../RulesView.module.css";
 
-const VERDICT_LABEL: Record<TraceVerdict, string> = {
-  match: "命中",
-  no_match: "未命中",
-  unknown: "需内核判定",
+const VERDICT_LABEL: Record<TraceVerdict, MessageKey> = {
+  match: "Match",
+  no_match: "No match",
+  unknown: "Requires the kernel",
 };
 
 /**
@@ -19,6 +20,7 @@ const VERDICT_LABEL: Record<TraceVerdict, string> = {
  * see lib/ruleTrace.ts for what can and cannot be decided without the kernel.
  */
 export function TraceRulesTab(props: { rules: readonly RuleObject[]; finalTarget: string }) {
+  const { t } = useI18n();
   const [domain, setDomain] = useState("");
   const [ip, setIp] = useState("");
   const [port, setPort] = useState("");
@@ -32,15 +34,21 @@ export function TraceRulesTab(props: { rules: readonly RuleObject[]; finalTarget
   const outcome = result.outcome;
   const outcomeText =
     outcome.kind === "rule"
-      ? `命中规则 #${outcome.index + 1}：${outcome.action}${outcome.target !== "" ? ` → ${outcome.target}` : ""}`
+      ? `${t("Matched rule #{index}: {action}", {
+          index: outcome.index + 1,
+          action: outcome.action,
+        })}${outcome.target !== "" ? ` → ${outcome.target}` : ""}`
       : outcome.kind === "final"
-        ? `未命中任何规则，走默认出站（final）${outcome.target !== "" ? ` → ${outcome.target}` : ""}`
-        : `在规则 #${outcome.index + 1} 处停止：${outcome.reason}`;
+        ? `${t("No rule matched; using the default outbound (final)")}${outcome.target !== "" ? ` → ${outcome.target}` : ""}`
+        : t("Stopped at rule #{index}: {reason}", {
+            index: outcome.index + 1,
+            reason: t(outcome.reason.key, outcome.reason.params),
+          });
 
   return (
     <div className={styles.tabBody}>
       <div className={styles.traceForm}>
-        <FcField label="域名" hint="如 www.example.com；域名类规则需要它">
+        <FcField label={t("Domain")} hint={t("e.g. www.example.com; required by domain-based rules")}>
           <input
             className="input"
             value={domain}
@@ -48,7 +56,7 @@ export function TraceRulesTab(props: { rules: readonly RuleObject[]; finalTarget
             onChange={(event) => setDomain(event.target.value)}
           />
         </FcField>
-        <FcField label="目标 IP" hint="可选；ip_cidr / geoip 规则需要它">
+        <FcField label={t("Target IP")} hint={t("Optional; required by ip_cidr / geoip rules")}>
           <input
             className="input"
             value={ip}
@@ -56,7 +64,7 @@ export function TraceRulesTab(props: { rules: readonly RuleObject[]; finalTarget
             onChange={(event) => setIp(event.target.value)}
           />
         </FcField>
-        <FcField label="端口" hint="可选；port / port_range 规则需要它">
+        <FcField label={t("Port")} hint={t("Optional; required by port / port_range rules")}>
           <input
             className="input"
             value={port}
@@ -65,7 +73,7 @@ export function TraceRulesTab(props: { rules: readonly RuleObject[]; finalTarget
             onChange={(event) => setPort(event.target.value)}
           />
         </FcField>
-        <FcField label="网络类型">
+        <FcField label={t("Network type")}>
           <FcSelect value={network} onChange={setNetwork}>
             <option value="tcp">TCP</option>
             <option value="udp">UDP</option>
@@ -81,7 +89,11 @@ export function TraceRulesTab(props: { rules: readonly RuleObject[]; finalTarget
             outcome.kind === "unknown" && styles.traceOutcomeUnknown,
           )}
         >
-          {outcome.kind === "rule" ? "结论" : outcome.kind === "final" ? "结论（默认）" : "无法完全判定"}
+          {outcome.kind === "rule"
+            ? t("Result")
+            : outcome.kind === "final"
+              ? t("Result (default)")
+              : t("Cannot fully determine")}
         </span>
         <span className={styles.traceOutcomeText}>{outcomeText}</span>
       </FcCard>
@@ -92,9 +104,9 @@ export function TraceRulesTab(props: { rules: readonly RuleObject[]; finalTarget
             <div key={step.index} className={styles.row}>
               <span className={styles.order}>{step.index + 1}</span>
               <div className={cx(styles.rowMain, styles.rowMainStatic)}>
-                <span className={styles.summary}>{ruleSummary(props.rules[step.index] ?? {})}</span>
-                {step.verdict === "unknown" && (
-                  <span className={styles.nestedNote}>{step.reason}</span>
+                <span className={styles.summary}>{ruleSummary(props.rules[step.index] ?? {}, t)}</span>
+                {step.reason !== null && (
+                  <span className={styles.nestedNote}>{t(step.reason.key, step.reason.params)}</span>
                 )}
               </div>
               <span
@@ -104,7 +116,7 @@ export function TraceRulesTab(props: { rules: readonly RuleObject[]; finalTarget
                   step.verdict === "unknown" && styles.verdictUnknown,
                 )}
               >
-                {VERDICT_LABEL[step.verdict]}
+                {t(VERDICT_LABEL[step.verdict])}
               </span>
             </div>
           ))}
@@ -112,9 +124,9 @@ export function TraceRulesTab(props: { rules: readonly RuleObject[]; finalTarget
       )}
 
       <p className={styles.hint}>
-        模拟按规则顺序静态求值，只覆盖域名 / IP / 端口 / 网络等可直接判定的匹配器；
-        rule_set 内容、geoip 库、进程与逻辑组合规则由内核判定，结果可能比内核宽松。
-        模拟基于当前页面（含未应用改动）的规则。
+        {t(
+          "The simulation evaluates rules statically in order and only covers matchers that can be decided directly, such as domain, IP, port, and network; rule_set contents, the geoip database, process rules, and combined logical rules are decided by the kernel, so results may be looser than the kernel's. It uses the rules on this page, including unapplied changes.",
+        )}
       </p>
     </div>
   );

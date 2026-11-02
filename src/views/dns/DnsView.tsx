@@ -17,12 +17,14 @@ import {
 import { afterConfigChange } from "../../app/configResync";
 import { navigate, useApi } from "../../app/context";
 import { showError } from "../../app/errorStore";
-import { Icon } from "../../components/Icon";
+import { useI18n, type MessageKey } from "../../app/i18n";
 import {
   FcButton,
   FcCard,
   FcCardHeader,
   FcField,
+  FcPageToolbar,
+  FcSearchField,
   FcSegmented,
   FcSwitch,
   FcTabs,
@@ -43,11 +45,11 @@ import styles from "./DnsView.module.css";
 type DnsTab = "stats" | "queries" | "cache" | "lookup";
 
 const TABS = [
-  { value: "stats", label: "统计" },
-  { value: "queries", label: "解析记录" },
-  { value: "cache", label: "缓存" },
-  { value: "lookup", label: "查询" },
-] as const;
+  { value: "stats", label: "Stats" },
+  { value: "queries", label: "Queries" },
+  { value: "cache", label: "Cache" },
+  { value: "lookup", label: "Query" },
+] as const satisfies readonly { value: DnsTab; label: MessageKey }[];
 
 function toRecord(entry: PanelDnsQueryEntry): DnsQueryRecord {
   return {
@@ -69,16 +71,23 @@ function ms(value: number | null): string {
   return value === null ? "—" : `${Math.round(value)} ms`;
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  ok: "上游应答",
-  nxdomain: "查无此名",
-  failed: "失败",
+const STATUS_KEYS: Record<string, MessageKey> = {
+  ok: "Answered by upstream",
+  nxdomain: "Name not found",
+  failed: "Failed",
 };
+
+/** Status labels come from the message catalog; unknown statuses pass through. */
+function statusLabel(status: string, t: (key: MessageKey) => string): string {
+  const key = STATUS_KEYS[status];
+  return key === undefined ? status : t(key);
+}
 
 /* ── stats tab ────────────────────────────────────────────── */
 
 /** One horizontal latency strip per upstream, log axis shared across rows. */
 function LatencyStrips(props: { rows: ReturnType<typeof groupByUpstream> }) {
+  const { t } = useI18n();
   const maxValue = useMemo(() => {
     let max = 100;
     for (const row of props.rows) {
@@ -107,7 +116,12 @@ function LatencyStrips(props: { rows: ReturnType<typeof groupByUpstream> }) {
               {row.upstream}
             </span>
             <span className={styles.stripMeta}>
-              {row.count} 条{row.median !== null ? ` · 中位数 ${Math.round(row.median)} ms` : ""}
+              {row.median !== null
+                ? t("{count} rows · median {median} ms", {
+                    count: row.count,
+                    median: Math.round(row.median),
+                  })
+                : t("{count} rows", { count: row.count })}
             </span>
           </div>
           <div className={styles.stripTrack}>
@@ -123,14 +137,16 @@ function LatencyStrips(props: { rows: ReturnType<typeof groupByUpstream> }) {
                   point.status === "failed" && styles.dotFailed,
                 )}
                 style={{ left: left(point.elapsedMs) }}
-                title={`${point.elapsedMs} ms · ${STATUS_LABEL[point.status] ?? point.status}`}
+                title={`${point.elapsedMs} ms · ${statusLabel(point.status, t)}`}
               />
             ))}
           </div>
         </div>
       ))}
       {props.rows.length === 0 && (
-        <div className={styles.empty}>没有带上游信息的记录；上游延迟需要 debug 级 DNS 日志</div>
+        <div className={styles.empty}>
+          {t("No records carry upstream information; upstream latency needs debug-level DNS logs")}
+        </div>
       )}
     </div>
   );
@@ -144,6 +160,7 @@ function StatsTab(props: {
   note: string;
   debugLogging: boolean;
 }) {
+  const { t } = useI18n();
   const latency = useMemo(() => summarizeLatency(props.records), [props.records]);
   const breakdown = useMemo(() => breakdownStatus(props.records), [props.records]);
   const [rankKey, setRankKey] = useState<"domain" | "client">("domain");
@@ -152,25 +169,39 @@ function StatsTab(props: {
   const hasClient = props.records.some((record) => (record.client ?? "").trim() !== "");
 
   const cards = [
-    { label: "中位数", value: ms(latency.median), hint: `${latency.count} 条带耗时记录` },
-    { label: "P95", value: ms(latency.p95), hint: "慢查询上限" },
     {
-      label: "缓存命中率（估算）",
+      label: t("Median"),
+      value: ms(latency.median),
+      hint: t("{count} timed records", { count: latency.count }),
+    },
+    { label: "P95", value: ms(latency.p95), hint: t("Slow-query ceiling") },
+    {
+      label: t("Cache hit rate (estimated)"),
       value: pct(breakdown.cacheRate),
-      hint: "无上游归属的应答，仅供估算",
+      hint: t("Answers without upstream attribution; estimate only"),
     },
     {
-      label: "失败率",
+      label: t("Failure rate"),
       value: pct(failureRate(breakdown)),
-      hint: `${breakdown.failed} / ${breakdown.total} 条`,
+      hint: t("{failed} / {total} rows", { failed: breakdown.failed, total: breakdown.total }),
     },
   ];
 
   const mix = [
-    { key: "cache", label: "缓存命中（估算）", count: breakdown.cacheHit, tone: styles.swCache },
-    { key: "answered", label: "上游应答", count: breakdown.answered, tone: styles.swAnswered },
-    { key: "nxdomain", label: "查无此名", count: breakdown.nxdomain, tone: styles.swNx },
-    { key: "failed", label: "失败", count: breakdown.failed, tone: styles.swFailed },
+    {
+      key: "cache",
+      label: t("Cache hit (estimated)"),
+      count: breakdown.cacheHit,
+      tone: styles.swCache,
+    },
+    {
+      key: "answered",
+      label: t("Answered by upstream"),
+      count: breakdown.answered,
+      tone: styles.swAnswered,
+    },
+    { key: "nxdomain", label: t("Name not found"), count: breakdown.nxdomain, tone: styles.swNx },
+    { key: "failed", label: t("Failed"), count: breakdown.failed, tone: styles.swFailed },
   ];
   const totalCells = Math.max(1, Math.min(240, breakdown.total));
   const cells: string[] = [];
@@ -197,11 +228,14 @@ function StatsTab(props: {
 
       <FcCard>
         <FcCardHeader
-          title="上游查询延迟"
-          subtitle={`${breakdown.total} 条记录 · 纵轴为日志时间顺序，横轴为对数耗时`}
+          title={t("Upstream query latency")}
+          subtitle={t(
+            "{total} records · vertical axis is log order, horizontal axis is logarithmic latency",
+            { total: breakdown.total },
+          )}
           actions={
             <FcButton size="small" disabled={props.probing} onClick={props.onProbe}>
-              {props.probing ? "探测中…" : "探测上游"}
+              {props.probing ? t("Probing…") : t("Probe upstream")}
             </FcButton>
           }
         />
@@ -215,7 +249,7 @@ function StatsTab(props: {
                   className={cx(styles.probeChip, !probe.ok && styles.probeChipFail)}
                   title={probe.error !== undefined && probe.error !== "" ? probe.error : probe.server}
                 >
-                  {probe.tag} · {probe.ok ? `${probe.elapsed_ms} ms` : "失败"}
+                  {probe.tag} · {probe.ok ? `${probe.elapsed_ms} ms` : t("Failed")}
                 </span>
               ))}
             </div>
@@ -225,7 +259,10 @@ function StatsTab(props: {
 
       <div className={styles.twoUp}>
         <FcCard>
-          <FcCardHeader title="响应结果" subtitle="按条数统计；缓存命中为估算值" />
+          <FcCardHeader
+            title={t("Response outcomes")}
+            subtitle={t("Counted by rows; cache hits are an estimate")}
+          />
           <div className={styles.cardBody}>
             <div className={styles.waffle} aria-hidden="true">
               {cells.map((tone, index) => (
@@ -249,22 +286,22 @@ function StatsTab(props: {
 
         <FcCard>
           <FcCardHeader
-            title="查询排行"
+            title={t("Query ranking")}
             actions={
               <FcSegmented
-                ariaLabel="排行维度"
+                ariaLabel={t("Ranking dimension")}
                 value={rankKey}
                 onChange={(value: string) => setRankKey(value as "domain" | "client")}
                 options={[
-                  { value: "domain", label: "域名" },
-                  { value: "client", label: "设备", disabled: !hasClient },
+                  { value: "domain", label: t("Domain") },
+                  { value: "client", label: t("Device"), disabled: !hasClient },
                 ]}
               />
             }
           />
           <div className={styles.cardBody}>
             {ranking.length === 0 ? (
-              <div className={styles.empty}>暂无数据</div>
+              <div className={styles.empty}>{t("No data")}</div>
             ) : (
               <div className={styles.rankList}>
                 {ranking.map((row) => (
@@ -276,7 +313,9 @@ function StatsTab(props: {
                       className={styles.rankBar}
                       style={{ width: `${(row.count / (ranking[0]?.count ?? 1)) * 100}%` }}
                     />
-                    <span className={styles.rankCount}>{row.count} 条</span>
+                    <span className={styles.rankCount}>
+                      {t("{count} rows", { count: row.count })}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -287,7 +326,9 @@ function StatsTab(props: {
 
       {!props.debugLogging && (
         <p className={styles.hint}>
-          统计依赖 debug 级 DNS 日志。到「解析记录」标签开启采集，或使用「探测上游」直接测量上游延迟。
+          {t(
+            "Statistics rely on debug-level DNS logs. Enable collection on the “Queries” tab, or measure upstream latency directly with “Probe upstream”.",
+          )}
         </p>
       )}
     </div>
@@ -305,6 +346,7 @@ function QueriesTab(props: {
   onRefresh: () => void;
   loading: boolean;
 }) {
+  const { t } = useI18n();
   const [search, setSearch] = useState("");
   const debug = props.config?.debug_logging === true;
   const level = props.config?.log_level ?? "";
@@ -327,40 +369,40 @@ function QueriesTab(props: {
     <div className={styles.tabBody}>
       <FcCard>
         <FcCardHeader
-          title="DNS 记录采集"
+          title={t("DNS record collection")}
           subtitle={
             debug
-              ? `已开启（log.level=${level}）：核心会为每条查询写一行日志`
-              : `未开启（log.level=${level === "" ? "未设置" : level}）：仅 debug 级别输出每条查询`
+              ? t("Enabled (log.level={level}): the core writes one log line per query", { level })
+              : t("Disabled (log.level={level}): only the debug level emits one line per query", {
+                  level: level === "" ? t("Not set") : level,
+                })
           }
           actions={
             <FcSwitch
               checked={debug}
               disabled={props.busy}
-              label="开启 DNS 记录采集"
+              label={t("Enable DNS record collection")}
               onChange={props.onToggleCollection}
             />
           }
         />
         <div className={styles.cardBody}>
           <p className={styles.hint}>
-            开启会把 log.level 改为 debug，日志量与磁盘占用明显增加；排查完建议切回 info。
-            记录来自面板读取系统日志，核心本身不保留历史。
+            {t(
+              "Enabling switches log.level to debug, which noticeably increases log volume and disk usage; switch back to info after troubleshooting. Records come from the panel reading system logs; the core keeps no history.",
+            )}
           </p>
         </div>
       </FcCard>
 
       <div className={styles.toolbar}>
-        <label className={styles.search}>
-          <Icon name="search" size={16} />
-          <input
-            value={search}
-            placeholder="搜索域名 / 类型 / 设备 / 上游"
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
+        <FcSearchField
+          value={search}
+          onChange={setSearch}
+          placeholder={t("Search domain / type / device / upstream")}
+        />
         <FcButton size="small" disabled={props.loading} onClick={props.onRefresh}>
-          {props.loading ? "刷新中…" : "刷新"}
+          {props.loading ? t("Refreshing…") : t("Refresh")}
         </FcButton>
       </div>
 
@@ -369,13 +411,13 @@ function QueriesTab(props: {
       <FcCard className={styles.tableCard}>
         <div className={styles.recordTable} role="table">
           <div className={cx(styles.recordRow, styles.recordHead)} role="row">
-            <span role="columnheader">时间</span>
-            <span role="columnheader">域名</span>
-            <span role="columnheader">类型</span>
-            <span role="columnheader">设备</span>
-            <span role="columnheader">上游</span>
-            <span role="columnheader">结果</span>
-            <span role="columnheader">耗时</span>
+            <span role="columnheader">{t("Time")}</span>
+            <span role="columnheader">{t("Domain")}</span>
+            <span role="columnheader">{t("Type")}</span>
+            <span role="columnheader">{t("Device")}</span>
+            <span role="columnheader">{t("Upstream")}</span>
+            <span role="columnheader">{t("Result")}</span>
+            <span role="columnheader">{t("Duration")}</span>
           </div>
           {shown.slice(0, 300).map((record, index) => (
             <div
@@ -403,7 +445,7 @@ function QueriesTab(props: {
                 )}
                 role="cell"
               >
-                {STATUS_LABEL[record.status] ?? record.status}
+                {statusLabel(record.status, t)}
               </span>
               <span className={styles.recordBytes} role="cell">
                 {record.elapsedMs !== undefined && record.elapsedMs > 0 ? `${record.elapsedMs} ms` : "—"}
@@ -411,7 +453,7 @@ function QueriesTab(props: {
             </div>
           ))}
           {shown.length === 0 && (
-            <div className={styles.empty}>{props.loading ? "加载中…" : "暂无记录"}</div>
+            <div className={styles.empty}>{props.loading ? t("Loading…") : t("No records")}</div>
           )}
         </div>
       </FcCard>
@@ -422,30 +464,37 @@ function QueriesTab(props: {
 /* ── cache tab ────────────────────────────────────────────── */
 
 function CacheTab(props: { config: PanelDnsConfig | null; onFlush: (kind: "dns" | "fakeip") => void; flushing: string }) {
+  const { t } = useI18n();
   const file = props.config?.cache_file;
   const cache = props.config?.cache ?? {};
   const rows: [string, string][] = [
-    ["DNS 缓存开关", props.config?.cache_enabled === true ? "已开启（dns.cache_enabled）" : "未开启"],
     [
-      "缓存文件",
-      file?.enabled === true
-        ? `${file.path ?? "—"}${file.size !== undefined ? ` · ${formatBytes(file.size)}` : ""}`
-        : "未启用 experimental.cache_file",
+      t("DNS cache toggle"),
+      props.config?.cache_enabled === true ? t("Enabled (dns.cache_enabled)") : t("Disabled"),
     ],
     [
-      "缓存文件更新",
+      t("Cache file"),
+      file?.enabled === true
+        ? `${file.path ?? "—"}${file.size !== undefined ? ` · ${formatBytes(file.size)}` : ""}`
+        : t("experimental.cache_file is not enabled"),
+    ],
+    [
+      t("Cache file updated"),
       file?.mtime !== undefined && file.mtime > 0
         ? new Date(file.mtime * 1000).toLocaleString()
         : "—",
     ],
-    ["缓存配置项", Object.keys(cache).length > 0 ? Object.keys(cache).join("、") : "—"],
+    [
+      t("Cache options"),
+      Object.keys(cache).length > 0 ? Object.keys(cache).join("、") : "—",
+    ],
   ];
 
   return (
     <div className={styles.tabBody}>
       <div className={styles.twoUp}>
         <FcCard>
-          <FcCardHeader title="缓存状态" subtitle="来自当前配置与缓存文件" />
+          <FcCardHeader title={t("Cache status")} subtitle={t("From the current config and cache file")} />
           <div className={styles.cardBody}>
             <div className={styles.detailList}>
               {rows.map(([label, value]) => (
@@ -462,25 +511,29 @@ function CacheTab(props: { config: PanelDnsConfig | null; onFlush: (kind: "dns" 
                 disabled={props.flushing !== ""}
                 onClick={() => props.onFlush("dns")}
               >
-                {props.flushing === "dns" ? "清除中…" : "清除 DNS 缓存"}
+                {props.flushing === "dns" ? t("Clearing…") : t("Clear DNS cache")}
               </FcButton>
               <FcButton
                 size="small"
                 disabled={props.flushing !== ""}
                 onClick={() => props.onFlush("fakeip")}
               >
-                {props.flushing === "fakeip" ? "清除中…" : "清除 FakeIP 缓存"}
+                {props.flushing === "fakeip" ? t("Clearing…") : t("Clear FakeIP cache")}
               </FcButton>
             </div>
           </div>
         </FcCard>
 
         <FcCard>
-          <FcCardHeader title="缓存条目" subtitle="sing-box 不提供缓存内容接口" />
+          <FcCardHeader
+            title={t("Cache entries")}
+            subtitle={t("sing-box exposes no cache-content API")}
+          />
           <div className={styles.cardBody}>
             <div className={styles.empty}>
-              核心只暴露「清空」，无法列出缓存条目或其 TTL；此处如实标注而不伪造数据。
-              需要条目级排查时请开启 debug 日志，在「解析记录」中查看实际查询。
+              {t(
+                "The core only exposes “flush”; entries and their TTL cannot be listed, so this is stated honestly instead of faking data. For entry-level troubleshooting, enable debug logs and check the actual queries under “Queries”.",
+              )}
             </div>
           </div>
         </FcCard>
@@ -492,6 +545,7 @@ function CacheTab(props: { config: PanelDnsConfig | null; onFlush: (kind: "dns" 
 /* ── lookup tab ───────────────────────────────────────────── */
 
 function LookupTab() {
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [type, setType] = useState("A");
   const [busy, setBusy] = useState(false);
@@ -516,7 +570,7 @@ function LookupTab() {
         type,
         result: records.length > 0 ? records.slice(0, 2).join(", ") : status,
         elapsedMs: elapsed,
-        source: "面板",
+        source: t("Panel"),
         ok: response.Status === 0,
       });
       setAnswer(records.length > 0 ? records.join("\n") : status);
@@ -528,7 +582,7 @@ function LookupTab() {
         type,
         result: message,
         elapsedMs: elapsed,
-        source: "面板",
+        source: t("Panel"),
         ok: false,
       });
       setAnswer(message);
@@ -540,9 +594,12 @@ function LookupTab() {
   return (
     <div className={styles.tabBody}>
       <FcCard>
-        <FcCardHeader title="DNS 查询" subtitle="经核心的 Clash API 发起，使用当前 DNS 配置" />
+        <FcCardHeader
+          title={t("DNS query")}
+          subtitle={t("Issued through the core's Clash API using the current DNS config")}
+        />
         <div className={styles.cardBody}>
-          <FcField label="域名">
+          <FcField label={t("Domain")}>
             <input
               className="input"
               value={name}
@@ -570,7 +627,7 @@ function LookupTab() {
           </div>
           <div className={styles.buttonRow}>
             <FcButton variant="primary" disabled={busy || name.trim() === ""} onClick={() => void run()}>
-              {busy ? "查询中…" : "查询"}
+              {busy ? t("Querying…") : t("Query")}
             </FcButton>
           </div>
           {answer !== null && <pre className={styles.answer}>{answer}</pre>}
@@ -584,6 +641,7 @@ function LookupTab() {
 
 export function DnsView() {
   const api = useApi();
+  const { t } = useI18n();
   const [tab, setTab] = useState<DnsTab>("stats");
   const [config, setConfig] = useState<PanelDnsConfig | null>(null);
   const [records, setRecords] = useState<DnsQueryRecord[]>([]);
@@ -638,16 +696,16 @@ export function DnsView() {
       try {
         const current = await getPanelConfig();
         if (!current.ok) {
-          throw new Error("读取配置失败");
+          throw new Error(t("Failed to read config"));
         }
         const text = patchConfigText(current.text, ["log", "level"], enabled ? "debug" : "info");
         const validation = await validatePanelConfig(text);
         if (!validation.ok) {
-          throw new Error(validation.message || "配置校验失败，未应用");
+          throw new Error(validation.message || t("Config validation failed; nothing was applied"));
         }
         const result = await applyPanelConfig(text, current.mtime);
         if (!result.ok) {
-          throw new Error(result.message || "写入失败");
+          throw new Error(result.message || t("Write failed"));
         }
         await afterConfigChange(api);
         await load();
@@ -657,7 +715,7 @@ export function DnsView() {
         setBusy(false);
       }
     },
-    [api, load],
+    [api, load, t],
   );
 
   const flush = useCallback(async (kind: "dns" | "fakeip") => {
@@ -687,35 +745,37 @@ export function DnsView() {
   if (!hasPanelToken()) {
     return (
       <div className="fc-page">
-        <div className={styles.pageHeader}>
-          <h1 className={styles.pageTitle}>DNS</h1>
+        <FcPageToolbar title="DNS" />
+        <div className="fc-page-body">
+          <div className={styles.empty}>
+            {t("DNS statistics require the panel backend; unavailable in direct mode.")}
+          </div>
         </div>
-        <div className={styles.empty}>DNS 统计需要面板后端；直接模式下不可用。</div>
       </div>
     );
   }
 
   return (
     <div className="fc-page">
-      <div className={styles.pageHeader}>
-        <div className={styles.pageTitles}>
-          <h1 className={styles.pageTitle}>DNS</h1>
-          <span className={styles.pageSubtitle}>域名解析与缓存内容</span>
-        </div>
-        <FcButton size="small" onClick={openConfig}>
-          打开 DNS 配置
-        </FcButton>
-      </div>
+      <FcPageToolbar
+        title="DNS"
+        subtitle={t("Domain resolution and cache contents")}
+        actions={
+          <FcButton size="small" variant="tonal" onClick={openConfig}>
+            {t("Open DNS config")}
+          </FcButton>
+        }
+      />
       <div className="fc-page-body">
         <FcTabs
           className={styles.tabs}
-          ariaLabel="DNS 视图"
+          ariaLabel={t("DNS view")}
           value={tab}
           onChange={setTab}
-          tabs={[...TABS]}
+          tabs={TABS.map((tab) => ({ value: tab.value, label: t(tab.label) }))}
         />
         {loading && records.length === 0 ? (
-          <div className={styles.empty}>加载中…</div>
+          <div className={styles.empty}>{t("Loading…")}</div>
         ) : (
           <>
             {tab === "stats" && (

@@ -9,11 +9,26 @@
 }
 
 .day-label {
-  padding: var(--fc-space-12) var(--fc-space-4) var(--fc-space-4);
+  display: flex;
+  gap: var(--fc-space-8);
+  align-items: center;
+  padding: var(--fc-space-14) var(--fc-space-4) var(--fc-space-6);
   font-size: var(--fc-text-caption2);
-  font-weight: var(--fc-weight-medium);
+  font-weight: var(--fc-weight-semibold);
   color: var(--fc-on-surface-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
+
+/* A hairline from the label to the card edge: without it the day buckets read
+   as one continuous list. */
+.day-label::after {
+  flex: 1;
+  height: var(--fc-hairline);
+  content: "";
+  background: var(--fc-divider);
+}
+
 
 .event {
   display: flex;
@@ -94,9 +109,68 @@
 
 .filters {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--fc-space-8);
   align-items: center;
   margin-bottom: var(--fc-space-12);
+}
+
+/* One search field width everywhere: it used to be a bare <input> on this page
+   and a 40px pill elsewhere. */
+.filter-search {
+  flex: 1 1 220px;
+  max-width: 320px;
+}
+
+/* The shared select and segmented controls are width:100% for stacked forms.
+   In a toolbar that turns every one of them into its own full-width row, so
+   they are reset to their natural width here. */
+.filters select {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 132px;
+  max-width: 220px;
+}
+
+.filters [role="radiogroup"] {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.toggle,
+.switch-field {
+  display: inline-flex;
+  gap: var(--fc-space-8);
+  align-items: center;
+  font-size: var(--fc-text-footnote);
+  color: var(--fc-on-surface-variant);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.toggle {
+  margin-inline-start: auto;
+}
+
+/* Toolbar segmented controls keep their natural width: stretched to the full
+   row they read as page-wide orange banners. */
+.filter-tabs {
+  flex: 0 0 260px;
+}
+
+.filter-severity {
+  flex: 0 0 240px;
+}
+
+.toggle-fixed {
+  display: inline-flex;
+  gap: var(--fc-space-8);
+  align-items: center;
+  margin-inline-start: auto;
+  font-size: var(--fc-text-footnote);
+  color: var(--fc-on-surface-variant);
+  white-space: nowrap;
+  cursor: pointer;
 }
 
 /* flows 列表样式已迁移至 src/views/flows/FlowsView.module.css */
@@ -112,6 +186,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--fc-space-4);
+  min-width: 0;
 }
 
 .stat-label {
@@ -120,9 +195,24 @@
 }
 
 .stat-value {
-  font-size: var(--fc-text-title3, 1.35rem);
+  font-size: var(--fc-text-title3);
   font-variant-numeric: tabular-nums;
   color: var(--fc-on-surface);
+  overflow-wrap: anywhere;
+}
+
+/* A path or a sentence at 20px eats the whole card; drop it to a readable
+   footnote instead of letting it wrap into a wall of text. */
+.stat-value[data-long="true"] {
+  font-size: var(--fc-text-footnote);
+  font-weight: var(--fc-weight-medium);
+  line-height: var(--fc-leading-footnote);
+  color: var(--fc-on-surface-variant);
+}
+
+.stat-value[data-mono="true"] {
+  font-family: var(--fc-font-mono);
+  letter-spacing: -0.01em;
 }
 
 .row {
@@ -131,4 +221,52 @@
   gap: var(--fc-space-8);
   align-items: center;
   margin-top: var(--fc-space-8);
+}
+
+.group-heading {
+  display: flex;
+  gap: var(--fc-space-8);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--fc-space-10) var(--fc-space-14);
+  font-size: var(--fc-text-footnote);
+  font-weight: var(--fc-weight-semibold);
+  color: var(--fc-on-surface-variant);
+  border-bottom: 1px solid var(--fc-outline);
+}
+
+.group-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-on-surface-faint);
+}
+
+.capability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+  gap: var(--fc-space-6);
+  margin-bottom: var(--fc-space-16);
+}
+
+.capability-chip {
+  gap: var(--fc-space-4);
+  justify-content: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--fc-font-mono);
+  white-space: nowrap;
+}
+
+.config-error {
+  display: flex;
+  gap: var(--fc-space-8);
+  align-items: flex-start;
+  padding: var(--fc-space-10) var(--fc-space-12);
+  margin-top: var(--fc-space-12);
+  font-size: var(--fc-text-caption1);
+  line-height: var(--fc-leading-caption1);
+  color: var(--fc-warning);
+  overflow-wrap: anywhere;
+  background: var(--fc-warning-container);
+  border-radius: var(--fc-radius-sm);
 }

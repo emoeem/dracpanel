@@ -40,6 +40,6 @@ describe("modeForSegment", () => {
 
   it("exposes the three FlClash segments in order", () => {
     expect(OUTBOUND_MODES.map((mode) => mode.value)).toEqual(["rule", "global", "direct"]);
-    expect(OUTBOUND_MODES.map((mode) => mode.label)).toEqual(["规则", "全局", "直连"]);
+    expect(OUTBOUND_MODES.map((mode) => mode.label)).toEqual(["Rule", "Global", "Direct"]);
   });
 });

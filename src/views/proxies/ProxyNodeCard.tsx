@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 
 import { cx } from "../../lib/cx";
 import { proxyDisplayType } from "../../api/format";
+import { useI18n, type Translate } from "../../app/i18n";
 import { flagOfText } from "../../lib/flclash/country";
 import { rateTone } from "../../lib/flclash/format";
 import { Icon } from "../../components/Icon";
@@ -19,14 +20,14 @@ interface ProxyNodeCardProps {
   onTest: () => void;
 }
 
-function delayLabel(item: GroupItem): string {
+function delayLabel(item: GroupItem, t: Translate): string {
   if (item.urlTestDelay > 0) {
     return `${item.urlTestDelay} ms`;
   }
   if (item.urlTestTime > 0n) {
-    return "超时";
+    return t("Timeout");
   }
-  return "测试";
+  return t("Test");
 }
 
 export function ProxyNodeCard({
@@ -42,6 +43,7 @@ export function ProxyNodeCard({
   const flag = flagOfText(item.tag);
   const tone = rateTone(item.urlTestDelay);
   const hasDelay = item.urlTestDelay > 0;
+  const { t } = useI18n();
   return (
     <div
       role="button"
@@ -60,19 +62,23 @@ export function ProxyNodeCard({
         }
       }}
       aria-pressed={selected}
-      title={selectable ? `选择 ${item.tag}` : `${item.tag}（当前策略组不可选）`}
+      title={
+        selectable
+          ? t("Select {name}", { name: item.tag })
+          : t("{name} (not selectable in the current group)", { name: item.tag })
+      }
     >
       <span className={styles.top}>
         <span className={styles.flag} aria-hidden="true">
           {flag || "•"}
         </span>
         {selected && (
-          <span className={styles.check} aria-label="已选择">
+          <span className={styles.check} aria-label={t("Selected")}>
             <Icon name="check" size={12} />
           </span>
         )}
         {pinned && (
-          <span className={styles.pin} aria-label="首选">
+          <span className={styles.pin} aria-label={t("Preferred")}>
             <Icon name="push_pin" size={12} />
           </span>
         )}
@@ -91,9 +97,9 @@ export function ProxyNodeCard({
             event.stopPropagation();
             onTest();
           }}
-          title="重新测试延迟"
+          title={t("Test latency again")}
         >
-          {testing ? <span className={styles.spinner} /> : delayLabel(item)}
+          {testing ? <span className={styles.spinner} /> : delayLabel(item, t)}
         </button>
       </span>
     </div>

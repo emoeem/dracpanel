@@ -101,15 +101,22 @@
   color: var(--fc-on-surface-faint);
 }
 
+/* A placeholder is a bordered well, not a sentence floating in empty space:
+   the card can be stretched by its grid row and the text stays anchored. */
 .hint-block {
   display: flex;
+  flex: 1;
   align-items: center;
   justify-content: center;
-  min-height: 96px;
-  padding: var(--fc-space-16);
+  min-height: 88px;
+  padding: var(--fc-space-14);
+  margin-top: var(--fc-space-8);
   font-size: var(--fc-text-caption1);
+  line-height: var(--fc-leading-caption1);
   color: var(--fc-on-surface-faint);
   text-align: center;
+  border: 1px dashed var(--fc-divider);
+  border-radius: var(--fc-radius-sm);
 }
 
 .chart-skeleton {

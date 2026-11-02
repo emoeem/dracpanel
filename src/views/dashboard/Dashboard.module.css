@@ -23,6 +23,41 @@
   min-height: 0;
 }
 
+.toolbar-actions {
+  display: flex;
+  gap: var(--fc-space-8);
+  align-items: center;
+}
+
+/* Widget grid: the same 4-column rhythm as FlClash, with per-widget spans
+   clamped to the breakpoint's real column count. */
+.widget-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.widget-grid[data-columns="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.widget-grid[data-columns="1"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.widget-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.widget-cell > * {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

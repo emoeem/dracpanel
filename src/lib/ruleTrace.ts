@@ -9,6 +9,8 @@
  * rule or the final outbound, every matcher on the way was provably true.
  */
 
+import type { MessageKey } from "../app/translations";
+import type { TranslateParams } from "../app/i18n";
 import { isNestedRule, type RuleObject } from "./ruleEditor";
 
 export interface TraceInput {
@@ -21,17 +23,26 @@ export interface TraceInput {
 
 export type TraceVerdict = "match" | "no_match" | "unknown";
 
+/**
+ * Why the walk could not decide. Kept as a key + params so the trace reads in
+ * the user's language instead of exporting developer Chinese to every locale.
+ */
+export interface TraceReason {
+  key: MessageKey;
+  params?: TranslateParams;
+}
+
 export interface TraceStep {
   index: number;
   verdict: TraceVerdict;
-  /** Why the walk stopped here (unknown verdict) or which rule matched. */
-  reason: string;
+  /** Why the walk stopped here (unknown verdict); null when it did not. */
+  reason: TraceReason | null;
 }
 
 export type TraceOutcome =
   | { kind: "rule"; index: number; action: string; target: string }
   | { kind: "final"; target: string }
-  | { kind: "unknown"; index: number; reason: string };
+  | { kind: "unknown"; index: number; reason: TraceReason };
 
 export interface TraceResult {
   steps: TraceStep[];
@@ -43,14 +54,14 @@ interface MatcherResult {
   ok: boolean;
   /** True when the matcher cannot be decided without the kernel/more input. */
   unknown: boolean;
-  reason: string;
+  reason: TraceReason | null;
 }
 
-const MATCH_TRUE: MatcherResult = { ok: true, unknown: false, reason: "" };
-const MATCH_FALSE: MatcherResult = { ok: false, unknown: false, reason: "" };
+const MATCH_TRUE: MatcherResult = { ok: true, unknown: false, reason: null };
+const MATCH_FALSE: MatcherResult = { ok: false, unknown: false, reason: null };
 
-function unknownMatcher(reason: string): MatcherResult {
-  return { ok: true, unknown: true, reason };
+function unknownMatcher(key: MessageKey, params?: TranslateParams): MatcherResult {
+  return { ok: true, unknown: true, reason: { key, params } };
 }
 
 /** Keys that are not matchers; the rest of a rule is treated as one. */
@@ -146,7 +157,7 @@ function evalMatcher(key: string, value: unknown, input: TraceInput): MatcherRes
     case "domain_regex": {
       const domain = normalizeDomain(input.domain);
       if (domain === "") {
-        return unknownMatcher("未填写域名，无法判定域名类匹配");
+        return unknownMatcher("No domain given, so domain matchers cannot be evaluated");
       }
       for (const item of asArray(value)) {
         const pattern = String(item).trim().toLowerCase();
@@ -173,7 +184,7 @@ function evalMatcher(key: string, value: unknown, input: TraceInput): MatcherRes
               return MATCH_TRUE;
             }
           } catch {
-            return unknownMatcher(`domain_regex 无法编译：${pattern}`);
+            return unknownMatcher("domain_regex failed to compile: {pattern}", { pattern });
           }
         }
       }
@@ -182,12 +193,12 @@ function evalMatcher(key: string, value: unknown, input: TraceInput): MatcherRes
     case "ip_cidr": {
       const ip = input.ip.trim();
       if (ip === "") {
-        return unknownMatcher("未填写目标 IP，无法判定 ip_cidr");
+        return unknownMatcher("No target IP given, so ip_cidr cannot be evaluated");
       }
       for (const item of asArray(value)) {
         const contains = cidrContains(String(item).trim(), ip);
         if (contains === null) {
-          return unknownMatcher(`ip_cidr 无法本地判定：${String(item)}`);
+          return unknownMatcher("ip_cidr cannot be evaluated locally: {value}", { value: String(item) });
         }
         if (contains) {
           return MATCH_TRUE;
@@ -198,25 +209,25 @@ function evalMatcher(key: string, value: unknown, input: TraceInput): MatcherRes
     case "geoip": {
       const ip = input.ip.trim();
       if (ip === "") {
-        return unknownMatcher("未填写目标 IP，无法判定 geoip");
+        return unknownMatcher("No target IP given, so geoip cannot be evaluated");
       }
       const items = asArray(value).map((item) => String(item).trim().toLowerCase());
       if (items.every((item) => item === "private")) {
         return items.length > 0 && isPrivateIp(ip) ? MATCH_TRUE : MATCH_FALSE;
       }
-      return unknownMatcher("geoip 数据库需内核判定");
+      return unknownMatcher("The geoip database is evaluated by the core only");
     }
     case "ip_is_private": {
       const ip = input.ip.trim();
       if (ip === "") {
-        return unknownMatcher("未填写目标 IP，无法判定 ip_is_private");
+        return unknownMatcher("No target IP given, so ip_is_private cannot be evaluated");
       }
       return isPrivateIp(ip) ? MATCH_TRUE : MATCH_FALSE;
     }
     case "port": {
       const port = portNumber(input.port);
       if (port === null) {
-        return unknownMatcher("未填写端口，无法判定 port");
+        return unknownMatcher("No port given, so port cannot be evaluated");
       }
       for (const item of asArray(value)) {
         if (portNumber(item) === port) {
@@ -228,14 +239,14 @@ function evalMatcher(key: string, value: unknown, input: TraceInput): MatcherRes
     case "port_range": {
       const port = portNumber(input.port);
       if (port === null) {
-        return unknownMatcher("未填写端口，无法判定 port_range");
+        return unknownMatcher("No port given, so port_range cannot be evaluated");
       }
       for (const item of asArray(value)) {
         const [loText, hiText] = String(item).split(":", 2);
         const lo = portNumber(loText ?? "");
         const hi = hiText === undefined ? lo : portNumber(hiText);
         if (lo === null || hi === null || lo > hi) {
-          return unknownMatcher(`port_range 无法解析：${String(item)}`);
+          return unknownMatcher("port_range cannot be parsed: {value}", { value: String(item) });
         }
         if (port >= lo && port <= hi) {
           return MATCH_TRUE;
@@ -246,14 +257,14 @@ function evalMatcher(key: string, value: unknown, input: TraceInput): MatcherRes
     case "network": {
       const network = input.network.trim().toLowerCase();
       if (network === "") {
-        return unknownMatcher("未选择网络类型（TCP/UDP）");
+        return unknownMatcher("No network type (TCP/UDP) selected");
       }
       return asArray(value).some((item) => String(item).toLowerCase() === network)
         ? MATCH_TRUE
         : MATCH_FALSE;
     }
     default:
-      return unknownMatcher(`“${key}” 需内核判定`);
+      return unknownMatcher("“{matcher}” is evaluated by the core only", { matcher: key });
   }
 }
 
@@ -261,12 +272,12 @@ function evalMatcher(key: string, value: unknown, input: TraceInput): MatcherRes
 export function evalTraceRule(
   rule: RuleObject,
   input: TraceInput,
-): { verdict: "match" | "no_match" } | { verdict: "unknown"; reason: string } {
+): { verdict: "match" | "no_match" } | { verdict: "unknown"; reason: TraceReason } {
   if (isNestedRule(rule)) {
-    return { verdict: "unknown", reason: "逻辑组合规则（rules[]）需内核判定" };
+    return { verdict: "unknown", reason: { key: "Logical rules (rules[]) are evaluated by the core only" } };
   }
   let anyFalse = false;
-  let pendingReason = "";
+  let pendingReason: TraceReason | null = null;
   for (const [key, value] of Object.entries(rule)) {
     if (NON_MATCHER_KEYS.has(key) || value === undefined) {
       continue;
@@ -278,13 +289,13 @@ export function evalTraceRule(
       anyFalse = true;
       continue;
     }
-    if (result.unknown && pendingReason === "") {
+    if (result.unknown && pendingReason === null) {
       pendingReason = result.reason;
     }
   }
   // A false matcher wins even over unknown ones: false AND x is false either
   // way, inverted or not. Otherwise an undecidable matcher blocks the proof.
-  if (!anyFalse && pendingReason !== "") {
+  if (!anyFalse && pendingReason !== null) {
     return { verdict: "unknown", reason: pendingReason };
   }
   const matched = rule.invert === true ? anyFalse : !anyFalse;
@@ -306,14 +317,14 @@ export function traceRules(
     const rule = rules[index] ?? {};
     const result = evalTraceRule(rule, input);
     if (result.verdict === "no_match") {
-      steps.push({ index, verdict: "no_match", reason: "" });
+      steps.push({ index, verdict: "no_match", reason: null });
       continue;
     }
     if (result.verdict === "unknown") {
       steps.push({ index, verdict: "unknown", reason: result.reason });
       return { steps, outcome: { kind: "unknown", index, reason: result.reason } };
     }
-    steps.push({ index, verdict: "match", reason: "" });
+    steps.push({ index, verdict: "match", reason: null });
     return {
       steps,
       outcome: {

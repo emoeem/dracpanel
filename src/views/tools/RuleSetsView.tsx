@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getPanelConfig, hasPanelToken, normalizeConfigJson } from "../../api/panel";
 import { navigate } from "../../app/context";
 import { showError } from "../../app/errorStore";
+import { useI18n } from "../../app/i18n";
 import { FcCard } from "../../components/flclash";
 import { ToolsPageHeader } from "./ToolsView";
 import styles from "./RuleSetsView.module.css";
@@ -23,6 +24,7 @@ interface ConfigShape {
 }
 
 export function RuleSetsView() {
+  const { t } = useI18n();
   const [sets, setSets] = useState<RuleSetEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -49,12 +51,12 @@ export function RuleSetsView() {
 
   return (
     <div className="fc-page">
-      <ToolsPageHeader title="自定义资源" onBack={() => navigate("tools")} />
+      <ToolsPageHeader title={t("Custom Resources")} onBack={() => navigate("tools")} />
       <div className="fc-page-body">
         {loading ? (
-          <div className={styles.empty}>加载中…</div>
+          <div className={styles.empty}>{t("Loading...")}</div>
         ) : sets.length === 0 ? (
-          <div className={styles.empty}>配置中没有 rule_set 资源</div>
+          <div className={styles.empty}>{t("No rule_set resources in the configuration")}</div>
         ) : (
           <FcCard className={styles.card}>
             {sets.map((entry, index) => (
@@ -71,7 +73,9 @@ export function RuleSetsView() {
           </FcCard>
         )}
         <p className={styles.hint}>
-          规则集由内核按配置刷新；添加或修改请在配置文件中编辑 route.rule_set。
+          {t(
+            "The kernel refreshes rule sets from the configuration; edit route.rule_set in the configuration file to add or change one.",
+          )}
         </p>
       </div>
     </div>

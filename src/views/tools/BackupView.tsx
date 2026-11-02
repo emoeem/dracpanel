@@ -12,6 +12,7 @@ import {
 import { useApi } from "../../app/context";
 import { afterConfigChange } from "../../app/configResync";
 import { showError } from "../../app/errorStore";
+import { useI18n } from "../../app/i18n";
 import { Icon } from "../../components/Icon";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { FcButton, FcCard, FcIconButton } from "../../components/flclash";
@@ -21,6 +22,7 @@ import styles from "./BackupView.module.css";
 
 export function BackupView() {
   const api = useApi();
+  const { t } = useI18n();
   const [backups, setBackups] = useState<PanelBackup[]>([]);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -51,7 +53,7 @@ export function BackupView() {
     try {
       const result = await backupPanelConfig();
       if (!result.ok) {
-        throw new Error(result.message || "备份失败");
+        throw new Error(result.message || t("Backup failed"));
       }
       await load();
     } catch (error) {
@@ -66,7 +68,7 @@ export function BackupView() {
     try {
       const result = await restorePanelBackup(backup.name);
       if (!result.ok) {
-        throw new Error(result.message || "恢复失败");
+        throw new Error(result.message || t("Restore failed"));
       }
       setRestoreTarget(null);
       await afterConfigChange(api);
@@ -81,8 +83,8 @@ export function BackupView() {
   if (!hasPanelToken()) {
     return (
       <div className="fc-page">
-        <ToolsPageHeader title="备份与恢复" onBack={() => navigate("tools")} />
-        <div className={styles.empty}>备份功能需要面板后端；直接模式下不可用。</div>
+        <ToolsPageHeader title={t("Backup and Restore")} onBack={() => navigate("tools")} />
+        <div className={styles.empty}>{t("Backup requires the panel backend; unavailable in direct mode.")}</div>
       </div>
     );
   }
@@ -90,19 +92,19 @@ export function BackupView() {
   return (
     <div className="fc-page">
       <ToolsPageHeader
-        title="备份与恢复"
+        title={t("Backup and Restore")}
         onBack={() => navigate("tools")}
         actions={
           <FcButton variant="primary" disabled={busy} onClick={() => void createBackup()}>
-            <Icon name="backup" size={16} /> 立即备份
+            <Icon name="backup" size={16} /> {t("Back up now")}
           </FcButton>
         }
       />
       <div className="fc-page-body">
         {loading ? (
-          <div className={styles.empty}>加载中…</div>
+          <div className={styles.empty}>{t("Loading...")}</div>
         ) : backups.length === 0 ? (
-          <div className={styles.empty}>暂无备份</div>
+          <div className={styles.empty}>{t("No backups")}</div>
         ) : (
           <FcCard className={styles.card}>
             {backups.map((backup) => (
@@ -114,11 +116,11 @@ export function BackupView() {
                   </span>
                 </span>
                 <span className={styles.rowActions}>
-                  <FcIconButton label="下载备份" onClick={() => void downloadPanelBackup(backup.name)}>
+                  <FcIconButton label={t("Download backup")} onClick={() => void downloadPanelBackup(backup.name)}>
                     <Icon name="download" size={16} />
                   </FcIconButton>
                   <FcButton size="small" disabled={busy} onClick={() => setRestoreTarget(backup)}>
-                    恢复
+                    {t("Restore")}
                   </FcButton>
                 </span>
               </div>
@@ -126,14 +128,16 @@ export function BackupView() {
           </FcCard>
         )}
         <p className={styles.hint}>
-          恢复备份会覆盖当前配置并重启内核；应用任何配置前面板都会自动创建新的备份。
+          {t(
+            "Restoring a backup overwrites the current configuration and restarts the core; the panel creates a fresh backup before every apply.",
+          )}
         </p>
       </div>
       {restoreTarget && (
         <ConfirmDialog
-          title="恢复备份"
-          message={`将配置恢复到 “${restoreTarget.name}” 并重启内核？当前未备份的修改会丢失。`}
-          confirmLabel="恢复"
+          title={t("Restore backup")}
+          message={t("Restore the configuration to “{name}” and restart the core? Changes that were not backed up will be lost.", { name: restoreTarget.name })}
+          confirmLabel={t("Restore")}
           busy={busy}
           onConfirm={() => void restore(restoreTarget)}
           onClose={() => setRestoreTarget(null)}

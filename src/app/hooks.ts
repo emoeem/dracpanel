@@ -182,3 +182,18 @@ export function useStreamingAction(): {
 
   return { running, error, reportError: setError, start, stop };
 }
+
+/**
+ * True while the component is mounted. Guards async callbacks (timers, fetches)
+ * that would otherwise setState after unmount.
+ */
+export function useMountedRef(): RefObject<boolean> {
+  const ref = useRef(true);
+  useEffect(() => {
+    ref.current = true;
+    return () => {
+      ref.current = false;
+    };
+  }, []);
+  return ref;
+}

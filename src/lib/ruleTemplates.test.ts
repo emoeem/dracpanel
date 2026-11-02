@@ -8,8 +8,8 @@ describe("RULE_TEMPLATES", () => {
       const covered =
         template.domainSuffixes.length > 0 || template.staticRule !== undefined;
       expect(covered, template.id).toBe(true);
-      expect(template.name, template.id).not.toBe("");
-      expect(template.description, template.id).not.toBe("");
+      expect(template.nameKey, template.id).not.toBe("");
+      expect(template.descriptionKey, template.id).not.toBe("");
     }
   });
 

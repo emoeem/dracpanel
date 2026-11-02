@@ -1,4 +1,5 @@
 import { hasPanelToken } from "../../api/panel";
+import { useI18n } from "../../app/i18n";
 import { useApi, navigate } from "../../app/context";
 import { usePanelState } from "../../app/usePanelState";
 import type { PanelStateResult } from "../../app/usePanelState";
@@ -58,6 +59,7 @@ function ConfirmSheet(props: {
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <FcSheet
       title={props.title}
@@ -65,10 +67,10 @@ function ConfirmSheet(props: {
       footer={
         <>
           <button type="button" className={styles.cancelAction} disabled={props.busy} onClick={props.onClose}>
-            取消
+            {t("Cancel")}
           </button>
           <button type="button" className={styles.primaryAction} disabled={props.busy} onClick={props.onConfirm}>
-            {props.busy ? "应用中…" : "应用并重启"}
+            {props.busy ? t("Applying…") : t("Apply and restart")}
           </button>
         </>
       }
@@ -91,26 +93,27 @@ export function useAdvancedToggles(panel: PanelStateResult): {
 }
 
 export function AdvancedView() {
+  const { t } = useI18n();
   const panel = usePanelState();
   const { systemProxy, tun, lan } = useAdvancedToggles(panel);
 
   return (
     <div className="fc-page">
-      <ToolsPageHeader title="进阶配置" onBack={() => navigate("tools")} />
+      <ToolsPageHeader title={t("Advanced Configuration")} onBack={() => navigate("tools")} />
       <div className="fc-page-body">
-        {!hasPanelToken() && <div className={styles.hint}>直接模式下，以下开关与配置工具不可用。</div>}
+        {!hasPanelToken() && <div className={styles.hint}>{t("In direct mode, the switches and configuration tools below are unavailable.")}</div>}
 
         <FcCard className={styles.card}>
-          <h2 className={styles.cardTitle}>网络</h2>
+          <h2 className={styles.cardTitle}>{t("Network")}</h2>
           <ToggleRow
             icon="swap_horiz"
-            label="系统代理"
+            label={t("System proxy")}
             detail={
               !systemProxy.supported
-                ? "需要面板后端提供 /api/system-proxy 接口"
+                ? t("The panel backend must expose /api/system-proxy.")
                 : systemProxy.enabled
-                  ? `已开启${systemProxy.port ? ` · 端口 ${systemProxy.port}` : ""}`
-                  : "已关闭"
+                  ? `${t("Enabled")}${systemProxy.port ? ` · ${t("Port {port}", { port: systemProxy.port })}` : ""}`
+                  : t("Disabled")
             }
             checked={systemProxy.enabled}
             disabled={!systemProxy.supported}
@@ -120,15 +123,15 @@ export function AdvancedView() {
           />
           <ToggleRow
             icon={tun.ebpfMode ? "shield" : "vpn_lock"}
-            label={tun.ebpfMode ? "流量接管（eBPF）" : "虚拟网卡（TUN）"}
+            label={tun.ebpfMode ? t("Traffic capture (eBPF)") : t("Virtual adapter (TUN)")}
             detail={
               !tun.supported
-                ? tun.reason ?? "需要面板后端"
+                ? tun.reason ?? t("Panel backend required")
                 : tun.ebpfMode
-                  ? "eBPF 模式下流量由内核 ebpf 入站接管"
+                  ? t("In eBPF mode, the kernel's ebpf inbound handles traffic.")
                   : tun.enabled
-                    ? "已开启（tun inbound）"
-                    : tun.reason ?? "已关闭"
+                    ? t("Enabled (tun inbound)")
+                    : tun.reason ?? t("Disabled")
             }
             checked={tun.ebpfMode ? true : (tun.pending ?? tun.enabled)}
             disabled={!tun.supported || tun.ebpfMode || tun.busy || (tun.reason !== null && !tun.enabled)}
@@ -136,13 +139,13 @@ export function AdvancedView() {
           />
           <ToggleRow
             icon="lan"
-            label="局域网代理"
+            label={t("LAN proxy")}
             detail={
               !lan.supported
-                ? lan.reason ?? "不可用"
+                ? lan.reason ?? t("Unavailable")
                 : lan.enabled
-                  ? `已开启${lan.port ? ` · 端口 ${lan.port}` : ""}`
-                  : "已关闭（仅本机监听）"
+                  ? `${t("Enabled")}${lan.port ? ` · ${t("Port {port}", { port: lan.port })}` : ""}`
+                  : t("Disabled (loopback only)")
             }
             checked={lan.pending ?? lan.enabled}
             disabled={!lan.supported || lan.busy}
@@ -151,38 +154,38 @@ export function AdvancedView() {
         </FcCard>
 
         <FcCard className={styles.card}>
-          <h2 className={styles.cardTitle}>配置与规则</h2>
+          <h2 className={styles.cardTitle}>{t("Configuration and rules")}</h2>
           <LinkRow
             icon="rule"
-            label="附加规则"
-            detail="编辑 route.rules 并写回配置"
+            label={t("Additional rules")}
+            detail={t("Edit route.rules and write them back to the configuration")}
             onClick={() => navigate("tools/rules")}
           />
           <LinkRow
             icon="rule"
-            label="自定义资源"
-            detail="rule_set 远程规则集"
+            label={t("Custom Resources")}
+            detail={t("rule_set remote rule sets")}
             onClick={() => navigate("tools/rulesets")}
           />
           <LinkRow
             icon="code"
-            label="配置文件"
-            detail="JSON 配置编辑器（含校验、备份、恢复）"
+            label={t("Configuration file")}
+            detail={t("JSON configuration editor (with validation, backup, and restore)")}
             onClick={() => navigate("tools/config")}
           />
         </FcCard>
 
         <FcCard className={styles.card}>
-          <h2 className={styles.cardTitle}>诊断</h2>
+          <h2 className={styles.cardTitle}>{t("Diagnostics")}</h2>
           <LinkRow
             icon="network_check"
-            label="网络质量"
+            label={t("Network quality")}
             onClick={() => navigate("tools/network-quality")}
           />
-          <LinkRow icon="hub" label="STUN 测试" onClick={() => navigate("tools/stun")} />
+          <LinkRow icon="hub" label={t("STUN test")} onClick={() => navigate("tools/stun")} />
           <LinkRow
             icon="cable"
-            label="连通性诊断"
+            label={t("Connectivity diagnostics")}
             onClick={() => navigate("tools/connectivity")}
           />
         </FcCard>
@@ -190,11 +193,11 @@ export function AdvancedView() {
 
       {tun.pending !== null && (
         <ConfirmSheet
-          title={tun.pending ? "开启虚拟网卡" : "关闭虚拟网卡"}
+          title={tun.pending ? t("Enable virtual adapter") : t("Disable virtual adapter")}
           message={
             tun.pending
-              ? "将把之前保存的 TUN 入站恢复到配置中，并重启内核。"
-              : "将从配置中移除 TUN 入站并保存为预设，方便之后恢复。"
+              ? t("The previously saved TUN inbound will be restored to the configuration and the core restarted.")
+              : t("The TUN inbound will be removed from the configuration and saved as a preset so you can restore it later.")
           }
           busy={tun.busy}
           onConfirm={() => void tun.confirm()}
@@ -203,11 +206,11 @@ export function AdvancedView() {
       )}
       {lan.pending !== null && (
         <ConfirmSheet
-          title={lan.pending ? "开启局域网代理" : "关闭局域网代理"}
+          title={lan.pending ? t("Enable LAN proxy") : t("Disable LAN proxy")}
           message={
             lan.pending
-              ? "将把本地入站监听切换为 0.0.0.0 并重启内核；请确认防火墙已放行。"
-              : "将把本地入站监听切回 127.0.0.1 并重启内核。"
+              ? t("The local inbound listener will switch to 0.0.0.0 and the core will restart; make sure your firewall allows it.")
+              : t("The local inbound listener will switch back to 127.0.0.1 and the core will restart.")
           }
           busy={lan.busy}
           onConfirm={() => void lan.confirm()}

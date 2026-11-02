@@ -12,8 +12,8 @@ export interface JournalEntryLike {
 }
 
 export interface JournalDayGroup<T extends { t: number }> {
+  /** `today` | `yesterday` | day-start epoch in ms, as a string. */
   key: string;
-  label: string;
   items: T[];
 }
 
@@ -23,7 +23,11 @@ function startOfDay(ms: number): number {
   return date.getTime();
 }
 
-/** Groups newest-first entries into 今天 / 昨天 / YYYY-MM-DD buckets. */
+/**
+ * Groups newest-first entries into today / yesterday / YYYY-MM-DD buckets.
+ * The bucket is returned as a key (`today`, `yesterday`, or the day-start
+ * epoch) so the view can label it in the reader's language.
+ */
 export function groupJournalByDay<T extends { t: number }>(
   entries: readonly T[],
   now: number = Date.now(),
@@ -37,20 +41,16 @@ export function groupJournalByDay<T extends { t: number }>(
     const at = entry.t * 1000;
     const dayStart = startOfDay(at);
     let key: string;
-    let label: string;
     if (dayStart >= today) {
       key = "today";
-      label = "今天";
     } else if (dayStart >= yesterday) {
       key = "yesterday";
-      label = "昨天";
     } else {
       key = String(dayStart);
-      label = new Date(dayStart).toLocaleDateString();
     }
     let group = index.get(key);
     if (!group) {
-      group = { key, label, items: [] };
+      group = { key, items: [] };
       index.set(key, group);
       groups.push(group);
     }

@@ -58,7 +58,7 @@ describe("evalTraceRule", () => {
     expect(evalTraceRule({ ip_cidr: ["10.0.0.0/8"] }, input())).toEqual({ verdict: "no_match" });
     expect(evalTraceRule({ ip_cidr: "2001:db8::/32" }, input())).toEqual({
       verdict: "unknown",
-      reason: "ip_cidr 无法本地判定：2001:db8::/32",
+      reason: { key: "ip_cidr cannot be evaluated locally: {value}", params: { value: "2001:db8::/32" } },
     });
   });
 
@@ -77,25 +77,25 @@ describe("evalTraceRule", () => {
     });
     expect(evalTraceRule({ geoip: ["cn"] }, input())).toEqual({
       verdict: "unknown",
-      reason: "geoip 数据库需内核判定",
+      reason: { key: "The geoip database is evaluated by the core only" },
     });
   });
 
   it("reports undecidable rules when required input is missing", () => {
     expect(evalTraceRule({ domain_suffix: "example.com" }, input({ domain: "" }))).toEqual({
       verdict: "unknown",
-      reason: "未填写域名，无法判定域名类匹配",
+      reason: { key: "No domain given, so domain matchers cannot be evaluated" },
     });
     expect(evalTraceRule({ ip_cidr: "10.0.0.0/8" }, input({ ip: "" }))).toEqual({
       verdict: "unknown",
-      reason: "未填写目标 IP，无法判定 ip_cidr",
+      reason: { key: "No target IP given, so ip_cidr cannot be evaluated" },
     });
   });
 
   it("stops at matchers only the kernel can decide", () => {
     expect(evalTraceRule({ rule_set: ["geosite-openai"] }, input())).toEqual({
       verdict: "unknown",
-      reason: "“rule_set” 需内核判定",
+      reason: { key: "“{matcher}” is evaluated by the core only", params: { matcher: "rule_set" } },
     });
   });
 
@@ -121,7 +121,7 @@ describe("evalTraceRule", () => {
         { type: "logical", mode: "and", rules: [{ port: 443 }, { network: "tcp" }] },
         input(),
       ),
-    ).toEqual({ verdict: "unknown", reason: "逻辑组合规则（rules[]）需内核判定" });
+    ).toEqual({ verdict: "unknown", reason: { key: "Logical rules (rules[]) are evaluated by the core only" } });
   });
 });
 
@@ -140,8 +140,8 @@ describe("traceRules", () => {
       target: "direct",
     });
     expect(result.steps).toEqual([
-      { index: 0, verdict: "no_match", reason: "" },
-      { index: 1, verdict: "match", reason: "" },
+      { index: 0, verdict: "no_match", reason: null },
+      { index: 1, verdict: "match", reason: null },
     ]);
   });
 
@@ -164,7 +164,7 @@ describe("traceRules", () => {
     expect(result.outcome).toEqual({
       kind: "unknown",
       index: 1,
-      reason: "“rule_set” 需内核判定",
+      reason: { key: "“{matcher}” is evaluated by the core only", params: { matcher: "rule_set" } },
     });
     expect(result.steps).toHaveLength(2);
     expect(result.steps[1]?.verdict).toBe("unknown");

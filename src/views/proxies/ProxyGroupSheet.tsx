@@ -3,6 +3,7 @@ import { useState } from "react";
 import { proxyDisplayType } from "../../api/format";
 import { useApi } from "../../app/context";
 import { showError } from "../../app/errorStore";
+import { useI18n } from "../../app/i18n";
 import { FcSheet } from "../../components/flclash";
 import type { Group } from "../../gen/daemon/started_service_pb";
 import { ProxyNodeCard } from "./ProxyNodeCard";
@@ -15,6 +16,7 @@ interface ProxyGroupSheetProps {
 
 /** FlClash opens the selected group's nodes in a sheet from the dashboard. */
 export function ProxyGroupSheet({ group, onClose }: ProxyGroupSheetProps) {
+  const { t } = useI18n();
   const api = useApi();
   const [pending, setPending] = useState<string | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
@@ -42,7 +44,7 @@ export function ProxyGroupSheet({ group, onClose }: ProxyGroupSheetProps) {
   return (
     <FcSheet
       title={group.tag}
-      subtitle={`${proxyDisplayType(group.type)} · ${group.items.length} 个节点`}
+      subtitle={`${proxyDisplayType(group.type)} · ${t("{count} nodes", { count: group.items.length })}`}
       onClose={onClose}
       wide
     >

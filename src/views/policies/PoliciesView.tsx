@@ -14,6 +14,7 @@ import {
 import { useApi } from "../../app/context";
 import { afterConfigChange } from "../../app/configResync";
 import { showError } from "../../app/errorStore";
+import { useI18n, type MessageKey } from "../../app/i18n";
 import { useStream } from "../../api/stream";
 import type { Group } from "../../gen/daemon/started_service_pb";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
@@ -23,6 +24,7 @@ import {
   FcField,
   FcIconButton,
   FcPageToolbar,
+  FcSearchField,
   FcSegmented,
   FcSelect,
   FcSheet,
@@ -54,9 +56,14 @@ function PolicyGroupCard(props: {
   group: PanelPolicyGroup;
   live: Group | undefined;
   coversAllNodes: boolean;
+  /** Tags that are themselves groups, so a member can jump to its own card. */
+  groupTags: ReadonlySet<string>;
+  focused: boolean;
+  onFocus: (tag: string) => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useI18n();
   const { group, live } = props;
   const [region, setRegion] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -107,31 +114,34 @@ function PolicyGroupCard(props: {
   const delay = currentItem?.delay ?? 0;
 
   return (
+    <div id={`policy-${group.tag}`} className={cx(props.focused && styles.cardFocus)}>
     <FcCard className={styles.card}>
       <div className={styles.head}>
         <span className={styles.name}>{group.tag}</span>
-        <span className={styles.badge}>{group.type === "urltest" ? "自动选择" : "手动选择"}</span>
-        {group.managed && <span className={cx(styles.badge, styles.badgeManaged)}>订阅托管</span>}
+        <span className={styles.badge}>
+          {group.type === "urltest" ? t("Auto selection") : t("Manual selection")}
+        </span>
+        {group.managed && <span className={cx(styles.badge, styles.badgeManaged)}>{t("Managed by subscription")}</span>}
         <span className={styles.spacer} />
-        <FcIconButton label="编辑" onClick={props.onEdit}>
+        <FcIconButton label={t("Edit")} onClick={props.onEdit}>
           <Icon name="edit" size={16} />
         </FcIconButton>
-        <FcIconButton label="删除" onClick={props.onDelete}>
+        <FcIconButton label={t("Delete")} onClick={props.onDelete}>
           <Icon name="delete" size={16} />
         </FcIconButton>
       </div>
       <div className={styles.summary}>
-        当前：{flagOfText(current)} {current}
+        {t("Current: {name}", { name: `${flagOfText(current)} ${current}` })}
         {delay > 0 && (
           <>
             {" · "}
             <span className={urlTestDelayTone(delay)}>{delay} ms</span>
           </>
         )}
-        {live && ` · ${usable} 个可用`}
-        {live && untested > 0 && ` · ${untested} 个未测试`}
-        {` · ${group.members.length} 个成员`}
-        {props.coversAllNodes && " · 包含所有节点"}
+        {live && t(" · {count} available", { count: usable })}
+        {live && untested > 0 && t(" · {count} untested", { count: untested })}
+        {t(" · {count} members", { count: group.members.length })}
+        {props.coversAllNodes && t(" · includes all nodes")}
       </div>
       {group.members.length > 0 && (
         <>
@@ -142,7 +152,7 @@ function PolicyGroupCard(props: {
                 className={cx(styles.regionChip, region === null && styles.regionChipActive)}
                 onClick={() => setRegion(null)}
               >
-                全部
+                {t("All")}
               </button>
               {regions.map(({ code, count }) => (
                 <button
@@ -157,36 +167,49 @@ function PolicyGroupCard(props: {
             </div>
           )}
           <div className={styles.cardTools}>
-            <label className={styles.toolSearch}>
-              <Icon name="search" size={14} />
-              <input
-                value={search}
-                placeholder="筛选节点"
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </label>
+            <FcSearchField
+              value={search}
+              onChange={setSearch}
+              placeholder={t("Filter nodes")}
+              compact
+              className={styles.toolSearch}
+            />
             <label className={styles.toolToggle}>
               <FcSwitch
                 checked={availableOnly}
                 disabled={live === undefined}
-                label="只显示可用节点"
+                label={t("Show available nodes only")}
                 onChange={setAvailableOnly}
               />
-              <span>只显示可用</span>
+              <span>{t("Available only")}</span>
             </label>
           </div>
         </>
       )}
       <div className={styles.members}>
-        {shown.slice(0, 8).map((member) => (
-          <span key={member} className={cx(styles.member, member === current && styles.memberCurrent)}>
-            {member}
-          </span>
-        ))}
+        {shown.slice(0, 8).map((member) =>
+          props.groupTags.has(member) ? (
+            <button
+              key={member}
+              type="button"
+              className={cx(styles.member, styles.memberLink, member === current && styles.memberCurrent)}
+              title={t("Open {name}", { name: member })}
+              onClick={() => props.onFocus(member)}
+            >
+              {member}
+              <Icon name="chevron_right" size={14} />
+            </button>
+          ) : (
+            <span key={member} className={cx(styles.member, member === current && styles.memberCurrent)}>
+              {member}
+            </span>
+          ),
+        )}
         {shown.length > 8 && <span className={styles.member}>+{shown.length - 8}</span>}
-        {shown.length === 0 && <span className={styles.membersEmpty}>无匹配成员</span>}
+        {shown.length === 0 && <span className={styles.membersEmpty}>{t("No matching members")}</span>}
       </div>
     </FcCard>
+    </div>
   );
 }
 
@@ -238,25 +261,25 @@ function emptyDraft(): Draft {
   };
 }
 
-function draftIssue(draft: Draft, existingTags: string[]): string | null {
+function draftIssue(draft: Draft, existingTags: string[]): MessageKey | null {
   const tag = draft.tag.trim();
   if (tag === "") {
-    return "请填写组名";
+    return "Enter a group name";
   }
   const duplicate =
     draft.mode === "create" ? existingTags.includes(tag) : tag !== draft.originalTag && existingTags.includes(tag);
   if (duplicate) {
-    return "组名已存在";
+    return "Group name already exists";
   }
   if (draft.members.length === 0) {
-    return "至少选择一个成员";
+    return "Select at least one member";
   }
   if (draft.type === "urltest") {
     if (!/^https?:\/\//.test(draft.url.trim())) {
-      return "探测 URL 需要以 http(s):// 开头";
+      return "The probe URL must start with http(s)://";
     }
     if (!draft.interval.trim()) {
-      return "请填写测速间隔（例如 10m）";
+      return "Enter a test interval (e.g. 10m)";
     }
   }
   return null;
@@ -287,6 +310,7 @@ function buildOutbound(draft: Draft, previous?: ConfigOutbound): Record<string, 
 
 /** 策略：selector/urltest 组的创建、编辑、删除与成员管理。 */
 export function PoliciesView() {
+  const { t } = useI18n();
   const api = useApi();
   const toast = useToast();
   const runtime = useStream(api.groups);
@@ -294,6 +318,10 @@ export function PoliciesView() {
   const [groups, setGroups] = useState<PanelPolicyGroup[]>([]);
   const [overrides, setOverrides] = useState<Record<string, PanelPolicyOverrides>>({});
   const [filter, setFilter] = useState<Filter>("all");
+  const [focus, setFocus] = useState<string | null>(() => {
+    const query = window.location.hash.split("?")[1] ?? "";
+    return new URLSearchParams(query).get("focus");
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -304,13 +332,13 @@ export function PoliciesView() {
   const load = useCallback(async () => {
     if (!hasPanelToken()) {
       setLoading(false);
-      setError("策略编辑需要面板后端");
+      setError(t("Policy editing requires the panel backend"));
       return;
     }
     try {
       const [nextConfig, nextPolicies] = await Promise.all([getPanelConfig(), getPolicies()]);
       if (!nextConfig.ok) {
-        throw new Error("读取配置失败");
+        throw new Error(t("Failed to read the configuration"));
       }
       setConfig(nextConfig);
       setGroups(nextPolicies.groups ?? []);
@@ -321,7 +349,7 @@ export function PoliciesView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -364,6 +392,21 @@ export function PoliciesView() {
     );
   }, [filter, groups]);
 
+  const groupTags = useMemo(() => new Set(groups.map((group) => group.tag)), [groups]);
+
+  useEffect(() => {
+    if (focus === null) {
+      return;
+    }
+    const target = document.getElementById(`policy-${focus}`);
+    if (target === null) {
+      return;
+    }
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+    const timer = window.setTimeout(() => setFocus(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [focus, filtered]);
+
   const counts = useMemo(
     () => ({
       all: groups.length,
@@ -400,16 +443,16 @@ export function PoliciesView() {
   const persist = useCallback(
     async (nextOutbounds: ConfigOutbound[], overrideUpdates: { tag: string; value: PanelPolicyOverrides }[]) => {
       if (!config) {
-        throw new Error("配置未就绪");
+        throw new Error(t("Configuration not ready"));
       }
       const text = patchConfigText(config.text, ["outbounds"], nextOutbounds);
       const validation = await validatePanelConfig(text);
       if (!validation.ok) {
-        throw new Error(validation.message || "配置校验失败，未应用");
+        throw new Error(validation.message || t("Configuration validation failed; not applied"));
       }
       const result = await applyPanelConfig(text, config.mtime);
       if (!result.ok) {
-        throw new Error(result.message || "写入失败");
+        throw new Error(result.message || t("Failed to write"));
       }
       for (const update of overrideUpdates) {
         await savePolicyOverrides(update.tag, update.value);
@@ -417,7 +460,7 @@ export function PoliciesView() {
       await afterConfigChange(api);
       await load();
     },
-    [api, config, load],
+    [api, config, load, t],
   );
 
   const saveDraft = async () => {
@@ -457,7 +500,7 @@ export function PoliciesView() {
 
       await persist(next, updates);
       setDraft(null);
-      toast("策略组已保存", "good");
+      toast(t("Policy group saved"), "good");
     } catch (cause) {
       showError(cause);
     } finally {
@@ -478,7 +521,7 @@ export function PoliciesView() {
         });
       await persist(next, []);
       setDeleteTarget(null);
-      toast("策略组已删除", "good");
+      toast(t("Policy group deleted"), "good");
     } catch (cause) {
       showError(cause);
     } finally {
@@ -493,35 +536,42 @@ export function PoliciesView() {
   return (
     <div className="fc-page">
       <FcPageToolbar
-        title="策略"
-        subtitle={loading ? "加载中…" : `${counts.all} 个组 · 手动 ${counts.manual} · 自动 ${counts.auto}`}
+        title={t("Policies")}
+        subtitle={
+          loading
+            ? t("Loading...")
+            : `${t("{count} groups", { count: counts.all })} · ${t("Manual selection")} ${counts.manual} · ${t("Auto selection")} ${counts.auto}`
+        }
         actions={
-          <FcIconButton label="新建组" onClick={() => setDraft(emptyDraft())}>
+          <FcIconButton label={t("New group")} onClick={() => setDraft(emptyDraft())}>
             <Icon name="add" size={20} />
           </FcIconButton>
         }
       />
       <div className="fc-page-body">
-        <div className={styles.row} style={{ marginBottom: 12 }}>
+        <div className={styles.filterRow}>
           <FcSegmented
-            ariaLabel="组类型筛选"
+            className={styles.filterTabs}
+            ariaLabel={t("Group type filter")}
             value={filter}
             onChange={(value) => setFilter(value as Filter)}
             options={[
-              { value: "all", label: `全部 ${counts.all}` },
-              { value: "manual", label: `手动选择 ${counts.manual}` },
-              { value: "auto", label: `自动选择 ${counts.auto}` },
+              { value: "all", label: `${t("All")} ${counts.all}` },
+              { value: "manual", label: `${t("Manual selection")} ${counts.manual}` },
+              { value: "auto", label: `${t("Auto selection")} ${counts.auto}` },
             ]}
           />
-          <span className={styles.note}>sing-box 的组只有单一选择，不支持按 TCP/UDP 分开设置</span>
+          <span className={styles.note}>
+            {t("sing-box groups select a single outbound; TCP/UDP split is not supported")}
+          </span>
         </div>
 
         {error !== "" ? (
           <div className={styles.empty}>{error}</div>
         ) : loading ? (
-          <div className={styles.empty}>加载中…</div>
+          <div className={styles.empty}>{t("Loading...")}</div>
         ) : filtered.length === 0 ? (
-          <div className={styles.empty}>暂无策略组</div>
+          <div className={styles.empty}>{t("No policy groups")}</div>
         ) : (
           <div className={styles.list}>
             {filtered.map((group) => (
@@ -530,6 +580,12 @@ export function PoliciesView() {
                 group={group}
                 live={runtimeByTag.get(group.tag)}
                 coversAllNodes={coversAllNodes.get(group.tag) === true}
+                groupTags={groupTags}
+                focused={focus === group.tag}
+                onFocus={(tag) => {
+                  setFilter("all");
+                  setFocus(tag);
+                }}
                 onEdit={() => setDraft(draftOf(group))}
                 onDelete={() => setDeleteTarget(group)}
               />
@@ -540,55 +596,58 @@ export function PoliciesView() {
 
       {draft && (
         <FcSheet
-          title={draft.mode === "create" ? "新建策略组" : `编辑 ${draft.originalTag}`}
-          subtitle="写入配置并热重载"
+          title={draft.mode === "create" ? t("New policy group") : t("Edit {name}", { name: draft.originalTag ?? "" })}
+          subtitle={t("Writes the configuration and hot-reloads")}
           wide
           onClose={() => setDraft(null)}
           footer={
             <>
               <FcButton variant="text" disabled={busy} onClick={() => setDraft(null)}>
-                取消
+                {t("Cancel")}
               </FcButton>
               <FcButton disabled={busy} onClick={() => void saveDraft()}>
-                {busy ? "保存中…" : "保存"}
+                {busy ? t("Saving...") : t("Save")}
               </FcButton>
             </>
           }
         >
           <div className={styles.form}>
-            <FcField label="组名">
+            <FcField label={t("Group name")}>
               <input
                 value={draft.tag}
-                placeholder="例如 Proxy"
+                placeholder={t("e.g. Proxy")}
                 onChange={(event) => setDraft({ ...draft, tag: event.target.value })}
               />
             </FcField>
-            <FcField label="类型" hint={draft.type === "urltest" ? "按探测结果自动选优" : "手动选择当前节点"}>
+            <FcField
+              label={t("Type")}
+              hint={draft.type === "urltest" ? t("Picks the best node by probe results") : t("Manually select the current node")}
+            >
               <FcSegmented
-                ariaLabel="组类型"
+                ariaLabel={t("Group type")}
                 value={draft.type}
                 onChange={(value) => setDraft({ ...draft, type: value as Draft["type"] })}
                 options={[
-                  { value: "selector", label: "手动选择" },
-                  { value: "urltest", label: "自动选择" },
+                  { value: "selector", label: t("Manual selection") },
+                  { value: "urltest", label: t("Auto selection") },
                 ]}
               />
             </FcField>
             {draft.type === "urltest" && (
               <>
-                <FcField label="探测 URL">
+                <FcField label={t("Probe URL")}>
                   <input
                     value={draft.url}
                     onChange={(event) => setDraft({ ...draft, url: event.target.value })}
                   />
                 </FcField>
-                <FcField label="测速间隔" hint="如 10m、5m">
+                <FcField label={t("Test interval")} hint={t("e.g. 10m, 5m")}>
                   <input
                     value={draft.interval}
                     onChange={(event) => setDraft({ ...draft, interval: event.target.value })}
                   />
                 </FcField>
-                <FcField label="容差（ms）" hint="留空表示默认">
+                <FcField label={t("Tolerance (ms)")} hint={t("Leave empty for the default")}>
                   <input
                     value={draft.tolerance}
                     inputMode="numeric"
@@ -597,13 +656,13 @@ export function PoliciesView() {
                 </FcField>
               </>
             )}
-            <FcField label={`成员（${draft.members.length}）`}>
+            <FcField label={t("Members ({count})", { count: draft.members.length })}>
               <div className={styles.form}>
                 {draft.members.map((member, index) => (
                   <div key={member} className={styles.memberRow}>
                     <span className={styles.memberName}>{member}</span>
                     <FcIconButton
-                      label="上移"
+                      label={t("Move up")}
                       disabled={index === 0}
                       onClick={() => {
                         const next = [...draft.members];
@@ -614,7 +673,7 @@ export function PoliciesView() {
                       <Icon name="unfold_more" size={14} />
                     </FcIconButton>
                     <FcIconButton
-                      label="下移"
+                      label={t("Move down")}
                       disabled={index === draft.members.length - 1}
                       onClick={() => {
                         const next = [...draft.members];
@@ -627,7 +686,7 @@ export function PoliciesView() {
                       </span>
                     </FcIconButton>
                     <FcIconButton
-                      label="移除"
+                      label={t("Remove")}
                       onClick={() =>
                         setDraft({
                           ...draft,
@@ -641,10 +700,10 @@ export function PoliciesView() {
                 ))}
                 <div className={styles.addRow}>
                   <FcSelect value={addMember} onChange={setAddMember}>
-                    <option value="">选择要添加的节点/组…</option>
+                    <option value="">{t("Select a node/group to add...")}</option>
                     {available.map((candidate) => (
                       <option key={candidate.tag} value={candidate.tag}>
-                        {candidate.tag}（{candidate.type}）
+                        {t("{tag} ({type})", { tag: candidate.tag, type: candidate.type })}
                       </option>
                     ))}
                   </FcSelect>
@@ -656,7 +715,7 @@ export function PoliciesView() {
                       setAddMember("");
                     }}
                   >
-                    添加
+                    {t("Add")}
                   </FcButton>
                 </div>
               </div>
@@ -667,9 +726,11 @@ export function PoliciesView() {
 
       {deleteTarget && (
         <ConfirmDialog
-          title="删除策略组"
-          message={`删除「${deleteTarget.tag}」？引用它的规则会校验失败，需要同步调整。`}
-          confirmLabel="删除"
+          title={t("Delete policy group")}
+          message={t("Delete “{name}”? Rules referencing it will fail validation and need adjusting.", {
+            name: deleteTarget.tag,
+          })}
+          confirmLabel={t("Delete")}
           danger
           busy={busy}
           onConfirm={() => void removeGroup(deleteTarget)}

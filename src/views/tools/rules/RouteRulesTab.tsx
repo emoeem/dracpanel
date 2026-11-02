@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 
+import { useI18n, type Translate } from "../../../app/i18n";
 import { FcButton, FcField, FcSegmented, FcSelect, FcSheet } from "../../../components/flclash";
 import type { RuleObject } from "../../../lib/ruleEditor";
 import {
@@ -18,17 +19,21 @@ const SIMPLE_TEMPLATE_COUNT = 4;
 
 /** How the generated rule will source its matchers, shown on the card. */
 function templateSource(
+  t: Translate,
   template: RuleTemplate,
   ruleSetTags: readonly string[],
 ): { viaRuleSet: boolean; text: string } {
   if (template.staticRule !== undefined) {
-    return { viaRuleSet: false, text: "固定匹配器" };
+    return { viaRuleSet: false, text: t("Fixed matchers") };
   }
   const available = (template.preferredRuleSets ?? []).filter((tag) => ruleSetTags.includes(tag));
   if (available.length > 0) {
-    return { viaRuleSet: true, text: `引用规则集 ${available.join("、")}` };
+    return { viaRuleSet: true, text: t("References rule sets {tags}", { tags: available.join(", ") }) };
   }
-  return { viaRuleSet: false, text: `静态域名后缀 ${template.domainSuffixes.length} 条` };
+  return {
+    viaRuleSet: false,
+    text: t("Static domain suffixes: {count}", { count: template.domainSuffixes.length }),
+  };
 }
 
 function TemplateCard(props: {
@@ -39,8 +44,9 @@ function TemplateCard(props: {
   disabled: boolean;
   onAdd: (rule: RuleObject) => void;
 }) {
+  const { t } = useI18n();
   const { template } = props;
-  const source = templateSource(template, props.ruleSetTags);
+  const source = templateSource(t, template, props.ruleSetTags);
   const generated = useMemo(
     () => resolveTemplateRule(template, props.outbound, props.ruleSetTags),
     [template, props.outbound, props.ruleSetTags],
@@ -52,20 +58,20 @@ function TemplateCard(props: {
   return (
     <div className={styles.templateCard}>
       <div className={styles.templateHead}>
-        <span className={styles.templateName}>{template.name}</span>
+        <span className={styles.templateName}>{t(template.nameKey)}</span>
         <span
           className={cx(styles.templateAction, template.action === "reject" && styles.templateReject)}
         >
-          {template.action === "reject" ? "拒绝" : "路由"}
+          {template.action === "reject" ? t("Reject") : t("Route")}
         </span>
       </div>
-      <p className={styles.templateDesc}>{template.description}</p>
+      <p className={styles.templateDesc}>{t(template.descriptionKey)}</p>
       <span
         className={cx(styles.templateSource, source.viaRuleSet && styles.templateSourceSet)}
         title={
           source.viaRuleSet
-            ? "优先引用配置中已有的 rule_set，比静态列表更准确"
-            : "配置中没有对应 rule_set，写入静态域名后缀列表"
+            ? t("Prefer an existing rule_set in the configuration; more accurate than a static list")
+            : t("No matching rule_set in the configuration; a static domain suffix list will be written")
         }
       >
         {source.text}
@@ -76,7 +82,7 @@ function TemplateCard(props: {
         disabled={props.disabled || exists}
         onClick={() => props.onAdd(generated)}
       >
-        {exists ? "已在列表" : "添加"}
+        {exists ? t("Already in the list") : t("Add")}
       </FcButton>
     </div>
   );
@@ -90,6 +96,7 @@ export function RouteRulesTab(props: {
   finalOutbound: string;
   busy: boolean;
 }) {
+  const { t } = useI18n();
   const [mode, setMode] = useState<RouteMode>("simple");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [target, setTarget] = useState("");
@@ -103,8 +110,14 @@ export function RouteRulesTab(props: {
     <>
       {props.outbounds.length > 0 && (
         <FcField
-          label="模板目标出站"
-          hint={`新增「路由」类模板规则指向该出站${outbound !== "" ? `（当前：${outbound}）` : ""}`}
+          label={t("Template target outbound")}
+          hint={
+            outbound !== ""
+              ? t("New routing template rules point at this outbound (current: {outbound})", {
+                  outbound,
+                })
+              : t("New routing template rules point at this outbound")
+          }
           className={styles.templateTargetField}
         >
           <FcSelect value={outbound} onChange={setTarget} disabled={props.busy}>
@@ -136,12 +149,12 @@ export function RouteRulesTab(props: {
     <div className={styles.tabBody}>
       <FcSegmented
         className={styles.modeToggle}
-        ariaLabel="规则编辑模式"
+        ariaLabel={t("Rule editing mode")}
         value={mode}
         onChange={setMode}
         options={[
-          { value: "simple", label: "简易" },
-          { value: "advanced", label: "高级" },
+          { value: "simple", label: t("Simple") },
+          { value: "advanced", label: t("Advanced") },
         ]}
       />
       {mode === "simple" ? (
@@ -149,16 +162,18 @@ export function RouteRulesTab(props: {
           {templateGrid(RULE_TEMPLATES.slice(0, SIMPLE_TEMPLATE_COUNT))}
           <div className={styles.moreRow}>
             <FcButton size="small" variant="text" disabled={props.busy} onClick={() => setSheetOpen(true)}>
-              更多模板
+              {t("More templates")}
             </FcButton>
           </div>
           <p className={styles.hint}>
-            模板只生成一条规则并加入暂存；更细的域名/IP 控制请切到「高级」。私有/多播/保留地址建议直连，可用「私有地址直连」模板并上移到列表前部。所有改动需点顶部「应用」后才写入配置。
+            {t(
+              "Templates only generate one rule and stage it; switch to Advanced for finer domain/IP control. Private, multicast, and reserved addresses are better routed directly — use the “Direct private addresses” template and move it to the top. Changes are written to the configuration only after you press Apply.",
+            )}
           </p>
           {sheetOpen && (
             <FcSheet
-              title="规则模板"
-              subtitle="点击添加后进入暂存，统一应用"
+              title={t("Rule templates")}
+              subtitle={t("Clicking add stages the rule; apply them together")}
               onClose={() => setSheetOpen(false)}
               wide
             >
@@ -171,11 +186,11 @@ export function RouteRulesTab(props: {
           rules={props.rules}
           onChange={props.onChange}
           targetKey="outbound"
-          targetLabel="出站"
+          targetLabel={t("Outbound")}
           targetOptions={props.outbounds}
           busy={props.busy}
-          addLabel="添加规则"
-          emptyText="暂无规则"
+          addLabel={t("Add rule")}
+          emptyText={t("No rules")}
         />
       )}
     </div>

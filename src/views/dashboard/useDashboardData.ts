@@ -12,7 +12,9 @@ import {
 } from "../../api/panel";
 import { hasPanelToken } from "../../api/panel";
 import { useNow } from "../../app/context";
+import { useI18n } from "../../app/i18n";
 import { showError } from "../../app/errorStore";
+import { useMountedRef } from "../../app/hooks";
 import type { PanelStateResult } from "../../app/usePanelState";
 import type { Group } from "../../gen/daemon/started_service_pb";
 import {
@@ -157,24 +159,43 @@ export function useEgress(panel: PanelStateResult) {
     };
   }, [ip]);
 
+  const mountedRef = useMountedRef();
+
   const reprobe = useCallback(() => {
     panel.refresh();
     if (!ip) {
       setProbing(true);
-      window.setTimeout(() => setProbing(false), 1200);
+      window.setTimeout(() => {
+        if (mountedRef.current) {
+          setProbing(false);
+        }
+      }, 1200);
       return;
     }
     setProbing(true);
     void getGeoIp(ip)
-      .then(setGeo)
-      .catch(() => setGeo(null))
-      .finally(() => setProbing(false));
-  }, [ip, panel]);
+      .then((value) => {
+        if (mountedRef.current) {
+          setGeo(value);
+        }
+      })
+      .catch(() => {
+        if (mountedRef.current) {
+          setGeo(null);
+        }
+      })
+      .finally(() => {
+        if (mountedRef.current) {
+          setProbing(false);
+        }
+      });
+  }, [ip, mountedRef, panel]);
 
   return { ip, geo, probing, reprobe };
 }
 
 export function useProfilesSummary(panel: PanelStateResult) {
+  const { t } = useI18n();
   const [items, setItems] = useState<PanelSubscription[]>([]);
   const [managed, setManaged] = useState<PanelManagedSubscriptions | null>(null);
   const [busy, setBusy] = useState(false);
@@ -223,7 +244,7 @@ export function useProfilesSummary(panel: PanelStateResult) {
     try {
       const result = await updateSubscription(subscription.id);
       if (!result.ok) {
-        throw new Error(result.message || "更新配置失败");
+        throw new Error(result.message || t("Failed to update the configuration"));
       }
       await load();
       panel.refresh();
@@ -232,7 +253,7 @@ export function useProfilesSummary(panel: PanelStateResult) {
     } finally {
       setBusy(false);
     }
-  }, [load, panel, summary.subscription]);
+  }, [load, panel, summary.subscription, t]);
 
   return { summary, busy, sync, reload: load };
 }

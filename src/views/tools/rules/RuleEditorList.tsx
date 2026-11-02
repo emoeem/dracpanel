@@ -1,10 +1,14 @@
 import { useMemo, useState } from "react";
 
 import { navigate } from "../../../app/context";
-import { useI18n } from "../../../app/i18n";
+import { useI18n, type Translate } from "../../../app/i18n";
 import { Icon } from "../../../components/Icon";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
-import { FcCard, FcIconButton } from "../../../components/flclash";
+import {
+  FcCard,
+  FcIconButton,
+  FcSearchField,
+} from "../../../components/flclash";
 import type { RuleObject } from "../../../lib/ruleEditor";
 import { emptyDraft, isNestedRule, ruleToDraft } from "../../../lib/ruleEditor";
 import { cx } from "../../../lib/cx";
@@ -15,7 +19,7 @@ import styles from "../RulesView.module.css";
 const NESTED_RULE_HINT =
   "Combined rules (rules/mode) cannot be edited here; change the JSON under Manage → Config instead." as const;
 
-export function ruleSummary(rule: RuleObject): string {
+export function ruleSummary(rule: RuleObject, t: Translate): string {
   const matchers: string[] = [];
   for (const [key, value] of Object.entries(rule)) {
     if (key === "action" || key === "outbound" || key === "server" || key === "rules") {
@@ -29,10 +33,10 @@ export function ruleSummary(rule: RuleObject): string {
       matchers.push(`${key}: ${String(value)}`);
     }
   }
-  return matchers.join(" · ") || "（空规则）";
+  return matchers.join(" · ") || t("(empty rule)");
 }
 
-export function ruleTarget(rule: RuleObject): string {
+export function ruleTarget(rule: RuleObject, t: Translate): string {
   if (typeof rule.outbound === "string") {
     return `→ ${rule.outbound}`;
   }
@@ -42,7 +46,7 @@ export function ruleTarget(rule: RuleObject): string {
   if (typeof rule.action === "string") {
     return `→ ${rule.action}`;
   }
-  return "→ 默认";
+  return `→ ${t("Default")}`;
 }
 
 /**
@@ -74,10 +78,10 @@ export function RuleEditorList(props: {
       .filter(
         ({ rule }) =>
           query === "" ||
-          ruleSummary(rule).toLowerCase().includes(query) ||
-          ruleTarget(rule).toLowerCase().includes(query),
+          ruleSummary(rule, t).toLowerCase().includes(query) ||
+          ruleTarget(rule, t).toLowerCase().includes(query),
       );
-  }, [props.rules, search]);
+  }, [props.rules, search, t]);
 
   const move = (index: number, direction: -1 | 1) => {
     const target = index + direction;
@@ -104,14 +108,7 @@ export function RuleEditorList(props: {
   return (
     <>
       <div className={styles.listToolbar}>
-        <label className={styles.search}>
-          <Icon name="search" size={16} />
-          <input
-            value={search}
-            placeholder="搜索规则"
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
+        <FcSearchField value={search} onChange={setSearch} placeholder={t("Search rules")} compact />
         <FcIconButton
           label={props.addLabel}
           disabled={props.busy}
@@ -136,7 +133,7 @@ export function RuleEditorList(props: {
                 <span className={styles.order}>{position + 1}</span>
                 {nested ? (
                   <div className={cx(styles.rowMain, styles.rowMainStatic)}>
-                    <span className={styles.summary}>{ruleSummary(rule)}</span>
+                    <span className={styles.summary}>{ruleSummary(rule, t)}</span>
                     <span className={styles.nestedNote} title={t(NESTED_RULE_HINT)}>
                       {t(NESTED_RULE_HINT)}
                     </span>
@@ -150,8 +147,8 @@ export function RuleEditorList(props: {
                       setEditorOpen(true);
                     }}
                   >
-                    <span className={styles.summary}>{ruleSummary(rule)}</span>
-                    <span className={styles.target}>{ruleTarget(rule)}</span>
+                    <span className={styles.summary}>{ruleSummary(rule, t)}</span>
+                    <span className={styles.target}>{ruleTarget(rule, t)}</span>
                   </button>
                 )}
                 <span className={styles.rowActions}>
@@ -161,7 +158,7 @@ export function RuleEditorList(props: {
                     </FcIconButton>
                   )}
                   <FcIconButton
-                    label="上移"
+                    label={t("Move up")}
                     disabled={props.busy || index === 0}
                     onClick={() => move(index, -1)}
                   >
@@ -170,7 +167,7 @@ export function RuleEditorList(props: {
                     </span>
                   </FcIconButton>
                   <FcIconButton
-                    label="下移"
+                    label={t("Move down")}
                     disabled={props.busy || index === props.rules.length - 1}
                     onClick={() => move(index, 1)}
                   >
@@ -179,7 +176,7 @@ export function RuleEditorList(props: {
                     </span>
                   </FcIconButton>
                   <FcIconButton
-                    label="删除规则"
+                    label={t("Delete rule")}
                     danger
                     disabled={props.busy}
                     onClick={() => setDeleteIndex(index)}
@@ -195,7 +192,7 @@ export function RuleEditorList(props: {
 
       {editorOpen && (
         <RuleEditorDialog
-          title={editIndex === null ? props.addLabel : "编辑规则"}
+          title={editIndex === null ? props.addLabel : t("Edit rule")}
           targetLabel={props.targetLabel}
           targetKey={props.targetKey}
           targetOptions={props.targetOptions}
@@ -215,9 +212,15 @@ export function RuleEditorList(props: {
       )}
       {deleteIndex !== null && (
         <ConfirmDialog
-          title="删除规则"
-          message={`删除第 ${deleteIndex + 1} 条规则（${ruleSummary(props.rules[deleteIndex] ?? {})}）？改动先暂存，点「应用」后生效。`}
-          confirmLabel="删除"
+          title={t("Delete rule")}
+          message={t(
+            "Delete rule {index} ({summary})? Changes are staged; they take effect after you press Apply.",
+            {
+              index: deleteIndex + 1,
+              summary: ruleSummary(props.rules[deleteIndex] ?? {}, t),
+            },
+          )}
+          confirmLabel={t("Delete")}
           danger
           onConfirm={() => {
             props.onChange(props.rules.filter((_, current) => current !== deleteIndex));

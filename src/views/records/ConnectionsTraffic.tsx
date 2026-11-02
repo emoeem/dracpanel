@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import type { ConnectionRow, GroupsData } from "../../api/daemon";
 import { FcCard, FcCardHeader, FcScatter, type ScatterPoint } from "../../components/flclash";
 import { formatBytes } from "../../api/format";
+import { useI18n } from "../../app/i18n";
 import { connectionHost } from "../../lib/connectionTools";
 import { countWithData, percentile, weightedPercentile } from "../../lib/latencyStats";
 import { cx } from "../../lib/cx";
@@ -18,7 +19,7 @@ function outboundOf(row: ConnectionRow): string {
   return row.connection.outbound || "direct";
 }
 
-/** 连接「流量」视图：最高流量、总量、散点图与节点延迟分位。 */
+/** Connections "traffic" view: top talker, totals, scatter plot, node latency percentiles. */
 export function ConnectionsTraffic({
   rows,
   groups,
@@ -28,6 +29,7 @@ export function ConnectionsTraffic({
   groups: GroupsData;
   onOpen: (row: ConnectionRow) => void;
 }) {
+  const { t } = useI18n();
   const [selected, setSelected] = useState<string>("");
 
   const byOutbound = useMemo(() => {
@@ -119,24 +121,29 @@ export function ConnectionsTraffic({
     <div className={styles.stack}>
       <div className={styles.topRow}>
         <FcCard className={styles.topCard}>
-          <FcCardHeader title="最高流量连接" />
+          <FcCardHeader title={t("Highest-traffic connection")} />
           <div className={styles.topHost}>{top.best ? connectionHost(top.best) : "—"}</div>
-          <div className={styles.topMeta}>{top.best ? outboundOf(top.best) : "暂无连接"}</div>
+          <div className={styles.topMeta}>{top.best ? outboundOf(top.best) : t("No connections")}</div>
         </FcCard>
         <FcCard className={styles.statCard}>
-          <FcCardHeader title="下载" />
+          <FcCardHeader title={t("Download")} />
           <div className={styles.statValue}>{formatBytes(top.down)}</div>
         </FcCard>
         <FcCard className={styles.statCard}>
-          <FcCardHeader title="上传" />
+          <FcCardHeader title={t("Upload")} />
           <div className={styles.statValue}>{formatBytes(top.up)}</div>
         </FcCard>
       </div>
 
       <FcCard>
-        <FcCardHeader title="连接流量" subtitle={`连接 ${visible.length} · 横轴上传 / 纵轴下载`} />
+        <FcCardHeader
+          title={t("Connection traffic")}
+          subtitle={t("{count} connections · x-axis upload / y-axis download", {
+            count: visible.length,
+          })}
+        />
         {points.length === 0 ? (
-          <div className={styles.empty}>暂无连接</div>
+          <div className={styles.empty}>{t("No connections")}</div>
         ) : (
           <FcScatter
             points={points}
@@ -165,18 +172,24 @@ export function ConnectionsTraffic({
       </FcCard>
 
       <FcCard>
-        <FcCardHeader title="节点延迟" subtitle={`有延迟的节点 ${latency.withData} · 无数据 ${latency.total - latency.withData}`} />
+        <FcCardHeader
+          title={t("Node latency")}
+          subtitle={t("Nodes with latency {withData} · no data {missing}", {
+            withData: latency.withData,
+            missing: latency.total - latency.withData,
+          })}
+        />
         <div className={styles.statRow}>
           <div className={styles.stat}>
-            <span className={styles.statLabel}>全部节点 P50</span>
+            <span className={styles.statLabel}>{t("All nodes P50")}</span>
             <span className={styles.statNumber}>{latency.p50 === null ? "—" : `${Math.round(latency.p50)} ms`}</span>
           </div>
           <div className={styles.stat}>
-            <span className={styles.statLabel}>全部节点 P90</span>
+            <span className={styles.statLabel}>{t("All nodes P90")}</span>
             <span className={styles.statNumber}>{latency.p90 === null ? "—" : `${Math.round(latency.p90)} ms`}</span>
           </div>
           <div className={styles.stat}>
-            <span className={styles.statLabel}>按连接数加权 P50</span>
+            <span className={styles.statLabel}>{t("P50 weighted by connection count")}</span>
             <span className={styles.statNumber}>
               {latency.weightedP50 === null ? "—" : `${Math.round(latency.weightedP50)} ms`}
             </span>

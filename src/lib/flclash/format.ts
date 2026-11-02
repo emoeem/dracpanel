@@ -1,3 +1,4 @@
+import type { Translate } from "../../app/i18n";
 import { formatBytes, pad2 } from "../../api/format";
 
 export function formatRate(value: number | bigint): string {
@@ -53,14 +54,25 @@ export function daysUntil(expireSeconds: number | undefined, nowMs: number): num
   return Math.ceil((expireSeconds * 1000 - nowMs) / 86_400_000);
 }
 
-export function formatExpiryDays(days: number | null): string {
+/**
+ * Expiry as data, not prose: the view renders it through `t()`, so the same
+ * number reads "剩余 49 天" in Chinese and "49 days left" elsewhere instead of
+ * leaking a hard-coded Chinese sentence into every language.
+ */
+export function expiryStatus(days: number | null): { expired: boolean; days: number } | null {
   if (days === null) {
+    return null;
+  }
+  return { expired: days <= 0, days };
+}
+
+/** Expiry as text, in the reader's language. */
+export function formatExpiryDays(days: number | null, t: Translate): string {
+  const status = expiryStatus(days);
+  if (status === null) {
     return "—";
   }
-  if (days <= 0) {
-    return "已过期";
-  }
-  return `剩余 ${days} 天`;
+  return status.expired ? t("Expired") : t("{count} days left", { count: status.days });
 }
 
 export function percentLabel(ratio: number): string {

@@ -5,8 +5,13 @@ import { useStream } from "../../api/stream";
 import { useApi } from "../../app/context";
 import { showError } from "../../app/errorStore";
 import { useDismiss, usePendingValue } from "../../app/hooks";
+import { useI18n } from "../../app/i18n";
 import { Icon } from "../../components/Icon";
-import { FcCard, FcIconButton } from "../../components/flclash";
+import {
+  FcCard,
+  FcIconButton,
+  FcSearchField,
+} from "../../components/flclash";
 import type { Group, GroupItem } from "../../gen/daemon/started_service_pb";
 import { runDelayPool } from "../../lib/flclash/delayPool";
 import { flagOfText } from "../../lib/flclash/country";
@@ -87,6 +92,7 @@ function gridColumns(width: number, layout: ProxiesLayout): number {
 }
 
 export function ProxiesView() {
+  const { t } = useI18n();
   const api = useApi();
   const groups = useStream(api.groups);
   const [preferences, setPreferences] = useState<ProxiesPreferences>(loadPreferences);
@@ -167,19 +173,12 @@ export function ProxiesView() {
     <div className="fc-page">
       <div className={styles.toolbar}>
         <div className={styles.titleRow}>
-          <h1 className={styles.pageTitle}>策略</h1>
+          <h1 className={styles.pageTitle}>{t("Policies")}</h1>
           <div className={styles.actions}>
-            <label className={styles.search}>
-              <Icon name="search" size={16} />
-              <input
-                value={search}
-                placeholder="搜索节点"
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </label>
+            <FcSearchField value={search} onChange={setSearch} placeholder={t("Search nodes")} narrow />
             {activeEntry && (
               <FcIconButton
-                label="延迟测试"
+                label={t("Latency test")}
                 disabled={testingGroup !== null}
                 onClick={() => {
                   void testGroup(activeEntry.group, activeEntry.items);
@@ -194,7 +193,7 @@ export function ProxiesView() {
             )}
             <div className={styles.menuAnchor} ref={menuRef}>
               <FcIconButton
-                label="更多选项"
+                label={t("More options")}
                 aria-expanded={overflowOpen}
                 onClick={() => setOverflowOpen((value) => !value)}
               >
@@ -203,11 +202,11 @@ export function ProxiesView() {
               {overflowOpen && (
                 <div className={styles.menu} role="menu">
                   <div className={styles.menuGroup}>
-                    <div className={styles.menuLabel}>风格</div>
+                    <div className={styles.menuLabel}>{t("Style")}</div>
                     {(
                       [
-                        { value: "tab", label: "标签页" },
-                        { value: "list", label: "列表" },
+                        { value: "tab", label: t("Tabs") },
+                        { value: "list", label: t("List") },
                       ] as const
                     ).map((option) => (
                       <button
@@ -229,12 +228,12 @@ export function ProxiesView() {
                     ))}
                   </div>
                   <div className={styles.menuGroup}>
-                    <div className={styles.menuLabel}>排序</div>
+                    <div className={styles.menuLabel}>{t("Sort By")}</div>
                     {(
                       [
-                        { value: "default", label: "默认" },
-                        { value: "latency", label: "延迟" },
-                        { value: "name", label: "名称" },
+                        { value: "default", label: t("Default") },
+                        { value: "latency", label: t("Latency") },
+                        { value: "name", label: t("Name") },
                       ] as const
                     ).map((option) => (
                       <button
@@ -256,12 +255,12 @@ export function ProxiesView() {
                     ))}
                   </div>
                   <div className={styles.menuGroup}>
-                    <div className={styles.menuLabel}>布局</div>
+                    <div className={styles.menuLabel}>{t("Layout")}</div>
                     {(
                       [
-                        { value: "compact", label: "紧凑" },
-                        { value: "standard", label: "标准" },
-                        { value: "loose", label: "宽松" },
+                        { value: "compact", label: t("Compact") },
+                        { value: "standard", label: t("Standard") },
+                        { value: "loose", label: t("Loose") },
                       ] as const
                     ).map((option) => (
                       <button
@@ -293,7 +292,7 @@ export function ProxiesView() {
                     <span className={styles.menuCheck}>
                       {preferences.hideUnavailable && <Icon name="check" size={14} />}
                     </span>
-                    隐藏超时代理
+                    {t("Hide timed-out proxies")}
                   </button>
                 </div>
               )}
@@ -320,7 +319,7 @@ export function ProxiesView() {
 
       <div ref={gridRef} className="fc-page-body">
         {groups.phase === "error" && !groups.data.loaded ? (
-          <div className={styles.empty}>策略组不可用，请检查核心连接。</div>
+          <div className={styles.empty}>{t("Policy groups are unavailable; check the core connection.")}</div>
         ) : !groups.data.loaded && groups.phase !== "active" ? (
           <div className={styles.skeletonGrid}>
             {Array.from({ length: 8 }, (_, index) => (
@@ -328,7 +327,7 @@ export function ProxiesView() {
             ))}
           </div>
         ) : filteredGroups.length === 0 ? (
-          <div className={styles.empty}>暂无策略组</div>
+          <div className={styles.empty}>{t("No policy groups")}</div>
         ) : preferences.style === "tab" ? (
           activeEntry && (
             <NodeGrid
@@ -368,6 +367,7 @@ function NodeGrid(props: {
   testingGroup: string | null;
   onTestGroup: (group: Group, items?: readonly GroupItem[]) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const api = useApi();
   const group = props.group;
   const [pending, setPending] = usePendingValue(group.selected);
@@ -405,7 +405,7 @@ function NodeGrid(props: {
           </span>
         </div>
         <FcIconButton
-          label={`测试 ${group.tag}`}
+          label={t("Test {name}", { name: group.tag })}
           disabled={props.testingGroup === group.tag}
           onClick={() => {
             void props.onTestGroup(group, props.items);
@@ -448,6 +448,7 @@ function GroupListCard(props: {
   testing: boolean;
   onTestGroup: (group: Group, items?: readonly GroupItem[]) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const api = useApi();
   const group = props.group;
   const [expanded, setExpanded] = useState(true);
@@ -494,7 +495,7 @@ function GroupListCard(props: {
         </span>
         <span className={styles.listActions}>
           <FcIconButton
-            label={`测试 ${group.tag}`}
+            label={t("Test {name}", { name: group.tag })}
             disabled={props.testing}
             onClick={(event) => {
               event.stopPropagation();
