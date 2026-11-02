@@ -1,20 +1,185 @@
-.log-view {
-  composes: text-mono-caption from global;
-  flex: 1;
-  min-height: 0;
-  padding: var(--space-12) var(--space-14);
-  overflow-y: auto;
-  overscroll-behavior: none;
-  line-height: 1.65;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fc-space-10);
+  align-items: center;
 }
 
-:global(.page):not(:global(.page-full)) .log-view {
-  height: calc(100vh - 170px);
+.search {
+  flex: 1 1 260px;
+  max-width: 420px;
+}
+
+.stream-state {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--fc-space-6);
+  align-items: center;
+  height: var(--fc-chip-height);
+  padding: 0 var(--fc-space-10);
+  font-size: var(--fc-text-caption1);
+  font-weight: var(--fc-weight-semibold);
+  color: var(--fc-on-surface-variant);
+  background: var(--neutral-soft);
+  border-radius: var(--fc-chip-radius);
+}
+
+.stream-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--fc-success);
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fc-success) 22%, transparent);
+  animation: stream-pulse 2s ease-in-out infinite;
+}
+
+.stream-state[data-state="paused"] .stream-dot {
+  background: var(--fc-warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fc-warning) 22%, transparent);
+  animation: none;
+}
+
+.rate,
+.window-hint {
+  font-size: var(--fc-text-caption1);
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-on-surface-faint);
+}
+
+.window-hint {
+  margin-inline-start: auto;
+}
+
+.clear-window {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--fc-space-4);
+  align-items: center;
+  height: var(--fc-chip-height);
+  padding: 0 var(--fc-space-10);
+  margin-inline-start: auto;
+  font-size: var(--fc-text-caption1);
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-primary-container-text);
+  cursor: pointer;
+  background: var(--fc-primary-container);
+  border: 0;
+  border-radius: var(--fc-chip-radius);
+}
+
+/* ── Surface: one card owns the histogram and the virtualised list ── */
+.surface {
+  flex: 1;
+  gap: var(--fc-space-10);
+  min-height: 0;
+  padding: var(--fc-card-padding-tight);
+}
+
+.surface-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fc-space-8);
+  align-items: baseline;
+}
+
+.surface-title {
+  font-size: var(--fc-text-footnote);
+  font-weight: var(--fc-weight-semibold);
+  color: var(--fc-on-surface-variant);
+}
+
+.surface-caption {
+  font-size: var(--fc-text-caption2);
+  color: var(--fc-on-surface-faint);
+}
+
+.legend {
+  display: flex;
+  gap: var(--fc-space-6);
+  align-items: center;
+  margin-inline-start: auto;
+}
+
+.histogram-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fc-space-4);
+}
+
+.histogram {
+  display: flex;
+  gap: var(--fc-space-2);
+  align-items: flex-end;
+  justify-content: space-between;
+  width: 100%;
+  height: 44px;
+  padding-top: var(--fc-space-2);
+  border-bottom: 1px solid var(--fc-divider);
+}
+
+.histogram-bar {
+  display: flex;
+  flex: 0 1 26px;
+  flex-direction: column-reverse;
+  gap: var(--fc-hairline);
+  align-items: stretch;
+  min-width: 4px;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--fc-radius-xs) var(--fc-radius-xs) 0 0;
+  transition: background var(--fc-duration-fast) var(--fc-ease-out-cubic);
+}
+
+.histogram-bar:hover {
+  background: var(--fc-hover-surface);
+}
+
+.histogram-bar[data-active="true"] {
+  outline: 1px solid var(--fc-primary);
+  outline-offset: 1px;
+  background: color-mix(in srgb, var(--fc-primary) 22%, transparent);
+}
+
+.histogram-info,
+.histogram-warn,
+.histogram-error {
+  display: block;
+  width: 100%;
+  min-height: 0;
+}
+
+.histogram-info {
+  background: color-mix(in srgb, var(--fc-primary) 45%, transparent);
+}
+
+.histogram-warn {
+  background: var(--fc-warning);
+}
+
+.histogram-error {
+  background: var(--fc-error);
+}
+
+.histogram-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fc-text-caption2);
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-on-surface-faint);
+}
+
+/* ── Log list ── */
+.log-view {
+  flex: 1;
+  min-height: 0;
+  padding-top: var(--fc-space-4);
+  overflow-y: auto;
+  overscroll-behavior: none;
+  border-top: 1px solid var(--fc-divider);
 }
 
 .log-canvas {
@@ -28,13 +193,71 @@
   position: absolute;
   inset-inline: 0;
   top: 0;
-  display: block;
+  display: grid;
+  grid-template-columns: 68px 62px minmax(0, 1fr);
+  gap: var(--fc-space-8);
+  align-items: start;
+  padding: var(--fc-space-4) var(--fc-space-8);
+  font-family: var(--fc-font-mono);
+  font-size: var(--fc-text-caption1);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  border-radius: var(--fc-radius-xs);
 }
 
-.log-line mark {
+.log-line:hover {
+  background: var(--fc-hover-surface);
+}
+
+.log-clock {
+  padding-top: var(--fc-space-2);
+  font-size: var(--fc-text-caption3);
+  font-variant-numeric: tabular-nums;
+  color: var(--fc-on-surface-faint);
+  text-align: end;
+  opacity: 0.75;
+}
+
+.log-level {
+  justify-content: center;
+  width: 100%;
+  font-family: var(--fc-font-mono);
+}
+
+.log-text {
+  min-width: 0;
+  color: var(--fc-on-surface);
+}
+
+.log-line[data-level="warn"] .log-text {
+  color: color-mix(in srgb, var(--fc-on-surface) 88%, var(--fc-warning));
+}
+
+.log-line[data-level="error"] .log-text {
+  color: color-mix(in srgb, var(--fc-on-surface) 82%, var(--fc-error));
+}
+
+.log-text mark {
   color: inherit;
   background: var(--highlight);
-  border-radius: var(--radius-xs);
+  border-radius: var(--fc-radius-xs);
+}
+
+.sheet-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 var(--fc-space-12);
+  font-size: var(--fc-text-footnote);
+  color: var(--fc-on-surface);
+  outline: none;
+  background: var(--fc-block);
+  border: 1px solid var(--fc-divider);
+  border-radius: var(--fc-radius-sm);
+}
+
+.sheet-input:focus {
+  border-color: var(--fc-primary);
 }
 
 [dir="rtl"] .log-view {
@@ -42,8 +265,42 @@
   unicode-bidi: isolate;
 }
 
-@media (max-width: 900px) {
-  :global(.page):not(:global(.page-full)) .log-view {
-      height: calc(100dvh - 230px);
-    }
+@keyframes stream-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (max-width: 600px) {
+  .search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .window-hint {
+    display: none;
+  }
+
+  /* The clock column costs a third of the width on a phone and every line
+     wraps to five rows because of it; the level chip earns its space, the
+     timestamp does not. */
+  .log-line {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: var(--fc-space-6);
+  }
+
+  .log-clock {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stream-dot {
+    animation: none;
+  }
 }

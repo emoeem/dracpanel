@@ -32,7 +32,7 @@ import { StreamStore } from "./stream";
 
 export const STATUS_HISTORY_LENGTH = 30;
 export const STATUS_SAMPLE_HISTORY_LENGTH = 3600;
-const LOG_MAX_ENTRIES = 3000;
+const LOG_MAX_ENTRIES = 10_000;
 const CLOSED_CONNECTIONS_MAX = 1000;
 
 export interface ServiceStatusData {
@@ -70,6 +70,12 @@ export interface LogEntry {
   id: number;
   level: LogLevel;
   message: string;
+  /**
+   * Arrival time, stamped once when the core pushed the line. The stream has no
+   * timestamp of its own, so anything that re-stamps later (e.g. remounting the
+   * logs view) would rewrite history and pile buffered lines into "now".
+   */
+  at: number;
 }
 
 export interface LogsData {
@@ -202,7 +208,10 @@ export class DaemonApi {
             let changed = false;
             for (const group of message.group) {
               for (const item of group.items) {
-                if (item.urlTestTime === 0n || item.urlTestDelay <= 0) {
+                // A finished probe with delay 0 means "timed out". Dropping it
+                // left the health clock stuck on the last good sample, so a
+                // dead node stayed "healthy" and no outage was ever announced.
+                if (item.urlTestTime === 0n) {
                   continue;
                 }
                 const stamp = `${item.urlTestTime}:${item.urlTestDelay}`;
@@ -214,7 +223,7 @@ export class DaemonApi {
                   ...history,
                   [item.tag]: appendLatencySample(history[item.tag] ?? [], {
                     at: Date.now(),
-                    delay: item.urlTestDelay,
+                    delay: Number(item.urlTestDelay) > 0 ? Number(item.urlTestDelay) : 0,
                   }),
                 };
                 changed = true;
@@ -276,10 +285,12 @@ export class DaemonApi {
             }
             update((data) => {
               let entries = message.reset ? [] : data.entries;
+              const at = Date.now();
               const appended = message.messages.map((logMessage) => ({
                 id: this.logSequence++,
                 level: logMessage.level,
                 message: logMessage.message,
+                at,
               }));
               entries = entries.concat(appended);
               if (entries.length > LOG_MAX_ENTRIES) {

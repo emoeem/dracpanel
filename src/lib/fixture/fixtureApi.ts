@@ -270,14 +270,22 @@ export class FixtureDaemonApi {
           [LogLevel.WARN, "dns: upstream timeout for dns.google, retrying via dns-direct"],
           [LogLevel.INFO, "inbound/tun[0]: udp packet from 192.168.31.30 to 8.8.8.8:443"],
         ];
-        update(() => ({
-          entries: lines.map(([level, message], index) => ({
-            id: this.logSequence++,
-            level,
-            message: `${message} (fixture #${index})`,
-          })),
-          defaultLevel: LogLevel.INFO,
-        }));
+        const at = Date.now();
+        // Seed once: re-subscribing (leaving and re-entering the logs page)
+        // must not rewrite the buffer, or arrival times look like new lines.
+        update((data) =>
+          data.entries.length > 0
+            ? data
+            : {
+                entries: lines.map(([level, message], index) => ({
+                  id: this.logSequence++,
+                  level,
+                  message: `${message} (fixture #${index})`,
+                  at,
+                })),
+                defaultLevel: LogLevel.INFO,
+              },
+        );
         await new Promise<never>(() => {});
       },
     );
@@ -447,8 +455,10 @@ export function installFixtureFetch(): void {
         egress_ip: "103.151.172.34",
         egress_probe_configured: true,
         local_ip: "192.168.31.30",
-        ip_type: "机房",
-        ip_quality: "普通",
+        // The real panel never supplies ip_type/ip_quality; the status card is
+        // supposed to fall back to the GeoIP location instead. Leaving fixture
+        // values in made the card show data that production cannot produce.
+
         memory_app: 310 * 1024 * 1024,
         memory_kernel: 97 * 1024 * 1024,
       });
