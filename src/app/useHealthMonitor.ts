@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { DaemonApi } from "../api/daemon";
+import { appendJournal, hasPanelToken } from "../api/panel";
 import type { Group } from "../gen/daemon/started_service_pb";
 import { useToast } from "../components/Toast";
 import { useNow } from "./context";
@@ -98,6 +99,8 @@ export function useHealthMonitor(options: HealthMonitorOptions): HealthMonitor {
   const lastRunRef = useRef(0);
   const statusesRef = useRef<Record<string, HealthStatus>>({});
   const runningRef = useRef(false);
+  /** Groups with a failover request in flight (one switch per group per burst). */
+  const switchingRef = useRef<Set<string>>(new Set());
   const groupTags = useMemo(() => groups.map((group) => group.tag), [groups]);
   const tagsRef = useRef<readonly string[]>(groupTags);
   useEffect(() => {
@@ -156,11 +159,48 @@ export function useHealthMonitor(options: HealthMonitorOptions): HealthMonitor {
         recovered.push(tag);
       }
     }
+    // Always advance the ledger: a status that is neither an outage nor a
+    // recovery (healthy→degraded, down→degraded) used to be skipped, so the
+    // later degraded→down transition compared against a stale "down" and the
+    // outage was never announced.
+    statusesRef.current = statuses;
     if (outages.length === 0 && recovered.length === 0) {
       return;
     }
-    statusesRef.current = statuses;
     saveHealthRun(serverId, { lastRunAt: lastRunRef.current, statuses });
+    // The journal is the audit ledger: unlike the toast/webhook below it records
+    // every transition even when notifications are turned off. Best effort —
+    // direct mode (no panel token) or a busy backend just skips the entry.
+    if (hasPanelToken()) {
+      if (outages.length > 0) {
+        const shown = outages.slice(0, 3).join(", ");
+        const list =
+          outages.length > 3
+            ? t("{nodes} and {count} more", { nodes: shown, count: outages.length - 3 })
+            : shown;
+        void appendJournal({
+          kind: "health",
+          severity: "warn",
+          category: "event",
+          source: "health",
+          title: t("Node unavailable"),
+          detail: list,
+          ok: true,
+        }).catch(() => undefined);
+      }
+      if (recovered.length > 0) {
+        const list = recovered.slice(0, 3).join(", ");
+        void appendJournal({
+          kind: "health",
+          severity: "info",
+          category: "event",
+          source: "health",
+          title: t("Node recovered"),
+          detail: list,
+          ok: true,
+        }).catch(() => undefined);
+      }
+    }
     if (!settings.notify) {
       return;
     }
@@ -196,14 +236,25 @@ export function useHealthMonitor(options: HealthMonitorOptions): HealthMonitor {
       const candidates = group.items
         .filter((item) => item.tag !== group.selected)
         .map((item) => ({ tag: item.tag, delay: averageDelay(histories[item.tag] ?? []) }));
-      const target = bestCandidate(candidates, 0, thresholds);
-      if (target === null) {
+      // `bestCandidate` rejects anything not strictly faster than `currentDelay`.
+      // Passing 0 made every candidate look slower, so failover never fired.
+      const currentDelay = averageDelay(histories[group.selected] ?? []);
+      const target = bestCandidate(
+        candidates,
+        currentDelay > 0 ? currentDelay : Number.POSITIVE_INFINITY,
+        thresholds,
+      );
+      if (target === null || switchingRef.current.has(group.tag)) {
         continue;
       }
+      switchingRef.current.add(group.tag);
       api.selectOutbound(group.tag, target).then(
         () => toast(t("{group} switched to {target}", { group: group.tag, target }), "info"),
         () => undefined,
-      );
+      ).finally(() => {
+        // Hold the guard while the core settles, then allow a later failover.
+        window.setTimeout(() => switchingRef.current.delete(group.tag), 10_000);
+      });
     }
   }, [active, api, groups, histories, settings.autoSwitch, t, thresholds, toast, verdicts]);
 

@@ -83,7 +83,9 @@ export function isNewOutage(before: HealthStatus, after: HealthStatus): boolean 
 }
 
 export function isRecovered(before: HealthStatus, after: HealthStatus): boolean {
-  return before === "down" && after === "healthy";
+  // A node that comes back slow is back: treating only "healthy" as recovery
+  // left the ledger at "down" and re-announced the same outage later.
+  return before === "down" && (after === "healthy" || after === "degraded");
 }
 
 export function isDue(lastAt: number | undefined, now: number, intervalMs: number): boolean {

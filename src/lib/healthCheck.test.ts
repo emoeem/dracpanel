@@ -74,7 +74,10 @@ describe("transitions", () => {
 
   it("reports recovery from down to healthy", () => {
     expect(isRecovered("down", "healthy")).toBe(true);
-    expect(isRecovered("down", "degraded")).toBe(false);
+    // Back but slow still counts as recovered: otherwise the ledger stays "down"
+    // and the same outage is announced again on the next dip.
+    expect(isRecovered("down", "degraded")).toBe(true);
+    expect(isRecovered("down", "unknown")).toBe(false);
     expect(isRecovered("healthy", "healthy")).toBe(false);
   });
 });
@@ -116,6 +119,15 @@ describe("bestCandidate", () => {
     expect(
       bestCandidate([{ tag: "a", delay: 500 }], 400, DEFAULT_THRESHOLDS),
     ).toBeNull();
+  });
+
+  it("treats an infinite current delay as 'current node is unusable'", () => {
+    // Failover passes POSITIVE_INFINITY when the selected node has no samples
+    // left; passing 0 instead made every candidate look slower (the switch
+    // never fired in production while these tests stayed green).
+    expect(
+      bestCandidate([{ tag: "ok", delay: 800 }], Number.POSITIVE_INFINITY, DEFAULT_THRESHOLDS),
+    ).toBe("ok");
   });
 
   it("refuses when everything is down", () => {

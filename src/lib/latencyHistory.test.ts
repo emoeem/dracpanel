@@ -7,9 +7,14 @@ import {
 } from "./latencyHistory";
 
 describe("appendLatencySample", () => {
-  it("ignores non-positive delays and caps the history", () => {
+  it("keeps a failed probe as delay 0 and caps the history", () => {
+    // A 0 delay is a recorded timeout: healthOf() must see it to report "down".
     let history = appendLatencySample([], { at: 1, delay: 0 });
-    expect(history).toEqual([]);
+    expect(history).toEqual([{ at: 1, delay: 0 }]);
+    expect(latencyStats(history)).toBeNull();
+    history = appendLatencySample(history, { at: 2, delay: -5 });
+    expect(history).toEqual([{ at: 1, delay: 0 }]);
+    expect(appendLatencySample(history, { at: 3, delay: Number.NaN })).toEqual(history);
     for (let index = 1; index <= LATENCY_HISTORY_LIMIT + 5; index += 1) {
       history = appendLatencySample(history, { at: index, delay: index });
     }

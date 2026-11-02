@@ -10,7 +10,9 @@ export function appendLatencySample(
   sample: LatencySample,
   limit = LATENCY_HISTORY_LIMIT,
 ): LatencySample[] {
-  if (!Number.isFinite(sample.delay) || sample.delay <= 0 || limit <= 0) {
+  // delay 0 is a recorded failed probe (see daemon's urlTest handling), not a
+  // missing value: it has to reach healthOf() or a dead node never reads "down".
+  if (!Number.isFinite(sample.delay) || sample.delay < 0 || limit <= 0) {
     return [...history];
   }
   const last = history[history.length - 1];
